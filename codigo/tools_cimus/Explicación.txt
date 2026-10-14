@@ -1,0 +1,9 @@
+Os he subido los dos archivos. Uno con las rutas que aparecen enriquecidas tras el analisis de los genes up reguladas (activadas) y otra con el de los genes down regulados (suprimidas) en las células Natural Killer (NK). Como podeis ver en los resultados en bruto aparecen muchas rutas y muchas de ellas se solapan lo que puede ayudar a resolver el problema ya que pueden incluir el termino de si la regulacion es positiva o negativa y los genes implicados. De todas formas esta inforamción esta disponible en la base de datos de la Gene Ontology (Biological Process). 
+
+Si quereis empezar for enfocaros en una ruta concreta para empezar, podría ser interesante que usarais la de "regulation of T cell activation" ya que incluye una lista larga de genes, pero podeis escoger la que creais conveniente en base a vuestras necesidades
+
+DESCRIPCION DEL archivos
+
+Dentro del archivo la unica información relevante para este proyecto es la columna de "Description" que indica el nombre de la ruta y "geneID" que contiene los genes de la lista usada en el analisis que se encuentran en dicha ruta separados por "/".
+
+Espero que esto os sea de ayuda y cualquier duda me podeis escribir al correo
