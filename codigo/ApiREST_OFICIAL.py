@@ -176,3 +176,4 @@ if __name__ == "__main__":
         print(f"\nDocumentos de referencia ({len(info['referencias'])}):")
         for ref in info["referencias"]:
             print(f"  - {ref['id']:<18} -> {ref['url']}")
+            
