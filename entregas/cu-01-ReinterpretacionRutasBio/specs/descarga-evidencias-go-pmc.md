@@ -1,0 +1,26 @@
+# Spec: Ingesta de Evidencias de Regulación GO y Descarga de Abstracts desde Europe PMC
+
+## Qué hay que construir
+Un módulo de ingesta y consulta de datos que tome como entrada los archivos tabulares de resultados de análisis transcriptómico de célula única (matrices de expresión diferencial generadas con DESeq2/clusterProfiler sobre células de laringe y faringe) y realice el siguiente flujo automatizado:
+1. **Extracción de identificadores:** Leer las filas de los archivos Excel de entrada y extraer el identificador biológico de la ontología Gene Ontology (campo `ID`) asociado a cada ruta biológica evaluada, junto con los símbolos oficiales de los genes asociados (nomenclatura HGNC).
+2. **Mapeo gen–ruta → evidencia bibliográfica (PMID):** Consultar las anotaciones estandarizadas de Gene Ontology (GO Biological Process) para recuperar los identificadores PubMed (`PMID`) que documentan experimentalmente el rol de dicho gen dentro de esa ruta específica.
+3. **Descarga de literatura científica desde Europe PMC:** Consultar la API REST pública de Europe PMC a partir de la lista consolidada de `PMID`s recopilados y recuperar el texto sin procesar del abstract, título del artículo, revista, año de publicación y metadatos de filiación.
+4. **Estructura en memoria RAM (*Stateless*):** De acuerdo con la arquitectura general del proyecto, el resultado debe consolidarse en una estructura de datos en memoria (p. ej., diccionario de Python o `pandas.DataFrame`), dejando los datos preparados para la siguiente etapa de preprocesamiento sin escribir en bases de datos relacionales persistentes.
+
+## Por qué
+El análisis transcriptómico a nivel de célula única clasifica los genes diferencialmente expresados en listas independientes sobreexpresadas (*Up*) e infraexpresadas (*Down*). Las bases de datos convencionales catalogan los genes de forma cualitativa (presencia o ausencia en la ruta), provocando que una misma ruta aparezca enriquecida en ambos sentidos sin explicar el efecto neto. 
+
+Para que podamos inferir si un gen concreto activa (+1) o reprime (-1) la ruta biológica en tejidos de cabeza y cuello, se necesita recopilar los estudios científicos originales que sustentan dicha interacción biológica. Este módulo automatiza la recopilación sistemática de esta evidencia experimental a partir de identificadores inequívocos de ontología y literatura abierta, reduciendo sesgos y evitando consultas manuales.
+
+## Restricciones
+* **Arquitectura *Stateless* / Sin persistencia en disco:** No se deben levantar bases de datos relacionales locales ni servicios gestores de datos persistentes (cero bases de datos como PostgreSQL o SQLite). Las estructuras intermedias deben mantenerse en memoria RAM durante la ejecución.
+* **Control de tasa de peticiones (*Rate Limiting*):** Las llamadas a la API REST de Europe PMC deben realizarse en lotes (*batch size* configurable de máximo 40 a 50 identificadores por llamada) y respetar un tiempo de espera exponencial (*exponential backoff*) ante respuestas HTTP `429 Too Many Requests` o `503 Service Unavailable`.
+* **Filtrado de referencias metodológicas no informativas:** Se deben descartar identificadores que no tengan la estructura estándar de PubMed (p. ej. `GO_REF`, `DOI`, `Reactome`) y omitir artículos metodológicos automatizados o de curación masiva computacional no experimental (códigos de evidencia no experimental como `IEA`).
+* **Formatos de entrada heterogéneos:** El módulo debe aceptar archivos de entrada en formato `.xlsx` y `.csv`, verificando la existencia de las columnas obligatorias correspondientes a los identificadores `GO:ID` y el símbolo génico antes de iniciar las llamadas de red.
+* **Gestión de credenciales y red:** Si se requiere identificación o correo institucional ante las APIs abiertas, este se leerá obligatoriamente desde la variable de entorno correspondiente definida en `.env` (documentada en `.env.example`), sin escribir datos privados en el código.
+
+## Criterios de aceptación
+* [ ] **Carga y validación de matriz de entrada:** Dado un archivo Excel de prueba con al menos una ruta y 5 genes, el parser extrae correctamente la lista de tuplas `(GO_ID, GENE_SYMBOL)` y rechaza con un error descriptivo (`ValueError`) cualquier archivo que carezca de dichas columnas obligatorias.
+* [ ] **Resolución gen–ruta → PMID:** Para una combinación de prueba validada (ej. `GO:0006915` - *apoptotic process* y gen humano conocido), el conector recupera al menos un `PMID` numérico documentado con evidencia experimental, omitiendo anotaciones con prefijo no numérico.
+* [ ] **Consumo y tolerancia a fallos en Europe PMC:** La función de descarga procesa un lote de 20 `PMID`s en una sola consulta HTTP; ante un `PMID` inexistente o sin abstract, el sistema asigna el valor `None`/cadena vacía al campo del abstract sin interrumpir la ejecución del lote restante.
+* [ ] **Pruebas unitarias desacopladas de red (Mocks/Fixtures):** La suite de pruebas en `pytest` ejecuta la descarga emulando las respuestas HTTP de Europe PMC mediante *fixtures* locales en `tests/fixtures/`, logrando un tiempo total de test inferior a 2 segundos y garantizando reproducibilidad sin conexión activa a internet.
