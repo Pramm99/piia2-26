@@ -94,8 +94,8 @@ La estructura del proyecto separa la documentación arquitectónica de soporte, 
 │   └── adr-004-llm-groq-json.md   #   - Decisión: Inferencia Llama-3 en Groq con schema JSON estricto.
 │
 ├── specs/                         # Especificaciones de unidades de trabajo por implementar:
-│   ├── extraccion-evidencias-go.md        #   - Tarea y criterios de aceptación para el módulo de ingesta HTTP.
-│   ├── spec-reranker.md           #   - Criterios para el filtrado léxico y re-ranking de abstracts.
+│   ├── descarga-evidencias-go-pmc.md        #   - Tarea y criterios de aceptación para el módulo de ingesta HTTP.
+│   ├── limpieza-abstracts-particion-génica.md           #   - Criterios para la limpieza y preprocesado de abstracts.
 │   ├── spec-inferencia-llm.md     #   - Especificación del prompt, parser JSON y control de errores.
 │   └── spec-scoring-r.md          #   - Especificación de la integración del Net Pathway Score en R.
 │
