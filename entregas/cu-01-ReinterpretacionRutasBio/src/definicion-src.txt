@@ -1,1 +1,29 @@
-Contendrá las carpetas de codigo fuente del pipeline
+.
+├── README.md                      # Puerta de entrada: visión de conjunto, objetivos y estructura.
+├── AGENTS.md                      # Instrucciones operativas para asistentes de IA y colaboradores.
+├── ARCHITECTURE.md                # Diagrama de flujo de componentes y recorrido del dato (Opción A).
+│
+├── decisions/                     # Architecture Decision Records (ADRs) con decisiones ya tomadas:
+│   ├── adr-001-rag-stateless.md   #   - Decisión: arquitectura sin base de datos ni lakehouse.
+│   ├── adr-002-europe-pmc-api.md  #   - Decisión: ingesta asíncrona de abstracts vía Europe PMC.
+│   ├── adr-003-cross-encoder.md   #   - Decisión: Re-ranker ligero ms-marco-MiniLM en CPU.
+│   └── adr-004-llm-groq-json.md   #   - Decisión: Inferencia Llama-3 en Groq con schema JSON estricto.
+│
+├── specs/                         # Especificaciones de unidades de trabajo por implementar:
+│   ├── descarga-evidencias-go-pmc.md        #   - Tarea y criterios de aceptación para el módulo de ingesta HTTP.
+│   ├── limpieza-abstracts-particion-génica.md           #   - Criterios para la limpieza y preprocesado de abstracts.
+│   ├── spec-inferencia-llm.md     #   - Especificación del prompt, parser JSON y control de errores.
+│   └── spec-scoring-r.md          #   - Especificación de la integración del Net Pathway Score en R.
+│
+├── src/                           # Código fuente del pipeline:
+│   ├── ingestion/                 #   - Módulos de descarga y consulta de literatura biomédica.
+│   ├── processing/                #   - Limpieza, normalización y filtrado Cross-Encoder.
+│   ├── reasoning/                 #   - Llamadas al LLM y extracción estructurada de contribución.
+│   └── analysis_r/                #   - Scripts en R para cruzar resultados con scRNA-seq y graficar.
+│
+├── tests/                         # Pruebas unitarias y de integración:
+│   ├── fixtures/                  #   - Mocks y respuestas JSON de prueba para ejecución sin red.
+│   └── test_pipeline.py           #   - Validación con pytest de parsers y lógica determinista.
+│
+├── .gitignore                     # Filtro de entornos (.venv), secretos (.env) y temporales.
+└── .env.example                   # Plantilla de variables de entorno y claves de API (GROQ_API_KEY).
