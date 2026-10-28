@@ -72,9 +72,9 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto se ac
 
 | **Nombre y Apellidos** | **Rol principal** | **Correo de contacto**          |
 | ---------------------- | ----------------- | ------------------------------- |
-| Iria Varela Palmás     |                   | `iria.varela.palmas@rai.usc.es` |
-| Luis Pérez Jiménez     |                   | `luis.perez2@rai.usc.es`        |
-| Pablo Rey Mariño       |                   | `pablo.rey.marino@rai.usc.es`   |
+| Iria Varela Palmás     | Repositorio, C.I, `gitignore`, entorno reproducible & NLP engineer| `iria.varela.palmas@rai.usc.es` |
+| Luis Pérez Jiménez     | Única voz hacia el equipo clínico & ML engineer| `luis.perez2@rai.usc.es` |
+| Pablo Rey Mariño       | Decisiones de arquitectura y gestión del camino crítico & Data Analyst | `pablo.rey.marino@rai.usc.es`   |
 
 ## 5. Estructura del repositorio
 
