@@ -10,7 +10,7 @@ El análisis transcriptómico de célula única (**scRNA-seq**) permite estudiar
 
 En los métodos bioinformáticos convencionales, las anotaciones de las rutas son cualitativas (presencia o ausencia de un gen en la ruta), sin indicar si un gen concreto actúa como **activador** o **inhibidor/represor** de dicha ruta.
 
-Esto genera contradicciones metodológicas directas: si en una ruta conformada por 100 genes encontramos 10 genes sobre-expresados (_up-regulated_) y 12 genes infra-expresados (_down-regulated_), las herramientas clásicas de enriquecimiento reportan que la ruta se encuentra simultáneamente activada e inhibida.
+Esto genera contradicciones metodológicas directas: si en una ruta conformada por 100 genes encontramos 10 genes sobre-expresados (_up-regulated_) y 12 genes infra-expresados (_down-regulated_), las herramientas clásicas de enriquecimiento reportan que la ruta se encuentra simultáneamente activada e inhibida, y resolverlas a mano resulta en un tedioso y a veces inviable esfuerzo para realizar a mano.
 
 ### La solución
 
@@ -48,7 +48,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto se ac
     
 - **Ingesta _stateless_:** Consultas HTTP asíncronas a la API de **Europe PMC** a partir de identificadores biológicos y PMIDs vinculados a Gene Ontology.
     
-- **Filtrado y Re-Ranking:** Pre-filtrado léxico y re-ordenación semántica con un modelo Cross-Encoder ligero en CPU (`ms-marco-MiniLM`) para seleccionar el Top 3 de resúmenes científicos pertinentes. 
+- **Limpieza y partición génica:** Limpieza de los formatos html obtenidos a través de la API de Europe PMC para que no interfieran en la calidad de la inferencia del modelo y la partición en dos conjuntos de genes en función de si son 'up' o 'down' para evitar la mezcla de datos y reconocer su procedencia para la expresión final del gen.
     
 - **Inferencia estructurada:** Extracción determinista del signo funcional del gen mediante LLM (Llama-3 vía Groq) con _temperature=0_, salida bajo esquema JSON estricto y opción obligatoria de rescate (`UNKNOWN`) ante falta de evidencia concluyente.  
     
@@ -72,9 +72,9 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto se ac
 
 | **Nombre y Apellidos** | **Rol principal** | **Correo de contacto**          |
 | ---------------------- | ----------------- | ------------------------------- |
-| Iria Varela Palmás     | Repositorio, C.I, `gitignore`, entorno reproducible & NLP engineer| `iria.varela.palmas@rai.usc.es` |
+| Iria Varela Palmás     | MLOps & NLP engineer| `iria.varela.palmas@rai.usc.es` |
 | Luis Pérez Jiménez     | Única voz hacia el equipo clínico & ML engineer| `luis.perez2@rai.usc.es` |
-| Pablo Rey Mariño       | Decisiones de arquitectura y gestión del camino crítico & Data Analyst | `pablo.rey.marino@rai.usc.es`   |
+| Pablo Rey Mariño       | Project Manager & Data Analyst | `pablo.rey.marino@rai.usc.es`   |
 
 ## 5. Estructura del repositorio
 

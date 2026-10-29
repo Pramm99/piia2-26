@@ -6,7 +6,7 @@ state: Aceptado
 # ADR 001 - Pipeline RAG Stateless para la Resolución Transcriptómica en Células de Laringe y Faringe
 
 ## Decisión
-Se decide implementar una arquitectura basada en un pipeline **RAG (Retrieval-Augmented Generation) "Stateless"** orquestado mediante APIs públicas (Europe PMC / QuickGO) y modelos LLM externos de inferencia rápida (Llama-3 vía Groq) con ejecución en memoria RAM (`@lru_cache`). 
+Se decide implementar una arquitectura basada en un pipeline **RAG (Retrieval-Augmented Generation) "Stateless"** orquestado mediante APIs públicas (Europe PMC / QuickGO) y modelos LLM externos de inferencia rápida (por ejemplo Llama-3 vía Groq) con ejecución en memoria RAM (`@lru_cache`). 
 
 Se descarta el desarrollo y mantenimiento de un modelo clasificador Transformer local entrenado/ajustado ad-hoc (`BioLinkBERT-base` acoplado con `scispaCy`) y la persistencia en bases de datos locales o Lakehouses.
 
