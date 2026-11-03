@@ -1,35 +1,4 @@
-"""
-FASE 1 (v4) - Objetivo único: obtener el MÁXIMO de abstracts por par (Gen, Ruta GO) en humanos.
 
-Cambios principales respecto a la v1:
-  1. Propagación por el grafo GO (is_a + part_of): una anotación a un término HIJO
-     cuenta como evidencia para la ruta PADRE (como hace clusterProfiler).
-  2. Se excluyen las anotaciones con calificador NOT (afirman lo contrario).
-  3. Coincidencia de gen por símbolo oficial y, si no, por sinónimo (sin ambigüedad).
-  4. Se aceptan TODOS los códigos de evidencia que traigan PMID (se guarda la columna
-     Evidencia y un flag Experimental para poder filtrar después).
-  5. Descarga robusta: reintentos también en POST, lotes que fallan se parten,
-     caché en disco por PMID, descargas atómicas (.tmp -> rename).
-  6. Salida: hoja con abstract, hoja de pares sin abstract y hoja de genes no encontrados.
-
-Cambios de la v4 respecto a la v2:
-  7. La propagación incluye también regulates / positively_regulates / negatively_regulates
-     (como hace GO.db, que usa clusterProfiler). Una anotación a "positive regulation of X"
-     ahora cuenta para la ruta X.
-  8. Se registra el TIPO de relación del camino término anotado -> ruta (Tipo_relacion) y,
-     cuando hay regulación con signo, una polaridad determinista (Polaridad_GO = +1 / -1 /
-     conflicto). Los signos se componen a lo largo del camino (neg. de neg. = pos.);
-     is_a y part_of no cambian el signo.
-  9. Las anotaciones GO que NO traen PMID (IBA, IEA, ISS con GO_REF...) ya no se descartan en
-     silencio: los pares que solo tienen ese tipo de anotación van a la hoja Anotado_sin_PMID,
-     con su polaridad GO (si la hay), evidencia, referencia y campo With/From.
- 10. Segunda fuente opcional: NCBI gene2go (la base de org.Hs.eg.db, que usa clusterProfiler).
-     Aporta anotaciones/PMIDs que el GAF de GOA no tiene. Se activa con USAR_GENE2GO.
-     La columna Fuente indica de dónde viene cada fila (GOA, NCBI o GOA|NCBI).
- 11. Rastreo de ortólogos (USAR_ORTOLOGOS): para los pares que siguen sin PMID, sigue el campo
-     With/From hasta el gen de ratón/rata y recoge los PMIDs de su anotación. Marcado en Fuente.
-  (limpiar_texto() NO se ha tocado: sigue pendiente el bug de títulos pegados.)
-"""
 import gzip
 import html
 import json
