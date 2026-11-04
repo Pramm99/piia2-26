@@ -4,8 +4,6 @@ data/
 *.pyc
 *.csv
 *.xlsx
-*.duckdb
-*.duckdb.wal
 *.gaf.gz
 *.gaf.gz.part
 *.obo
