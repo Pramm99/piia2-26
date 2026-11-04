@@ -1,29 +1,56 @@
-.
-├── README.md                      # Puerta de entrada: visión de conjunto, objetivos y estructura.
-├── AGENTS.md                      # Instrucciones operativas para asistentes de IA y colaboradores.
-├── ARCHITECTURE.md                # Diagrama de flujo de componentes y recorrido del dato (Opción A).
+Definición de la estructura del código fuente
+==============================================
+
+El código del pipeline no vive en esta carpeta src/, sino en la carpeta codigo/ de la raíz
+del repositorio. Este fichero describe esa estructura: qué módulos existen ya y cuáles están
+previstos, siguiendo ARCHITECTURE.md (los números entre corchetes son los componentes de su
+diagrama).
+
+Leyenda: (hecho) implementado · (en parte) implementado con cambios pendientes ·
+         (previsto) pendiente; el nombre del fichero es una propuesta.
+
+codigo/
+├── extraer_info/                  # FASE 1 · Ingesta (spec descarga-evidencias-go-pmc, ADR-002)
+│   ├── main.py                    #   (hecho) Orquesta la Fase 1 en orden.
+│   ├── config.py                  #   (hecho) Rutas, URLs, tamaños de lote y opciones de filtrado.
+│   ├── red.py                     #   (hecho) Sesión HTTP con reintentos y descarga atómica.
+│   ├── entrada_excel.py           #   (en parte) [1] Lectura de los Excels de rutas -> pares (gen, ruta).
+│   ├── grafo_go.py                #   (hecho) [2] Grafo GO, propagación a descendientes y Polaridad_GO.
+│   ├── cruce_gaf.py               #   (hecho) [3] Cruce con el GAF -> evidencias con PMID.
+│   ├── abstracts.py               #   (en parte) [4] Europe PMC + NCBI con caché de abstracts.
+│   └── salida.py                  #   (hecho) [5] Embudo por consola y Excel de la Fase 1.
 │
-├── decisions/                     # Architecture Decision Records (ADRs) con decisiones ya tomadas:
-│   ├── adr-001-rag-stateless.md   #   - Decisión: arquitectura sin base de datos ni lakehouse.
-│   ├── adr-002-europe-pmc-api.md  #   - Decisión: ingesta asíncrona de abstracts vía Europe PMC.
-│   ├── adr-003-cross-encoder.md   #   - Decisión: Re-ranker ligero ms-marco-MiniLM en CPU.
-│   └── adr-004-llm-groq-json.md   #   - Decisión: Inferencia Llama-3 en Groq con schema JSON estricto.
+├── consulta_gen/                  # FASE 2 · Inferencia (specs limpieza e inferencia-llm, ADR-003/004/005)
+│   ├── esquema.py                 #   (en parte) Tipos inmutables: Evidencia, PromptLLM y constantes de signo.
+│   ├── lectura.py                 #   (hecho) [6] Hoja Con_abstract -> Evidencia.
+│   ├── limpieza.py                #   (en parte) [6] Limpieza conservadora + forma de comparación (pendiente).
+│   ├── filtro_gen.py              #   (previsto) [7] Mención del gen o sus alias como palabra completa.
+│   ├── prompt.py                  #   (en parte) [8] Construcción del prompt, igual para todos los modelos.
+│   ├── cliente_llm.py             #   (previsto) [9] Conectores Groq / Gemini / Ollama con reintentos ante 429.
+│   ├── registro.py                #   (previsto) [9] Registro respuestas_llm.jsonl y reanudación (ADR-004).
+│   ├── respuesta.py               #   (en parte) [10] Extracción del JSON, normalización del signo y verificación de la cita.
+│   ├── contraste.py               #   (previsto) [11] Signo final, estado y motivos (GO y entre modelos).
+│   ├── pipeline.py                #   (en parte) Orquestación de la Fase 2.
+│   ├── _extraer_info.py           #   (hecho) Puente hacia los módulos de la Fase 1.
+│   ├── __init__.py / __main__.py  #   (hecho) API del paquete y demo por línea de comandos.
+│   └── consultar_gen.py           #   (en parte) Primera versión con Groq; se sustituirá por cliente_llm.py.
 │
-├── specs/                         # Especificaciones de unidades de trabajo por implementar:
-│   ├── descarga-evidencias-go-pmc.md        #   - Tarea y criterios de aceptación para el módulo de ingesta HTTP.
-│   ├── limpieza-abstracts-particion-génica.md           #   - Criterios para la limpieza y preprocesado de abstracts.
-│   ├── spec-inferencia-llm.md     #   - Especificación del prompt, parser JSON y control de errores.
-│   └── spec-scoring-r.md          #   - Especificación de la integración del Net Pathway Score en R.
+├── scoring/                       # FASE 3 · Agregación y Net Pathway Score [12]
+│                                  #   (previsto) Sin especificar: falta la regla de agregación.
 │
-├── src/                           # Código fuente del pipeline:
-│   ├── ingestion/                 #   - Módulos de descarga y consulta de literatura biomédica.
-│   ├── processing/                #   - Limpieza, normalización y filtrado Cross-Encoder.
-│   ├── reasoning/                 #   - Llamadas al LLM y extracción estructurada de contribución.
-│   └── analysis_r/                #   - Scripts en R para cruzar resultados con scRNA-seq y graficar.
+├── evaluacion/                    # BENCHMARK [13] (spec benchmark-gold-set, ADR-005)
+│   ├── seleccion_gold_set.py      #   (previsto) Muestra estratificada de 60 casos con semilla fija.
+│   ├── gold_set.jsonl             #   (previsto) Etiquetas del experto (versionado en git).
+│   └── informe.py                 #   (previsto) Métricas con intervalos de confianza a partir del registro.
 │
-├── tests/                         # Pruebas unitarias y de integración:
-│   ├── fixtures/                  #   - Mocks y respuestas JSON de prueba para ejecución sin red.
-│   └── test_pipeline.py           #   - Validación con pytest de parsers y lógica determinista.
+├── tests/                         # PRUEBAS (pytest, sin red)
+│   ├── fixtures/                  #   (previsto) Respuestas simuladas de Europe PMC, NCBI y de los modelos.
+│   └── test_processing.py         #   (previsto) Limpieza, forma de comparación y verificación de citas.
 │
-├── .gitignore                     # Filtro de entornos (.venv), secretos (.env) y temporales.
-└── .env.example                   # Plantilla de variables de entorno y claves de API (GROQ_API_KEY).
+├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas y su script de análisis.
+├── data/                          # Ficheros locales, ignorados por git (ADR-004):
+│                                  #   go-basic.obo, goa_human.gaf.gz, cache_abstracts.json,
+│                                  #   respuestas_llm.jsonl (previsto).
+├── ApiREST_OFICIAL.py             # Prototipo inicial contra AmiGO/GOlr (descartado en el ADR-002).
+├── requirements.txt               # Dependencias de Python (pendiente: añadir pandas y openpyxl).
+└── .env.example                   # (previsto) NCBI_EMAIL, NCBI_API_KEY, GROQ_API_KEY, GEMINI_API_KEY.
