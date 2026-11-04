@@ -1,14 +1,9 @@
-# Entorno virtual
 pia_venv/
-
-# Python
 __pycache__/
-*.pyc
-
-# Datos generados por el pipeline
 data/
-
-# Por si cambias --workdir / --db / --jsonl / --csv a otra ruta
+*.pyc
+*.csv
+*.xlsx
 *.duckdb
 *.duckdb.wal
 *.gaf.gz
@@ -16,4 +11,3 @@ data/
 *.obo
 *.obo.part
 llm_queue.jsonl
-resultados.csv
