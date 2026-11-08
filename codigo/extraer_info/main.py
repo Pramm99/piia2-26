@@ -5,7 +5,8 @@
   3. entrada_excel   -> pares (Gen, Ruta) de los Excels
   4. inmunoglobulinas-> las Ig salen aparte como neutras, con la función de la Ig completa
   5. cruce_gaf       -> anotaciones con/sin PMID para esos pares
-  6. polaridad       -> triaje del signo GO: aceptar_GO (sin LLM) / LLM / LLM_y_revision
+  6. polaridad       -> triaje del signo GO: aceptar_GO (sin LLM) / LLM / LLM_y_revision;
+                        al final, los pares sin ningún abstract se cierran como UNKNOWN (sin_evidencia)
   7. pmid_externos   -> PMIDs de GeneRIF y Europe PMC (fuentes/) para los pares sin abstract del GAF
   8. abstracts       -> títulos y abstracts de los PMIDs
   9. salida          -> embudo por consola y Excel final
@@ -20,7 +21,7 @@ from entrada_excel import cargar_entrada
 from grafo_go import cargar_go, cargar_sinonimos, construir_desc_map
 from inmunoglobulinas import construir_hoja_ig, detectar_inmunoglobulinas
 from pmid_externos import buscar_pmids_externos
-from polaridad import triaje_pares
+from polaridad import cerrar_sin_evidencia, triaje_pares
 from red import descargar_archivo
 
 
@@ -63,6 +64,7 @@ def ejecutar_fase_1():
     base, con, sin = salida.combinar(df_excel, df_ev, df_abs)
     salida.imprimir_embudo(pares, base, con, pmids, df_abs)
     sin_evidencia = salida.construir_sin_evidencia(df_excel, con, df_anot, df_ev)
+    sin_evidencia, triaje = cerrar_sin_evidencia(sin_evidencia, triaje, df_anot)
 
     sin_pmid = salida.construir_anotado_sin_pmid(df_excel, df_ev, df_sin)
     salida.imprimir_sin_pmid(sin_pmid)
