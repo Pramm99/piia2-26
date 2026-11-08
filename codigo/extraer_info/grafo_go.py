@@ -1,7 +1,7 @@
 """Grafo de Gene Ontology: lectura del OBO, propagación a descendientes y polaridad de las relaciones."""
 from collections import defaultdict, deque
 
-from config import PROPAGAR_REGULACION
+from config import ARISTAS_SIN_SIGNO, CORTAR_REGULACION_TRAS_PART_OF, PROPAGAR_REGULACION
 
 # Relaciones del grafo GO usadas para propagar y su "signo":
 #   N = neutra (no cambia la polaridad), + = positiva, - = negativa, R = regula sin signo
@@ -56,7 +56,7 @@ def cargar_go(ruta_obo):
     return hijos, alias
 
 
-def _componer(a, b):
+def componer(a, b):
     """Compone dos 'signos' de relación a lo largo de un camino."""
     if a == "N":
         return b
@@ -83,26 +83,36 @@ def cargar_nombres(ruta_obo):
 
 
 def descendientes(go_id, hijos):
-    """Devuelve {termino: {estados}} con todos los descendientes de go_id (incluido él mismo, 'N').
-    El estado indica la relación efectiva termino -> go_id (ver ESTADO_RELACION)."""
-    res = defaultdict(set)
-    res[go_id].add("N")
-    inicio = (go_id, "N")
+    """Devuelve {termino: {estado: profundidad}} con todos los descendientes de go_id (incluido él
+    mismo, 'N' a profundidad 0). El estado es la relación efectiva termino -> go_id (ver
+    ESTADO_RELACION) y la profundidad, el camino más corto con ese estado (número de aristas).
+    Dos cortes del signo:
+      - una regulación por encima de un part_of no conserva el signo (deprecado en RO);
+      - las aristas de ARISTAS_SIN_SIGNO generalizan demasiado y dejan el camino sin signo."""
+    res = defaultdict(dict)
+    res[go_id]["N"] = 0
+    inicio = (go_id, "N", False)  # (termino, estado, ¿hay un part_of por encima?)
     vistos = {inicio}
-    cola = deque([inicio])
-    while cola:
-        t, est = cola.popleft()
+    cola = deque([(inicio, 0)])
+    while cola:  # BFS: la primera vez que se llega a (termino, estado) es por el camino más corto
+        (t, est, tras_part_of), prof = cola.popleft()
         for h, rel in hijos.get(t, ()):
-            nuevo = _componer(est, ESTADO_RELACION[rel])
-            if (h, nuevo) not in vistos:
-                vistos.add((h, nuevo))
-                res[h].add(nuevo)
-                cola.append((h, nuevo))
+            signo = ESTADO_RELACION[rel]
+            if signo != "N" and tras_part_of and CORTAR_REGULACION_TRAS_PART_OF:
+                signo = "R"
+            nuevo = componer(est, signo)
+            if (h, t) in ARISTAS_SIN_SIGNO and nuevo in "+-":
+                nuevo = "R"
+            clave = (h, nuevo, tras_part_of or rel == "part_of")
+            if clave not in vistos:
+                vistos.add(clave)
+                res[h].setdefault(nuevo, prof + 1)
+                cola.append((clave, prof + 1))
     return res
 
 
 def construir_desc_map(pares, hijos):
-    """desc_map[termino_GO][ruta_del_Excel] = {estados de la relación termino -> ruta}."""
+    """desc_map[termino_GO][ruta_del_Excel] = {estado de la relación termino -> ruta: profundidad}."""
     desc_map = defaultdict(dict)
     for ruta in {r for _, r in pares}:
         for t, estados in descendientes(ruta, hijos).items():
@@ -112,10 +122,11 @@ def construir_desc_map(pares, hijos):
 
 def estados_efectivos(estados):
     """Un término 'positive regulation of Y' llega también por el camino sin signo
-    (su padre 'regulation of Y' -> regulates). Si ya hay camino con signo, el 'R' sobra."""
+    (su padre 'regulation of Y' -> regulates). Si ya hay camino con signo, el 'R' sobra.
+    Acepta un set de estados o un dict {estado: profundidad} y devuelve lo mismo filtrado."""
     if "+" in estados or "-" in estados:
-        return estados - {"R"}
-    return set(estados)
+        return {e: v for e, v in estados.items() if e != "R"} if isinstance(estados, dict) else estados - {"R"}
+    return estados.copy()
 
 
 def polaridad_desde_estados(estados):

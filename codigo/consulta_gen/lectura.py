@@ -3,14 +3,23 @@ from typing import Iterator, Mapping, Optional
 
 import pandas as pd
 
+from ._extraer_info import DESTINOS_SIN_LLM
 from .esquema import COLUMNAS_OBLIGATORIAS, HOJA_EVIDENCIAS, Evidencia
 from .limpieza import limpiar_abstract, normalizar_pmid, recortar, valor_texto
 
 
 def cargar_hoja(ruta_excel: str, hoja: str = HOJA_EVIDENCIAS) -> pd.DataFrame:
-    df = pd.read_excel(ruta_excel, sheet_name=hoja)
+    # Sin dtype, pandas convierte "+1"/"-1" en 1.0/-1.0 y la pista GO deja de reconocerse
+    df = pd.read_excel(ruta_excel, sheet_name=hoja, dtype={"Polaridad_GO": str, "PMID": str})
     validar_columnas(df.columns)
     return df
+
+
+def pendientes_de_llm(df: pd.DataFrame) -> pd.DataFrame:
+    """Quita los pares cuyo signo ya acepta el grafo GO (columna Destino del triaje de la Fase 1)."""
+    if "Destino" not in df.columns:
+        return df
+    return df[~df["Destino"].isin(DESTINOS_SIN_LLM)]
 
 
 def validar_columnas(columnas) -> None:

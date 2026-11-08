@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import pandas as pd
 
 from .esquema import PromptLLM
-from .lectura import cargar_hoja, fila_a_evidencia, filtrar, iterar_filas
+from .lectura import cargar_hoja, fila_a_evidencia, filtrar, iterar_filas, pendientes_de_llm
 from .prompt import ConfigPrompt, construir_prompt
 from .respuesta import validar_respuesta
 
@@ -22,8 +22,8 @@ def df_a_prompts(df: pd.DataFrame, cfg: ConfigPrompt = ConfigPrompt()) -> List[P
 
 def generar_prompts(ruta_excel: str, gen: Optional[str] = None, go_id: Optional[str] = None,
                     cfg: ConfigPrompt = ConfigPrompt()) -> List[PromptLLM]:
-    """Lee el Excel, filtra por gen/ruta y genera un prompt por fila."""
-    return df_a_prompts(filtrar(cargar_hoja(ruta_excel), gen, go_id), cfg)
+    """Lee el Excel, filtra por gen/ruta y genera un prompt por fila que tenga que leer el LLM."""
+    return df_a_prompts(pendientes_de_llm(filtrar(cargar_hoja(ruta_excel), gen, go_id)), cfg)
 
 
 def resolver_respuesta(prompt: PromptLLM, texto_llm: str) -> Dict[str, Any]:

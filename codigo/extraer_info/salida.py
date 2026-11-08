@@ -55,6 +55,21 @@ def construir_anotado_sin_pmid(df_excel, df_ev, df_sin):
     return sin_pmid
 
 
+def anadir_destino(df, triaje):
+    """Añade a cada fila el destino del triaje de su par (aceptar_GO / LLM / LLM_y_revision)."""
+    if df.empty:
+        return df
+    return pd.merge(df, triaje[["Gen", "GO_ID", "Destino"]].drop_duplicates(), on=["Gen", "GO_ID"], how="left")
+
+
+def imprimir_triaje(triaje, hoja_ig):
+    print("\n=== TRIAJE DEL SIGNO GO ===")
+    print(f"Pares de inmunoglobulinas (neutros, sin abstracts) ... {len(_pares(hoja_ig)) if not hoja_ig.empty else 0}")
+    for destino, n in triaje.drop_duplicates(["Gen", "GO_ID"])["Destino"].value_counts().items():
+        print(f"{destino:.<52} {n}")
+    print(f"Pares con bandera freno/retroalimentación ........... {int(triaje['Freno_retroalimentacion'].sum())}")
+
+
 def imprimir_sin_pmid(sin_pmid):
     if sin_pmid.empty:
         total, con_pol = 0, 0
@@ -64,7 +79,7 @@ def imprimir_sin_pmid(sin_pmid):
     print(f"Pares anotados SIN PMID ....... {total}  (con polaridad GO +1/-1: {con_pol})")
 
 
-def escribir_excel(con, sin, sin_pmid, no_encontrados):
+def escribir_excel(con, sin, sin_pmid, no_encontrados, triaje, hoja_ig):
     genes_sin = pd.DataFrame({"Gen_no_encontrado_en_GAF": no_encontrados})
     with pd.ExcelWriter(SALIDA, engine="openpyxl") as w:
         limpiar_para_excel(con).to_excel(w, sheet_name="Con_abstract", index=False)
@@ -72,4 +87,6 @@ def escribir_excel(con, sin, sin_pmid, no_encontrados):
             w, sheet_name="PMID_sin_abstract", index=False)
         limpiar_para_excel(sin_pmid).to_excel(w, sheet_name="Anotado_sin_PMID", index=False)
         genes_sin.to_excel(w, sheet_name="Genes_no_encontrados", index=False)
+        limpiar_para_excel(triaje).to_excel(w, sheet_name="Triaje_polaridad", index=False)
+        limpiar_para_excel(hoja_ig).to_excel(w, sheet_name="Inmunoglobulinas", index=False)
     print(f"🚀 FASE 1 COMPLETADA -> {SALIDA}")

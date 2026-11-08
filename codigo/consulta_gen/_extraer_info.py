@@ -16,5 +16,6 @@ if str(DIR_EXTRAER_INFO) not in sys.path:
 
 from abstracts import limpiar_texto  # noqa: E402
 from config import SALIDA  # noqa: E402
+from polaridad import DESTINOS_SIN_LLM  # noqa: E402
 
-__all__ = ["DIR_EXTRAER_INFO", "limpiar_texto", "SALIDA"]
+__all__ = ["DIR_EXTRAER_INFO", "limpiar_texto", "SALIDA", "DESTINOS_SIN_LLM"]
