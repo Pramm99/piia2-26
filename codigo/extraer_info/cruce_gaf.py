@@ -5,7 +5,7 @@ import re
 import pandas as pd
 
 from config import CL_COMPATIBLES_NK, EVIDENCIAS_EXPERIMENTALES, GAF_FILE, SOLO_EXPERIMENTAL
-from grafo_go import NOMBRE_ESTADO, componer, estados_efectivos, polaridad_desde_estados
+from grafo_go import CON_SIGNO, NOMBRE_ESTADO, componer, estados_efectivos, polaridad_desde_estados
 
 # Calificadores (col 4) que ya traen signo: se componen con el del camino hasta la ruta
 SIGNO_CALIFICADOR = {
@@ -89,7 +89,7 @@ def cruzar_con_gaf(pares, desc_map):
                     "Referencia": ref, "With_From": with_from, "Via_gen": via, "Fuente": "GOA",
                     "Calificador": calif, "CL_no_NK": "|".join(cl_ajenos),
                     "Estados": set(efectivos), "Profundidad": min(efectivos.values()),
-                    "Profundidad_signo": min((p for e, p in efectivos.items() if e in "+-"), default=None),
+                    "Profundidad_signo": min((p for e, p in efectivos.items() if e in CON_SIGNO), default=None),
                 })
     df_anot = pd.DataFrame(anotaciones)
     if df_anot.empty:

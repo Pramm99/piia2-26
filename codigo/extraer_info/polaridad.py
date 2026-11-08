@@ -88,6 +88,8 @@ def _triaje_par(gen, anots):
         motivos.append("contexto_no_NK")
     if indirecta.any():
         motivos.append("indirecto")
+    if firmadas["Estados"].apply(lambda s: "P" in s and not ({"+", "-"} & s)).all():
+        motivos.append("signo_por_pertenencia")  # el signo sale solo de estar anotado a la ruta de regulación
 
     if signo == "conflicto":
         destino = LLM_Y_REVISION

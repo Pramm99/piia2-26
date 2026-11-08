@@ -63,6 +63,10 @@ ARISTAS_SIN_SIGNO = {
     ("GO:0050870", "GO:1903039"),  # positive regulation of T cell activation -> ... of leukocyte cell-cell adhesion
     ("GO:0050868", "GO:1903038"),  # negative regulation of T cell activation -> ... of leukocyte cell-cell adhesion
 }
+# En una ruta «positive/negative regulation of X», estar anotado a ella (o a un descendiente is_a)
+# significa ejecutar esa regulación: +1 respecto a la ruta (estado P). En un proceso normal, participar
+# no equivale a activar y sigue sin signo.
+SIGNO_POR_PERTENENCIA_REGULACION = True
 PROFUNDIDAD_MAX_ACEPTAR = 2  # a profundidad ≤2 con evidencia experimental no hubo errores en la auditoría
 EVIDENCIAS_FILOGENETICAS = {"IBA", "IBD", "IKR", "IRD"}  # se descartan si contradicen a una experimental
 # Tipos celulares de Cell Ontology compatibles con NK: CL:0000623, sus ancestros y sus subtipos
