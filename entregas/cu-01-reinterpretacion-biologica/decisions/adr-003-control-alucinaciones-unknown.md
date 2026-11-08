@@ -27,7 +27,7 @@ El sistema **nunca fuerza un signo** cuando la evidencia no lo sostiene. Cada pa
 | `cita_no_verificada` | Regla automática | `no_concluyente` | `UNKNOWN` |
 | `json_invalido` | Regla automática | `no_concluyente` | `UNKNOWN` |
 | `incoherencia_respuesta` | Regla automática (p. ej. un efecto con un motivo de UNKNOWN) | `revisar` | Se mantiene |
-| `ruta_sin_direccion` | Composición (v1_proceso): la ruta es «regulation of X» sin dirección | — | `UNKNOWN` en esa ruta |
+| `ruta_sin_direccion` | Composición (v1_proceso), solo si `SIN_DIRECCION_COMO_PROCESO = False`: la ruta es «regulation of X» sin dirección. Por defecto esas rutas se tratan como X. | — | `UNKNOWN` en esa ruta |
 | `discrepancia_polaridad_GO` | Contraste con GO | `revisar` | Se mantiene |
 | `discrepancia_entre_modelos` | Contraste entre modelos | `revisar` | El del modelo principal |
 | `sin_evidencia:<causa>` | Fase 1: el par no tiene ningún abstract y no llega al LLM | `no_concluyente` | `UNKNOWN` |

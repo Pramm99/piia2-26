@@ -42,7 +42,8 @@ El signo siempre se expresa **respecto a la ruta tal como se llama**. En una rut
 * **Polaridad de la ruta:**
   * +1 si es un proceso o «positive regulation of X»;
   * −1 si es «negative regulation of X»;
-  * **sin dirección** si es «regulation of X». Esas rutas reciben `UNKNOWN` con el motivo `ruta_sin_direccion` aunque el efecto sobre X se conozca. **Decisión pendiente:** qué convención usar en ellas (son el 25 % de las filas). Se detecta por la estructura del OBO.
+  * +1 también si es «regulation of X» sin dirección: **se trata como X**, de modo que +1 significa «el gen promueve X» (decisión del 2026-11-08; son el 25 % de las filas). Con `SIN_DIRECCION_COMO_PROCESO = False` en `proceso.py`, esas rutas recibirían `UNKNOWN` con el motivo `ruta_sin_direccion`.
+  * La dirección se detecta por la estructura del OBO, y las regulaciones encadenadas multiplican su signo («regulation of negative regulation of X» se comporta como «negative regulation of X»).
 * **Signo del camino** entre núcleos, reutilizando `grafo_go` de la Fase 1:
   * `is_a` y `part_of` conservan el signo (un subtipo o una parte de X);
   * las regulaciones con signo multiplican;
@@ -79,13 +80,13 @@ Marcados ✅ los que ya cumple el código (commit `1738e0b`, comprobados con dat
 * [x] ✅ **Línea base congelada:** los prompts de `v0_original` son idénticos byte a byte a los del código anterior (4.927 filas comprobadas).
 * [x] ✅ **Contenido del prompt `v1_proceso`:** no contiene `Activada`, `Suprimida`, `UP`, `DOWN`, el valor de `Polaridad_GO` ni el contexto HNSC, e incluye el abstract limpio completo en frases numeradas.
 * [x] ✅ **Orden del JSON pedido:** en `v1_proceso`, `id_frase`, `justificacion_literal` y `razonamiento_corto` van antes que `efecto`.
-* [x] ✅ **Núcleo y polaridad:** «negative regulation of T cell proliferation» → («T cell proliferation», −1); «regulation of T cell activation» → (T cell activation, sin dirección).
+* [x] ✅ **Núcleo y polaridad:** «negative regulation of T cell proliferation» → («T cell proliferation», −1); «regulation of T cell activation» → («T cell activation», +1).
 * [x] ✅ **Filtro previo:** un caso cuyo título y abstract no nombran el gen, sus alias ni su nombre se cierra con `no_menciona_gen` y no genera prompt.
 * [x] ✅ **Respuesta con texto alrededor:** una respuesta del tipo ` ```json {…} ``` ` seguida de texto libre se interpreta correctamente.
 * [x] ✅ **Valor no válido:** `"efecto": "MAYBE"` (v1) o `"signo_funcional": "maybe"` (v0) da `signo = UNKNOWN` y `motivos = ["json_invalido"]`.
 * [x] ✅ **Cita no verificada:** un efecto cuya cita no está en la frase indicada, tiene menos de 6 palabras o es una paráfrasis da `signo = UNKNOWN`, `cita_no_verificada`, `estado = no_concluyente` y conserva `signo_llm`.
 * [x] ✅ **Incoherencia:** un efecto con `motivo_unknown` distinto de `none` conserva el signo y da `estado = revisar` con `incoherencia_respuesta`.
-* [x] ✅ **Composición:** un `DECREASES` sobre «NK cell mediated cytotoxicity» da −1 en «leukocyte mediated immunity» y `UNKNOWN` (`ruta_sin_direccion`) en «regulation of immune effector process».
+* [x] ✅ **Composición:** un `DECREASES` sobre «NK cell mediated cytotoxicity» da −1 en «leukocyte mediated immunity» y también en «regulation of immune effector process» (tratada como el proceso).
 * [ ] **Discrepancia entre modelos:** con el principal respondiendo `+1` y el secundario `UNKNOWN` (ambos válidos), la salida es `signo = +1`, `estado = revisar`, `motivos` con `discrepancia_entre_modelos`, y se guardan `signo_modelo_principal` y `signo_modelo_secundario`.
 * [ ] **Discrepancia con GO:** un `+1` válido frente a `Polaridad_GO = -1` da `estado = revisar` con `discrepancia_polaridad_GO`, manteniendo `signo = +1`.
 * [ ] **Reanudación:** una segunda ejecución con el registro completo y el mismo prompt realiza **0 llamadas** a los modelos.

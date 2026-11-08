@@ -6,7 +6,9 @@ traslada el efecto a la ruta del Excel:
     signo_ruta = efecto_sobre_nucleo_T × signo_camino(nucleo_T -> nucleo_R) × polaridad(R)
 
   - polaridad(R): +1 si la ruta es un proceso o «positive regulation of X»; -1 si es «negative
-    regulation of X»; None si es «regulation of X» sin dirección (el efecto no se puede trasladar).
+    regulation of X». Una ruta «regulation of X» sin dirección se trata como X (+1 = el gen promueve
+    X; decisión del usuario del 2026-11-08). Con SIN_DIRECCION_COMO_PROCESO = False daría None y la
+    ruta quedaría en UNKNOWN (ruta_sin_direccion).
   - signo_camino: is_a y part_of conservan el signo (un subtipo o una parte de X), las regulaciones
     con signo multiplican, y regulates sin signo, una regulación por encima de un part_of (deprecado
     en RO) o caminos con signos opuestos lo rompen. Reutiliza grafo_go.descendientes de la Fase 1.
@@ -17,7 +19,9 @@ from typing import Dict, List, Optional, Tuple
 from ._extraer_info import (OBO_FILE, cargar_go, cargar_nombres, cargar_sinonimos, descendientes,
                             estados_efectivos)
 
-SIGNO_REGULA = {"positively_regulates": 1, "negatively_regulates": -1, "regulates": None}
+SIN_DIRECCION_COMO_PROCESO = True
+SIGNO_REGULA = {"positively_regulates": 1, "negatively_regulates": -1,
+                "regulates": 1 if SIN_DIRECCION_COMO_PROCESO else None}
 SIGNO_ESTADO = {"N": 1, "+": 1, "P": 1, "-": -1}
 
 
@@ -44,7 +48,8 @@ def nombre(go_id: str) -> str:
 
 def nucleo_y_polaridad(go_id: str) -> Tuple[str, Optional[int]]:
     """'negative regulation of T cell proliferation' -> (GO de 'T cell proliferation', -1).
-    Sigue las regulaciones encadenadas multiplicando su signo; una regulación sin signo da None."""
+    Sigue las regulaciones encadenadas multiplicando su signo; una regulación sin signo cuenta como +1
+    (SIN_DIRECCION_COMO_PROCESO) o da None."""
     regula = _ontologia()[2]
     t, polaridad, vistos = go_id, 1, set()
     while t in regula and t not in vistos:
