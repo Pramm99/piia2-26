@@ -1,6 +1,6 @@
 ---
 description: Control de alucinaciones mediante un esquema de salida con signo, estado y motivos, reglas automáticas de verificación y contraste con Gene Ontology y entre dos modelos.
-state: Aceptado (pendiente de implementación)
+state: Aceptado (validación implementada el 2026-11-08; falta el contraste entre modelos y con GO)
 ---
 
 # ADR 003 - Control de Alucinaciones: Signo, Estado y Motivos en Lugar de Predicciones Forzadas
@@ -17,23 +17,33 @@ El sistema **nunca fuerza un signo** cuando la evidencia no lo sostiene. Cada pa
 | Motivo | Origen | Estado | Signo |
 |---|---|---|---|
 | `no_menciona_gen` | LLM o filtro previo | `no_concluyente` | `UNKNOWN` |
-| `efecto_indirecto` | LLM | `no_concluyente` | `UNKNOWN` |
-| `contradictorio` | LLM | `no_concluyente` | `UNKNOWN` |
-| `contexto_ajeno` | LLM | `no_concluyente` | `UNKNOWN` |
+| `efecto_indirecto` | LLM (el efecto es de otra molécula) | `no_concluyente` | `UNKNOWN` |
+| `contradictorio` | LLM (el abstract da las dos direcciones) | `no_concluyente` | `UNKNOWN` |
+| `contexto_ajeno` | LLM (el abstract no trata ese proceso) | `no_concluyente` | `UNKNOWN` |
+| `direccion_inversa` | LLM (el gen es la diana, no la causa: «TNF induce el gen») | `no_concluyente` | `UNKNOWN` |
+| `marcador_correlacion` | LLM (marcador, coexpresión o correlación, sin causalidad) | `no_concluyente` | `UNKNOWN` |
+| `sin_efecto` | LLM (el abstract dice que no hay efecto) | `no_concluyente` | `UNKNOWN` |
+| `especulativo` | LLM (hipótesis sin resultado) | `no_concluyente` | `UNKNOWN` |
 | `cita_no_verificada` | Regla automática | `no_concluyente` | `UNKNOWN` |
 | `json_invalido` | Regla automática | `no_concluyente` | `UNKNOWN` |
+| `incoherencia_respuesta` | Regla automática (p. ej. un efecto con un motivo de UNKNOWN) | `revisar` | Se mantiene |
+| `ruta_sin_direccion` | Composición (v1_proceso): la ruta es «regulation of X» sin dirección | — | `UNKNOWN` en esa ruta |
 | `discrepancia_polaridad_GO` | Contraste con GO | `revisar` | Se mantiene |
 | `discrepancia_entre_modelos` | Contraste entre modelos | `revisar` | El del modelo principal |
+| `sin_evidencia:<causa>` | Fase 1: el par no tiene ningún abstract y no llega al LLM | `no_concluyente` | `UNKNOWN` |
+
+Los motivos `direccion_inversa`, `marcador_correlacion`, `sin_efecto` y `especulativo` se añadieron el 2026-11-08 (informe «Prompt y modelos gratuitos Fase 2»): separan las trampas de dirección más frecuentes, que antes caían todas en `efecto_indirecto` o `contexto_ajeno`, para poder analizar los errores por tipo.
 
 `UNKNOWN` queda reservado para los casos **sin evidencia utilizable**. Cuando hay evidencia pero otra fuente la contradice (Gene Ontology o el modelo secundario), se conserva el signo y el caso se marca para revisión experta.
 
 El control se organiza en tres capas:
 
-1. **Prompt:** el modelo puede responder `UNKNOWN` indicando uno de los cuatro motivos semánticos. La justificación literal y el razonamiento se piden **antes** del signo.
+1. **Prompt:** el modelo puede responder `UNKNOWN` indicando uno de los motivos semánticos, cada uno con un criterio explícito en el prompt (ofrecer «unknown» sin criterios provoca abstenciones falsas). La justificación literal y el razonamiento se piden **antes** del signo. En `v1_proceso` el modelo devuelve el efecto sobre el proceso (`INCREASES` / `DECREASES` / `NO_CLEAR_EFFECT`) y sus motivos en inglés, que el código traduce a los de esta tabla; la línea base `v0_original` conserva el prompt de partida para el benchmark.
 2. **Reglas automáticas**, que no dependen del juicio del modelo:
    * **Filtro previo:** si ni el gen ni sus alias del GAF aparecen en el abstract como palabra completa (`CD7` no cuenta dentro de `CD70`; `CD-7` equivale a `CD7`), la salida es `no_menciona_gen` sin llamar al LLM.
-   * **Verificación de la cita:** la justificación debe aparecer literalmente en el abstract tras una normalización solo para comparar (minúsculas, todos los guiones unificados, letras griegas escritas como palabras: α→alpha, κ→kappa…, y sin puntuación). Debe tener **al menos 6 palabras**. Si no se verifica, el signo pasa a `UNKNOWN` con `cita_no_verificada`, y se conserva el signo original del modelo (`signo_llm`) para auditoría.
-   * **Formato:** un JSON no interpretable o un signo fuera de los valores válidos da `json_invalido`.
+   * **Verificación de la cita:** la justificación debe aparecer literalmente en el abstract tras una normalización solo para comparar (minúsculas, todos los guiones unificados, letras griegas escritas como palabras: α→alpha, κ→kappa…, y sin puntuación). Debe tener **al menos 6 palabras** y coincidir con palabras enteras. En `v1_proceso` el abstract va en frases numeradas y la cita debe estar dentro de la frase que indica el modelo (`id_frase`). Si no se verifica, el signo pasa a `UNKNOWN` con `cita_no_verificada`, y se conserva el signo original del modelo (`signo_llm`) para auditoría.
+   * **Formato:** un JSON no interpretable, un campo que falta o un valor fuera de los permitidos da `json_invalido`.
+   * **Coherencia:** una respuesta internamente incoherente (un efecto con motivo de `UNKNOWN`, `NO_CLEAR_EFFECT` sin motivo, o un efecto basado en `correlation_or_marker`) conserva el signo, añade `incoherencia_respuesta` y queda en `revisar`.
 3. **Contraste con fuentes independientes:**
    * **Gene Ontology:** si el signo del modelo difiere de `Polaridad_GO` (cuando esta existe), se añade `discrepancia_polaridad_GO`.
    * **Dos modelos:** cada caso se evalúa con un **modelo principal** y un **modelo secundario**, ambos gratuitos. El `signo` final es el del principal y se registran las respuestas de los dos. Cualquier diferencia entre ellos (signos opuestos, o uno `UNKNOWN` y el otro no) añade el motivo `discrepancia_entre_modelos` y deja el caso en `revisar`. Qué modelo es el principal y cuál el secundario se fija en el [ADR-005](adr-005-eleccion-modelo-coste-cero.md), a partir del benchmark.
@@ -84,8 +94,12 @@ Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga 
 
 ## Referencias
 * **Código del proyecto (estado actual):**
-  * `codigo/consulta_gen/respuesta.py`: ya calcula `cita_verificada`, pero todavía no fuerza `UNKNOWN`; `normalizar_signo` ya convierte valores no válidos en `UNKNOWN`.
-  * `codigo/consulta_gen/prompt.py` y `limpieza.py`: lugar previsto para los motivos del prompt y la normalización de comparación.
+  * `codigo/consulta_gen/respuesta.py`: verificación de la cita, `UNKNOWN` forzado, `json_invalido`, `incoherencia_respuesta` y traducción de los motivos (commit `1738e0b`).
+  * `codigo/consulta_gen/limpieza.py`: `forma_comparacion()` y `segmentar_frases()`.
+  * `codigo/consulta_gen/pipeline.py`: filtro previo `no_menciona_gen` (alias de MyGene, sin llamar al LLM).
+  * `codigo/consulta_gen/esquema.py`: esquema JSON estricto de `v1_proceso` y tabla de motivos.
+  * `codigo/extraer_info/polaridad.py`: cierre `sin_evidencia` de los pares sin abstract.
+  * Pendiente: el contraste entre modelos y con `Polaridad_GO` (necesita el cliente LLM).
 * **Salidas estructuradas:**
   * Groq: [https://console.groq.com/docs/structured-outputs](https://console.groq.com/docs/structured-outputs)
   * Gemini API: [https://ai.google.dev/gemini-api/docs/structured-output](https://ai.google.dev/gemini-api/docs/structured-output)
