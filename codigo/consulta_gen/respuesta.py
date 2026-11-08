@@ -1,12 +1,21 @@
-"""Interpretación y validación de la respuesta (texto) de un LLM. No llama a ningún LLM."""
+"""Interpretación y validación de la respuesta (texto) de un LLM. No llama a ningún LLM.
+
+Las dos versiones del prompt comparten la verificación de la cita (ADR-003, spec de limpieza): la cita,
+en forma de comparación, debe tener al menos 6 palabras y aparecer como palabras enteras en el texto
+enviado. Si un signo no tiene cita verificada se fuerza UNKNOWN con cita_no_verificada y se guarda el
+signo que dio el modelo (signo_llm).
+"""
 import json
 import re
-from typing import Any, Dict
+from typing import Any, Dict, List
 
-from .esquema import SIGNO_DESCONOCIDO, SIGNO_NEGATIVO, SIGNO_POSITIVO, PromptLLM
-from .limpieza import normalizar_espacios
+from .esquema import (EFECTO_A_SIGNO, ESQUEMA_V1, ESTADO_NO_CONCLUYENTE, ESTADO_RESUELTO, ESTADO_REVISAR,
+                      MIN_PALABRAS_CITA, MOTIVO_MODELO_A_ADR, SIGNO_DESCONOCIDO, SIGNO_NEGATIVO,
+                      SIGNO_POSITIVO, V1_PROCESO, PromptLLM)
+from .limpieza import forma_comparacion
 
 _VALLAS = re.compile(r"```(?:json)?", re.IGNORECASE)
+_A_SIGNO = {1: SIGNO_POSITIVO, -1: SIGNO_NEGATIVO, None: SIGNO_DESCONOCIDO}
 
 
 def extraer_json(texto: str) -> Dict[str, Any]:
@@ -32,25 +41,82 @@ def normalizar_signo(valor: Any) -> str:
     return SIGNO_DESCONOCIDO
 
 
-def _cita_en_abstract(cita: str, abstract: str) -> bool:
-    c = normalizar_espacios(cita).casefold().strip(" .\"'")
-    return bool(c) and c in normalizar_espacios(abstract).casefold()
+def verificar_cita(cita: str, texto: str) -> bool:
+    """La cita (≥6 palabras) aparece como palabras enteras en el texto, tolerando mayúsculas, guiones,
+    griegas escritas y puntuación (forma_comparacion)."""
+    c = forma_comparacion(cita)
+    return len(c.split()) >= MIN_PALABRAS_CITA and f" {c} " in f" {forma_comparacion(texto)} "
+
+
+def _cerrar(signo: str, motivos: List[str], cita_ok: bool) -> Dict[str, Any]:
+    """Aplica el UNKNOWN forzado por cita y decide el estado."""
+    signo_llm = signo
+    if signo != SIGNO_DESCONOCIDO and not cita_ok:
+        signo, motivos = SIGNO_DESCONOCIDO, motivos + ["cita_no_verificada"]
+    if "incoherencia_respuesta" in motivos:
+        estado = ESTADO_REVISAR
+    else:
+        estado = ESTADO_RESUELTO if signo != SIGNO_DESCONOCIDO else ESTADO_NO_CONCLUYENTE
+    return {"signo": signo, "signo_llm": signo_llm, "estado": estado, "motivos": motivos, "cita_verificada": cita_ok}
+
+
+def _validar_v0(prompt: PromptLLM, crudo: Dict[str, Any]) -> Dict[str, Any]:
+    ev = prompt.evidencia
+    signo = normalizar_signo(crudo.get("signo_funcional"))
+    cita = str(crudo.get("justificacion_literal") or "").strip()
+    motivos = [] if str(crudo.get("signo_funcional")).strip() in ("+1", "-1", "1", "UNKNOWN") else ["json_invalido"]
+    salida = _cerrar(signo, motivos, verificar_cita(cita, f"{ev.titulo} {ev.abstract}"))
+    return {**salida, "justificacion_literal": cita, "razonamiento_corto": str(crudo.get("razonamiento_corto") or "").strip(),
+            "signo_funcional": salida["signo"]}  # signo_funcional: nombre de la v0, se mantiene
+
+
+def _texto_frase(caso, id_frase: str) -> str:
+    if id_frase == "T":
+        return caso.titulo
+    if id_frase.startswith("S") and id_frase[1:].isdigit() and 1 <= int(id_frase[1:]) <= len(caso.frases):
+        return caso.frases[int(id_frase[1:]) - 1]
+    return ""
+
+
+def _validar_v1(prompt: PromptLLM, crudo: Dict[str, Any]) -> Dict[str, Any]:
+    caso = prompt.evidencia
+    props = ESQUEMA_V1["properties"]
+    faltan = [k for k in ESQUEMA_V1["required"] if k not in crudo]
+    fuera = [k for k, p in props.items() if "enum" in p and k in crudo and crudo[k] not in p["enum"]]
+    if faltan or fuera:
+        return {**_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "efecto": "", "rutas": []}
+
+    efecto, motivo_modelo = crudo["efecto"], crudo["motivo_unknown"]
+    id_frase = str(crudo["id_frase"]).strip().strip("[]")
+    cita = str(crudo["justificacion_literal"]).strip()
+    signo = _A_SIGNO[EFECTO_A_SIGNO[efecto]]
+    motivos = [MOTIVO_MODELO_A_ADR[motivo_modelo]] if motivo_modelo != "none" else []
+    # Combinaciones incoherentes -> revisar (se conservan para el análisis de errores)
+    if (efecto != "NO_CLEAR_EFFECT" and motivo_modelo != "none") or (efecto == "NO_CLEAR_EFFECT" and motivo_modelo == "none") \
+            or (efecto != "NO_CLEAR_EFFECT" and crudo["tipo_evidencia"] == "correlation_or_marker"):
+        motivos.append("incoherencia_respuesta")
+    salida = _cerrar(signo, motivos, verificar_cita(cita, _texto_frase(caso, id_frase)))
+
+    # Signo sobre cada ruta del caso: efecto × factor (None = ruta «regulation of X» sin dirección)
+    e = EFECTO_A_SIGNO[efecto] if salida["signo"] != SIGNO_DESCONOCIDO else None
+    rutas = [{"go_id": r, "ruta_nombre": n,
+              "signo_ruta": _A_SIGNO[e * f] if e is not None and f is not None else SIGNO_DESCONOCIDO,
+              "motivo_ruta": "ruta_sin_direccion" if f is None and e is not None else ""}
+             for r, n, f in caso.rutas]
+    return {**salida, "efecto": efecto, "id_frase": id_frase, "justificacion_literal": cita,
+            "tipo_evidencia": crudo["tipo_evidencia"], "organismo": crudo["organismo"],
+            "tipo_celular": crudo["tipo_celular"], "razonamiento_corto": str(crudo["razonamiento_corto"]).strip(),
+            "nucleo_id": caso.nucleo_id, "nucleo_nombre": caso.nucleo_nombre, "rutas": rutas}
 
 
 def validar_respuesta(prompt: PromptLLM, texto_llm: str) -> Dict[str, Any]:
-    """Devuelve un dict con el esquema fijo. pmid y gen se toman de la evidencia, no del LLM.
-    `cita_verificada` indica si la justificación aparece literalmente en el abstract enviado."""
+    """Dict con el esquema fijo de la versión del prompt. pmid y gen se toman de la evidencia, nunca del LLM.
+    Una respuesta recibida pero no interpretable da UNKNOWN con json_invalido."""
     ev = prompt.evidencia
-    base = {"pmid": ev.pmid, "gen": ev.gen, "go_id": ev.go_id}
+    base = {"version": prompt.version, "pmid": ev.pmid, "gen": ev.gen, "go_id": ev.go_id}
     try:
         crudo = extraer_json(texto_llm)
     except Exception as err:
-        return {**base, "signo_funcional": SIGNO_DESCONOCIDO, "justificacion_literal": "",
-                "razonamiento_corto": "", "cita_verificada": False,
-                "error": f"Respuesta no interpretable: {err}"}
-
-    signo = normalizar_signo(crudo.get("signo_funcional"))
-    cita = str(crudo.get("justificacion_literal") or "").strip()
-    return {**base, "signo_funcional": signo, "justificacion_literal": cita,
-            "razonamiento_corto": str(crudo.get("razonamiento_corto") or "").strip(),
-            "cita_verificada": _cita_en_abstract(cita, ev.abstract), "error": ""}
+        return {**base, **_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "error": f"Respuesta no interpretable: {err}"}
+    validar = _validar_v1 if prompt.version == V1_PROCESO else _validar_v0
+    return {**base, **validar(prompt, crudo), "error": ""}
