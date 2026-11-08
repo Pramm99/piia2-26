@@ -30,13 +30,20 @@ HGNC_IG_URL = 'https://rest.genenames.org/search/locus_type/"immunoglobulin gene
 EXCEPCIONES_IG = {"JCHAIN", "PIGR"}
 
 # --- Fuentes externas de PMIDs para los pares que el GAF deja sin PMID (fuentes/) ---
-# Solo fuentes gratuitas y curadas: frases de NCBI GeneRIF (vía MyGene.info) y la sección
-# FUNCTION de UniProt Swiss-Prot. Sus PMIDs se cruzan con la ruta y se descargan con abstracts.py.
+# Solo fuentes gratuitas: 1) frases curadas de NCBI GeneRIF (vía MyGene.info); 2) para los pares
+# que sigan vacíos, búsqueda dirigida en Europe PMC. Los PMIDs se descargan con abstracts.py.
 MYGENE_API = "https://mygene.info/v3/query"
 MYGENE_CACHE = os.path.join(DIR_DATA, "cache_mygene.json")
+EPMC_SEARCH_POST = "https://www.ebi.ac.uk/europepmc/webservices/rest/searchPOST"
+EPMC_BUSQUEDAS_CACHE = os.path.join(DIR_DATA, "cache_epmc_busquedas.json")
+EPMC_PROFUNDIDAD_CONSULTA = 2       # frases de la ruta en la consulta (la verificación usa todo el subárbol)
+EPMC_FRASES_POR_CONSULTA = 80       # las rutas con más frases se reparten en varias consultas
+EPMC_RESULTADOS_POR_CONSULTA = 25   # los más relevantes según Europe PMC
+MAX_PMIDS_EXTERNOS_POR_PAR = 10     # límite de abstracts por par para no saturar al LLM
+
+# --- UniProt Swiss-Prot (función de la Ig completa) ---
 UNIPROT_API = "https://rest.uniprot.org/uniprotkb/search"
 UNIPROT_CACHE = os.path.join(DIR_DATA, "cache_uniprot.json")
-MAX_PMIDS_EXTERNOS_POR_PAR = 10  # límite de abstracts por par para no saturar al LLM
 
 # --- Función de la Ig completa (UniProt Swiss-Prot) ---
 # Isotipos y piezas del complejo con función propia; el resto (segmentos V/D/J, cadenas κ/λ)

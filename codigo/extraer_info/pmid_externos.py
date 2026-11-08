@@ -1,35 +1,92 @@
-"""PMIDs de fuentes externas para los pares (Gen, Ruta) que el GAF deja sin PMID.
+"""PMIDs de fuentes externas para los pares (Gen, Ruta) que el GAF deja sin PMID. Dos etapas:
 
-Para cada gen se reúnen las frases curadas de NCBI GeneRIF y de UniProt FUNCTION, cada una con su
-PMID. Un PMID se asigna a un par si la frase, el título o el abstract mencionan la ruta o algún término
-de su subárbol (relevancia.py). En los GeneRIF, además, el texto tiene que nombrar al gen: un mismo
-GeneRIF puede venir de un artículo sobre otros genes. Las filas salen con el mismo esquema que las
-evidencias del GAF, así que siguen el mismo camino hasta la hoja Con_abstract.
+  1. NCBI GeneRIF: frases curadas sobre el gen, cada una con su PMID.
+  2. Europe PMC dirigida, solo para los pares que siguen vacíos: artículos que nombran el gen y la
+     ruta en la MISMA frase del título o del abstract (no está curada: la coincidencia en frases
+     distintas daba muchos artículos que solo mencionan el gen de pasada).
+
+Un PMID se asigna a un par si la frase GeneRIF, el título o el abstract mencionan la ruta o algún
+término de su subárbol (relevancia.py) y, además, nombran al gen: un GeneRIF puede venir de un artículo
+sobre otros genes y la búsqueda de Europe PMC no distingue CD7 de CD-7 ni de alias ambiguos. Las filas
+salen con el mismo esquema que las evidencias del GAF y siguen el mismo camino hasta Con_abstract.
 """
+from collections import defaultdict
+
 import pandas as pd
 
 from abstracts import descargar_abstracts
-from config import MAX_PMIDS_EXTERNOS_POR_PAR
+from config import EPMC_PROFUNDIDAD_CONSULTA, MAX_PMIDS_EXTERNOS_POR_PAR
+from fuentes import europepmc
 from fuentes.generif import datos_mygene
-from fuentes.uniprot import entradas_uniprot, frases_funcion
-from relevancia import coincidencia, menciona_gen, ngramas, patron_gen, vocabularios_rutas
+from relevancia import (MIN_ALIAS, coincidencia, coincidencia_en_frase, menciona_gen, ngramas, patron_gen,
+                        vocabularios_rutas)
 
 COLUMNAS = ["Gen", "GO_ID", "PMID", "GO_ID_anotado", "Directo", "Profundidad", "Evidencia", "Via_gen",
             "Fuente", "Tipo_relacion", "Polaridad_GO", "Experimental", "Frase_fuente",
             "Termino_coincidente", "Coincide_en"]
 
 
-def _candidatos(genes):
-    """({gen: [(pmid, fuente, frase)]}, {gen: patrón del gen}) con las frases GeneRIF y UniProt."""
-    mg = datos_mygene(genes)
-    up = entradas_uniprot(genes)
-    cand, patrones = {}, {}
-    for g in genes:
-        filas = [(r["PMID"], "GeneRIF", r["Texto"]) for r in mg[g]["GeneRIF"]]
-        filas += [(p, "UniProt", frase) for pmids, frase in frases_funcion(up[g]["Funcion"]) for p in pmids]
-        cand[g] = filas
-        patrones[g] = patron_gen(g, mg[g]["Alias"], mg[g]["Nombre"])
-    return cand, patrones
+class _Textos:
+    """Título + abstract por PMID (descargados con abstracts.py) y sus n-gramas, calculados una vez."""
+
+    def __init__(self):
+        self.texto, self._gramas = {}, {}
+
+    def cargar(self, pmids):
+        nuevos = sorted(set(pmids) - set(self.texto))
+        if nuevos:
+            df = descargar_abstracts(nuevos)
+            self.texto.update({p: f"{t} {a}" for p, t, a in zip(df["PMID"], df["Titulo"], df["Abstract"])})
+
+    def gramas(self, pmid):
+        if pmid not in self._gramas:
+            self._gramas[pmid] = ngramas(self.texto.get(pmid, ""))
+        return self._gramas[pmid]
+
+
+def _etapa_generif(pares, mg, patrones, vocab, textos):
+    """Registros GeneRIF: la frase curada o el abstract nombran la ruta, y el texto nombra al gen."""
+    textos.cargar(r["PMID"] for g in {g for g, _ in pares} for r in mg[g]["GeneRIF"])
+    por_gen, registros, descartados = defaultdict(list), [], 0
+    for g in {g for g, _ in pares}:
+        for r in mg[g]["GeneRIF"]:
+            p, frase = r["PMID"], r["Texto"]
+            if not menciona_gen(f"{frase} {textos.texto.get(p, '')}", patrones[g]):
+                descartados += 1
+                continue
+            por_gen[g].append((p, frase, ngramas(frase)))
+    for gen, ruta in pares:
+        for pmid, frase, gramas in por_gen[gen]:
+            termino, donde = coincidencia(gramas, vocab[ruta]), "frase"
+            if not termino and pmid in textos.texto:
+                termino, donde = coincidencia(textos.gramas(pmid), vocab[ruta]), "abstract"
+            if termino:
+                registros.append({"Gen": gen, "GO_ID": ruta, "PMID": pmid, "Fuente": "GeneRIF",
+                                  "Frase_fuente": frase, "Termino_coincidente": termino, "Coincide_en": donde})
+    print(f"   GeneRIF: {len(registros)} asignaciones; {descartados} descartados porque el texto no nombra al gen")
+    return registros
+
+
+def _etapa_europepmc(pares, mg, patrones, vocab, vocab_consulta, textos):
+    """Registros Europe PMC: búsqueda por gen + frases cercanas de la ruta, verificada en local frase a frase."""
+    consultas = {}
+    for gen, ruta in pares:
+        nombres = {gen} | {a for a in mg[gen]["Alias"] if len(a) >= MIN_ALIAS and not a.isdigit()}
+        consultas[(gen, ruta)] = europepmc.construir_consultas(nombres, vocab_consulta[ruta].values())
+    resultados = europepmc.buscar([q for qs in consultas.values() for q in qs])
+    candidatos = {par: list(dict.fromkeys(p for q in qs for p in resultados[q])) for par, qs in consultas.items()}
+    textos.cargar(p for ps in candidatos.values() for p in ps)
+    registros = []
+    for (gen, ruta), pmids in candidatos.items():
+        for pmid in pmids:
+            if pmid not in textos.texto:
+                continue
+            frase, termino = coincidencia_en_frase(textos.texto[pmid], patrones[gen], vocab[ruta])
+            if termino:
+                registros.append({"Gen": gen, "GO_ID": ruta, "PMID": pmid, "Fuente": "EuropePMC",
+                                  "Frase_fuente": frase, "Termino_coincidente": termino, "Coincide_en": "frase_abstract"})
+    print(f"   Europe PMC: {len(registros)} asignaciones en {len({(r['Gen'], r['GO_ID']) for r in registros})} pares")
+    return registros
 
 
 def buscar_pmids_externos(pares_sin, desc_map, sinonimos):
@@ -37,40 +94,24 @@ def buscar_pmids_externos(pares_sin, desc_map, sinonimos):
     if not pares_sin:
         return pd.DataFrame(columns=COLUMNAS)
     genes = sorted({g for g, _ in pares_sin})
-    cand, patrones = _candidatos(genes)
-    pmids = sorted({p for filas in cand.values() for p, _, _ in filas})
-    print(f"🔎 Fuentes externas: {len(genes)} genes sin PMID en el GAF, {len(pmids)} PMIDs candidatos")
-    df_abs = descargar_abstracts(pmids)
-    textos = {p: f"{t} {a}" for p, t, a in zip(df_abs["PMID"], df_abs["Titulo"], df_abs["Abstract"])}
-    vocab = vocabularios_rutas(desc_map, sinonimos, {r for _, r in pares_sin})
+    rutas = {r for _, r in pares_sin}
+    print(f"🔎 Fuentes externas para {len(pares_sin)} pares sin PMID en el GAF ({len(genes)} genes)")
+    mg = datos_mygene(genes)
+    patrones = {g: patron_gen(g, mg[g]["Alias"], mg[g]["Nombre"]) for g in genes}
+    vocab = vocabularios_rutas(desc_map, sinonimos, rutas)
+    textos = _Textos()
 
-    gramas_abs = {}
-    registros = []
-    descartados = 0
-    for g in genes:
-        filas = []
-        for p, f, frase in cand[g]:
-            if f == "GeneRIF" and not menciona_gen(f"{frase} {textos.get(p, '')}", patrones[g]):
-                descartados += 1
-                continue
-            filas.append((p, f, frase, ngramas(frase)))
-        for gen, ruta in (par for par in pares_sin if par[0] == g):
-            for pmid, fuente, frase, gramas in filas:
-                termino, donde = coincidencia(gramas, vocab[ruta]), "frase"
-                if not termino and pmid in textos:
-                    if pmid not in gramas_abs:
-                        gramas_abs[pmid] = ngramas(textos[pmid])
-                    termino, donde = coincidencia(gramas_abs[pmid], vocab[ruta]), "abstract"
-                if termino:
-                    registros.append({"Gen": gen, "GO_ID": ruta, "PMID": pmid, "Fuente": fuente,
-                                      "Frase_fuente": frase, "Termino_coincidente": termino, "Coincide_en": donde})
-    print(f"   GeneRIF descartados porque el texto no nombra al gen: {descartados}")
+    registros = _etapa_generif(pares_sin, mg, patrones, vocab, textos)
+    vacios = pares_sin - {(r["Gen"], r["GO_ID"]) for r in registros}
+    if vacios:
+        cerca = vocabularios_rutas(desc_map, sinonimos, {r for _, r in vacios}, EPMC_PROFUNDIDAD_CONSULTA)
+        registros += _etapa_europepmc(vacios, mg, patrones, vocab, cerca, textos)
     if not registros:
         return pd.DataFrame(columns=COLUMNAS)
 
     j = lambda x: "|".join(sorted(set(x)))
     df = (pd.DataFrame(registros).groupby(["Gen", "GO_ID", "PMID"], as_index=False)
-          .agg(Fuente=("Fuente", j), Frase_fuente=("Frase_fuente", " | ".join),
+          .agg(Fuente=("Fuente", j), Frase_fuente=("Frase_fuente", lambda x: " | ".join(f for f in x if f)),
                Termino_coincidente=("Termino_coincidente", j), Coincide_en=("Coincide_en", j)))
     # Primero los PMIDs cuya propia frase curada nombra la ruta; el abstract solo es respaldo
     # (y, a igualdad, los más recientes: PMID mayor)

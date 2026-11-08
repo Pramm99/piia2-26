@@ -1,13 +1,8 @@
-"""UniProt Swiss-Prot (humano): secciones FUNCTION y SUBUNIT, y las frases de FUNCTION con sus PMIDs."""
-import re
+"""UniProt Swiss-Prot (humano): secciones FUNCTION y SUBUNIT (para la función de la Ig completa)."""
 
 from config import UNIPROT_API, UNIPROT_CACHE
 from fuentes.cache import cargar_json, guardar_json
 from red import configurar_sesion
-
-# UniProt cita al final de cada frase o grupo de frases: "(PubMed:123, PubMed:456)"
-CITA = re.compile(r"\((?:PubMed:\d+(?:,\s*)?)+\)")
-PMID = re.compile(r"PubMed:(\d+)")
 
 
 def _entrada(sesion, gen):
@@ -41,13 +36,3 @@ def entradas_uniprot(genes, destino=UNIPROT_CACHE):
         guardar_json(cache, destino)
     return {g: cache[g] for g in genes}
 
-
-def frases_funcion(funcion):
-    """[(pmids, frase)]: cada tramo de FUNCTION con los PMIDs que lo respaldan (sin tramos sin cita)."""
-    frases, inicio = [], 0
-    for m in CITA.finditer(funcion):
-        frase = funcion[inicio:m.start()].strip(" .")
-        if frase:
-            frases.append((PMID.findall(m.group()), frase))
-        inicio = m.end()
-    return frases

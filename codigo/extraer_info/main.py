@@ -6,7 +6,7 @@
   4. inmunoglobulinas-> las Ig salen aparte como neutras, con la función de la Ig completa
   5. cruce_gaf       -> anotaciones con/sin PMID para esos pares
   6. polaridad       -> triaje del signo GO: aceptar_GO (sin LLM) / LLM / LLM_y_revision
-  7. pmid_externos   -> PMIDs de GeneRIF y UniProt (fuentes/) para los pares sin PMID en el GAF
+  7. pmid_externos   -> PMIDs de GeneRIF y Europe PMC (fuentes/) para los pares sin PMID en el GAF
   8. abstracts       -> títulos y abstracts de los PMIDs
   9. salida          -> embudo por consola y Excel final
 """
