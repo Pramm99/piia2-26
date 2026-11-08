@@ -82,6 +82,23 @@ def cargar_nombres(ruta_obo):
     return nombres
 
 
+def cargar_sinonimos(ruta_obo):
+    """{GO_ID: [nombre, sinónimos EXACT...]} leído del OBO (vocabulario para buscar la ruta en textos)."""
+    vocab, actual = defaultdict(list), None
+    with open(ruta_obo, encoding="utf-8") as f:
+        for linea in f:
+            linea = linea.strip()
+            if linea.startswith("["):
+                actual = None
+            elif linea.startswith("id: GO:"):
+                actual = linea[4:].strip()
+            elif actual and linea.startswith("name:"):
+                vocab[actual].append(linea[5:].strip())
+            elif actual and linea.startswith("synonym:") and " EXACT " in linea:
+                vocab[actual].append(linea.split('"')[1])
+    return vocab
+
+
 def descendientes(go_id, hijos):
     """Devuelve {termino: {estado: profundidad}} con todos los descendientes de go_id (incluido él
     mismo, 'N' a profundidad 0). El estado es la relación efectiva termino -> go_id (ver

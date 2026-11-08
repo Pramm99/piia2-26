@@ -33,9 +33,11 @@ def combinar(df_excel, df_ev, df_abs):
 def imprimir_embudo(pares, base, con, pmids, df_abs):
     print("\n=== EMBUDO ===")
     print(f"Pares de entrada .............. {len(pares)}")
-    print(f"Pares con >=1 PMID en GAF ..... {len(_pares(base))}")
-    print(f"  de ellos, alcanzados por regulación ... {len(_pares(base[base['Tipo_relacion'].str.contains('regulates')]))}")
-    print(f"  de ellos, con polaridad GO (+1/-1) .... {len(_pares(base[base['Polaridad_GO'].isin(['+1', '-1'])]))}")
+    gaf = base[base["Fuente"] == "GOA"]
+    print(f"Pares con >=1 PMID en GAF ..... {len(_pares(gaf))}")
+    print(f"Pares con PMID solo externo ... {len(_pares(base) - _pares(gaf))}  (GeneRIF / UniProt)")
+    print(f"  de ellos, alcanzados por regulación ... {len(_pares(gaf[gaf['Tipo_relacion'].str.contains('regulates')]))}")
+    print(f"  de ellos, con polaridad GO (+1/-1) .... {len(_pares(gaf[gaf['Polaridad_GO'].isin(['+1', '-1'])]))}")
     print(f"Pares con >=1 abstract ........ {len(_pares(con))}")
     print(f"PMIDs únicos .................. {len(pmids)}  (con abstract: {len(df_abs)})")
     print(f"Filas finales con abstract .... {len(con)}")
@@ -70,6 +72,18 @@ def imprimir_triaje(triaje, hoja_ig):
     print(f"Pares con bandera freno/retroalimentación ........... {int(triaje['Freno_retroalimentacion'].sum())}")
 
 
+def construir_sin_evidencia(df_excel, con, df_anot, df_ev):
+    """Pares que se quedan sin ningún abstract (ni del GAF ni de las fuentes externas), con la causa."""
+    info = df_excel[["Gen", "GO_ID", "Ruta_Nombre", "Estado_Original"]].drop_duplicates()
+    falta = info[[p not in _pares(con) for p in zip(info["Gen"], info["GO_ID"])]].copy()
+    anotados = _pares(df_anot) if not df_anot.empty else set()
+    con_pmid = _pares(df_ev) if not df_ev.empty else set()
+    falta["Causa"] = ["PMID_sin_abstract" if p in con_pmid else "anotado_sin_PMID" if p in anotados
+                      else "sin_anotacion_GAF" for p in zip(falta["Gen"], falta["GO_ID"])]
+    print(f"Pares sin ningún abstract ..... {len(falta)}  {falta['Causa'].value_counts().to_dict()}")
+    return falta
+
+
 def imprimir_sin_pmid(sin_pmid):
     if sin_pmid.empty:
         total, con_pol = 0, 0
@@ -79,7 +93,7 @@ def imprimir_sin_pmid(sin_pmid):
     print(f"Pares anotados SIN PMID ....... {total}  (con polaridad GO +1/-1: {con_pol})")
 
 
-def escribir_excel(con, sin, sin_pmid, no_encontrados, triaje, hoja_ig):
+def escribir_excel(con, sin, sin_pmid, no_encontrados, triaje, hoja_ig, sin_evidencia):
     genes_sin = pd.DataFrame({"Gen_no_encontrado_en_GAF": no_encontrados})
     with pd.ExcelWriter(SALIDA, engine="openpyxl") as w:
         limpiar_para_excel(con).to_excel(w, sheet_name="Con_abstract", index=False)
@@ -89,4 +103,5 @@ def escribir_excel(con, sin, sin_pmid, no_encontrados, triaje, hoja_ig):
         genes_sin.to_excel(w, sheet_name="Genes_no_encontrados", index=False)
         limpiar_para_excel(triaje).to_excel(w, sheet_name="Triaje_polaridad", index=False)
         limpiar_para_excel(hoja_ig).to_excel(w, sheet_name="Inmunoglobulinas", index=False)
+        limpiar_para_excel(sin_evidencia).to_excel(w, sheet_name="Sin_evidencia", index=False)
     print(f"🚀 FASE 1 COMPLETADA -> {SALIDA}")

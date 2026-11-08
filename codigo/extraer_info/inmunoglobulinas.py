@@ -7,13 +7,14 @@ pequeño (~230 símbolos) y no depende de cuántos genes haya (medido el 2026-11
 Las Ig no activan ni inhiben la ruta: sus pares no buscan abstracts, salen como «neutro» y llevan
 la función de la Ig completa tomada de UniProt Swiss-Prot (FUNCTION y, para la IgA, SUBUNIT).
 """
-import json
 import os
 
 import pandas as pd
 
 from config import (EXCEPCIONES_IG, HGNC_IG_FILE, HGNC_IG_URL, IG_CON_SUBUNIDAD, IG_FUNCION_PROPIA,
-                    IG_GEN_PLANTILLA, IG_INICIO_PARRAFO, UNIPROT_API, UNIPROT_IG_FILE)
+                    IG_GEN_PLANTILLA, IG_INICIO_PARRAFO)
+from fuentes.cache import cargar_json, guardar_json
+from fuentes.uniprot import entradas_uniprot
 from red import configurar_sesion
 
 SIGNO_NEUTRO = "neutro"
@@ -28,55 +29,13 @@ def cargar_lista_ig(destino=HGNC_IG_FILE):
         simbolos = sorted(d["symbol"].upper() for d in r.json()["response"]["docs"])
         if not simbolos:
             raise RuntimeError("HGNC no ha devuelto ninguna inmunoglobulina: revisa HGNC_IG_URL")
-        _guardar_json(simbolos, destino)
-    with open(destino, encoding="utf-8") as f:
-        return set(json.load(f))
+        guardar_json(simbolos, destino)
+    return set(cargar_json(destino))
 
 
 def detectar_inmunoglobulinas(genes):
     """Devuelve los genes que son inmunoglobulinas (lista HGNC + excepciones)."""
     return {g.strip().upper() for g in genes} & (cargar_lista_ig() | EXCEPCIONES_IG)
-
-
-def _guardar_json(datos, destino):
-    os.makedirs(os.path.dirname(destino) or ".", exist_ok=True)
-    tmp = destino + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(datos, f, ensure_ascii=False)
-    os.replace(tmp, destino)
-
-
-def _entrada_uniprot(sesion, gen):
-    """{Accesion, Funcion, Subunidad} de la entrada Swiss-Prot humana del gen ('' si no tiene)."""
-    params = {"query": f"gene_exact:{gen} AND organism_id:9606 AND reviewed:true",
-              "fields": "accession,cc_function,cc_subunit", "format": "json"}
-    r = sesion.get(UNIPROT_API, params=params, timeout=60)
-    r.raise_for_status()
-    res = r.json().get("results", [])
-    if not res:
-        return {"Accesion": "", "Funcion": "", "Subunidad": ""}
-    textos = {"FUNCTION": [], "SUBUNIT": []}
-    for c in res[0].get("comments", []):
-        if c.get("commentType") in textos:
-            textos[c["commentType"]] += [t["value"] for t in c.get("texts", [])]
-    return {"Accesion": res[0]["primaryAccession"], "Funcion": " ".join(textos["FUNCTION"]),
-            "Subunidad": " ".join(textos["SUBUNIT"])}
-
-
-def cargar_uniprot_ig(genes, destino=UNIPROT_IG_FILE):
-    """Entradas UniProt de los genes (y del gen plantilla), con caché en disco."""
-    cache = {}
-    if os.path.exists(destino):
-        with open(destino, encoding="utf-8") as f:
-            cache = json.load(f)
-    pendientes = sorted((set(genes) | {IG_GEN_PLANTILLA}) - set(cache))
-    if pendientes:
-        print(f"📥 Consultando UniProt para {len(pendientes)} inmunoglobulinas ...")
-        sesion = configurar_sesion()
-        for g in pendientes:
-            cache[g] = _entrada_uniprot(sesion, g)
-        _guardar_json(cache, destino)
-    return cache
 
 
 def _parrafo_comun(funcion):
@@ -107,7 +66,7 @@ def construir_hoja_ig(df_excel, igs):
     df = df_excel[df_excel["Gen"].isin(igs)][columnas[:4]].drop_duplicates()
     if df.empty:
         return pd.DataFrame(columns=columnas)
-    entradas = cargar_uniprot_ig(igs)
+    entradas = entradas_uniprot(set(igs) | {IG_GEN_PLANTILLA})
     textos = {g: funcion_ig_completa(g, entradas) for g in igs}
     df["Signo"] = SIGNO_NEUTRO
     df["Motivo"] = "inmunoglobulina"

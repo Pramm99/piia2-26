@@ -29,9 +29,16 @@ HGNC_IG_URL = 'https://rest.genenames.org/search/locus_type/"immunoglobulin gene
 # Forman parte de la Ig completa pero su símbolo no empieza por IG (cadena J y componente secretor)
 EXCEPCIONES_IG = {"JCHAIN", "PIGR"}
 
-# --- Función de la Ig completa (UniProt Swiss-Prot, se descarga una vez por gen) ---
+# --- Fuentes externas de PMIDs para los pares que el GAF deja sin PMID (fuentes/) ---
+# Solo fuentes gratuitas y curadas: frases de NCBI GeneRIF (vía MyGene.info) y la sección
+# FUNCTION de UniProt Swiss-Prot. Sus PMIDs se cruzan con la ruta y se descargan con abstracts.py.
+MYGENE_API = "https://mygene.info/v3/query"
+MYGENE_CACHE = os.path.join(DIR_DATA, "cache_mygene.json")
 UNIPROT_API = "https://rest.uniprot.org/uniprotkb/search"
-UNIPROT_IG_FILE = os.path.join(DIR_DATA, "uniprot_inmunoglobulinas.json")
+UNIPROT_CACHE = os.path.join(DIR_DATA, "cache_uniprot.json")
+MAX_PMIDS_EXTERNOS_POR_PAR = 10  # límite de abstracts por par para no saturar al LLM
+
+# --- Función de la Ig completa (UniProt Swiss-Prot) ---
 # Isotipos y piezas del complejo con función propia; el resto (segmentos V/D/J, cadenas κ/λ)
 # usa el párrafo común de UniProt sobre la Ig completa
 IG_FUNCION_PROPIA = {"IGHG1", "IGHG2", "IGHG3", "IGHG4", "IGHM", "IGHD", "IGHE",
