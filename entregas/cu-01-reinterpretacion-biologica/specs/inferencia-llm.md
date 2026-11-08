@@ -42,7 +42,7 @@ El signo siempre se expresa **respecto a la ruta tal como se llama**. En una rut
 * **Polaridad de la ruta:**
   * +1 si es un proceso o «positive regulation of X»;
   * −1 si es «negative regulation of X»;
-  * +1 también si es «regulation of X» sin dirección: **se trata como X**, de modo que +1 significa «el gen promueve X» (decisión del 2026-11-08; son el 25 % de las filas). Con `SIN_DIRECCION_COMO_PROCESO = False` en `proceso.py`, esas rutas recibirían `UNKNOWN` con el motivo `ruta_sin_direccion`.
+  * +1 también si es «regulation of X» sin dirección: **se trata como X**, de modo que +1 significa «el gen promueve X» (decisión del 2026-11-08; son el 25 % de las filas). La opción `SIN_DIRECCION_COMO_PROCESO` está en `codigo/extraer_info/config.py` y se aplica igual en la Fase 1 (`Polaridad_GO`), para que el contraste con GO también funcione en estas rutas; con `False`, recibirían `UNKNOWN` con el motivo `ruta_sin_direccion`.
   * La dirección se detecta por la estructura del OBO, y las regulaciones encadenadas multiplican su signo («regulation of negative regulation of X» se comporta como «negative regulation of X»).
 * **Signo del camino** entre núcleos, reutilizando `grafo_go` de la Fase 1:
   * `is_a` y `part_of` conservan el signo (un subtipo o una parte de X);
