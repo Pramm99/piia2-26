@@ -1,4 +1,4 @@
-"""PMIDs de fuentes externas para los pares (Gen, Ruta) que el GAF deja sin PMID. Dos etapas:
+"""PMIDs de fuentes externas para los pares (Gen, Ruta) sin abstract utilizable del GAF. Dos etapas:
 
   1. NCBI GeneRIF: frases curadas sobre el gen, cada una con su PMID.
   2. Europe PMC dirigida, solo para los pares que siguen vacíos: artículos que nombran el gen y la
@@ -95,7 +95,7 @@ def buscar_pmids_externos(pares_sin, desc_map, sinonimos):
         return pd.DataFrame(columns=COLUMNAS)
     genes = sorted({g for g, _ in pares_sin})
     rutas = {r for _, r in pares_sin}
-    print(f"🔎 Fuentes externas para {len(pares_sin)} pares sin PMID en el GAF ({len(genes)} genes)")
+    print(f"🔎 Fuentes externas para {len(pares_sin)} pares sin abstract del GAF ({len(genes)} genes)")
     mg = datos_mygene(genes)
     patrones = {g: patron_gen(g, mg[g]["Alias"], mg[g]["Nombre"]) for g in genes}
     vocab = vocabularios_rutas(desc_map, sinonimos, rutas)

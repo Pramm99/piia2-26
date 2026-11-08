@@ -6,7 +6,7 @@
   4. inmunoglobulinas-> las Ig salen aparte como neutras, con la función de la Ig completa
   5. cruce_gaf       -> anotaciones con/sin PMID para esos pares
   6. polaridad       -> triaje del signo GO: aceptar_GO (sin LLM) / LLM / LLM_y_revision
-  7. pmid_externos   -> PMIDs de GeneRIF y Europe PMC (fuentes/) para los pares sin PMID en el GAF
+  7. pmid_externos   -> PMIDs de GeneRIF y Europe PMC (fuentes/) para los pares sin abstract del GAF
   8. abstracts       -> títulos y abstracts de los PMIDs
   9. salida          -> embudo por consola y Excel final
 """
@@ -43,8 +43,14 @@ def ejecutar_fase_1():
               f"(ej: {no_encontrados[:15]})")
     triaje = triaje_pares(df_excel, df_anot)
 
-    pares_con_pmid = set(zip(df_ev["Gen"], df_ev["GO_ID"])) if not df_ev.empty else set()
-    df_ext = buscar_pmids_externos(pares - pares_con_pmid, desc_map, cargar_sinonimos(OBO_FILE))
+    # Las fuentes externas buscan todos los pares sin abstract utilizable del GAF: los que no tienen
+    # PMID y los que solo tienen PMIDs sin abstract en PubMed (p. ej. revisiones antiguas indexadas sin él)
+    pares_con_abstract = set()
+    if not df_ev.empty:
+        con_texto = descargar_abstracts(df_ev["PMID"].unique().tolist())["PMID"]
+        ev_texto = df_ev[df_ev["PMID"].isin(con_texto)]
+        pares_con_abstract = set(zip(ev_texto["Gen"], ev_texto["GO_ID"]))
+    df_ext = buscar_pmids_externos(pares - pares_con_abstract, desc_map, cargar_sinonimos(OBO_FILE))
     if not df_ext.empty:
         df_ev = pd.concat([df_ev, df_ext], ignore_index=True) if not df_ev.empty else df_ext
     if df_ev.empty:
