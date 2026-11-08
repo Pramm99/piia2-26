@@ -2,7 +2,7 @@
 from collections import defaultdict, deque
 
 from config import (ARISTAS_SIN_SIGNO, CORTAR_REGULACION_TRAS_PART_OF, PROPAGAR_REGULACION,
-                    SIGNO_POR_PERTENENCIA_REGULACION)
+                    SIGNO_POR_PERTENENCIA_REGULACION, SIN_DIRECCION_COMO_PROCESO)
 
 # Relaciones del grafo GO usadas para propagar y su "signo":
 #   N = neutra (no cambia la polaridad), + = positiva, - = negativa, R = regula sin signo
@@ -141,12 +141,34 @@ def reguladores_dirigidos(hijos):
             if rel in ("positively_regulates", "negatively_regulates")}
 
 
+def reguladores_sin_direccion(hijos):
+    """{término: X} para los «regulation of X» sin dirección (solo relación regulates hacia X)."""
+    dirigidos = reguladores_dirigidos(hijos)
+    res = {}
+    for objetivo, hs in sorted(hijos.items()):
+        for h, rel in sorted(hs):
+            if rel == "regulates" and h not in dirigidos:
+                res.setdefault(h, objetivo)
+    return res
+
+
+def _descendientes_ruta(ruta, hijos, dirigidos, sin_direccion):
+    """Descendientes de la ruta con el estado respecto a ella; en una «regulation of X» sin dirección,
+    los términos de su subárbol llevan su estado respecto a X (la ruta se trata como X)."""
+    desc = descendientes(ruta, hijos, "P" if ruta in dirigidos else "N")
+    if ruta in sin_direccion:
+        respecto_x = descendientes(sin_direccion[ruta], hijos)
+        desc = {t: respecto_x.get(t, e) for t, e in desc.items()}
+    return desc
+
+
 def construir_desc_map(pares, hijos):
     """desc_map[termino_GO][ruta_del_Excel] = {estado de la relación termino -> ruta: profundidad}."""
     desc_map = defaultdict(dict)
     dirigidos = reguladores_dirigidos(hijos) if SIGNO_POR_PERTENENCIA_REGULACION else set()
+    sin_direccion = reguladores_sin_direccion(hijos) if SIN_DIRECCION_COMO_PROCESO else {}
     for ruta in {r for _, r in pares}:
-        for t, estados in descendientes(ruta, hijos, "P" if ruta in dirigidos else "N").items():
+        for t, estados in _descendientes_ruta(ruta, hijos, dirigidos, sin_direccion).items():
             desc_map[t][ruta] = estados
     return desc_map
 

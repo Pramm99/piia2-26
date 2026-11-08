@@ -15,13 +15,14 @@ if str(DIR_EXTRAER_INFO) not in sys.path:
     sys.path.insert(0, str(DIR_EXTRAER_INFO))
 
 from abstracts import limpiar_texto  # noqa: E402
-from config import OBO_FILE, SALIDA  # noqa: E402
+from config import OBO_FILE, SALIDA, SIN_DIRECCION_COMO_PROCESO  # noqa: E402
 from fuentes.generif import datos_mygene  # noqa: E402
 from grafo_go import (cargar_go, cargar_nombres, cargar_sinonimos, descendientes,  # noqa: E402
                       estados_efectivos)
 from polaridad import DESTINOS_SIN_LLM  # noqa: E402
 from relevancia import MIN_ALIAS, menciona_gen, patron_gen  # noqa: E402
 
-__all__ = ["DIR_EXTRAER_INFO", "limpiar_texto", "SALIDA", "DESTINOS_SIN_LLM", "OBO_FILE", "datos_mygene",
+__all__ = ["DIR_EXTRAER_INFO", "limpiar_texto", "SALIDA", "DESTINOS_SIN_LLM", "OBO_FILE", "SIN_DIRECCION_COMO_PROCESO",
+           "datos_mygene",
            "cargar_go", "cargar_nombres", "cargar_sinonimos", "descendientes", "estados_efectivos",
            "MIN_ALIAS", "menciona_gen", "patron_gen"]

@@ -67,6 +67,9 @@ ARISTAS_SIN_SIGNO = {
 # significa ejecutar esa regulación: +1 respecto a la ruta (estado P). En un proceso normal, participar
 # no equivale a activar y sigue sin signo.
 SIGNO_POR_PERTENENCIA_REGULACION = True
+# Una ruta «regulation of X» sin dirección se trata como X: el signo de cada término de su subárbol se
+# calcula respecto a X (+1 = el gen promueve X). Lo usan la Fase 1 (Polaridad_GO) y la Fase 2 (v1_proceso).
+SIN_DIRECCION_COMO_PROCESO = True
 PROFUNDIDAD_MAX_ACEPTAR = 2  # a profundidad ≤2 con evidencia experimental no hubo errores en la auditoría
 EVIDENCIAS_FILOGENETICAS = {"IBA", "IBD", "IKR", "IRD"}  # se descartan si contradicen a una experimental
 # Tipos celulares de Cell Ontology compatibles con NK: CL:0000623, sus ancestros y sus subtipos

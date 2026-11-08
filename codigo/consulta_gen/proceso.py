@@ -7,8 +7,9 @@ traslada el efecto a la ruta del Excel:
 
   - polaridad(R): +1 si la ruta es un proceso o «positive regulation of X»; -1 si es «negative
     regulation of X». Una ruta «regulation of X» sin dirección se trata como X (+1 = el gen promueve
-    X; decisión del usuario del 2026-11-08). Con SIN_DIRECCION_COMO_PROCESO = False daría None y la
-    ruta quedaría en UNKNOWN (ruta_sin_direccion).
+    X; decisión del usuario del 2026-11-08). La opción SIN_DIRECCION_COMO_PROCESO está en el config.py
+    de la Fase 1, que la aplica igual a Polaridad_GO; con False daría None y la ruta quedaría en UNKNOWN
+    (ruta_sin_direccion).
   - signo_camino: is_a y part_of conservan el signo (un subtipo o una parte de X), las regulaciones
     con signo multiplican, y regulates sin signo, una regulación por encima de un part_of (deprecado
     en RO) o caminos con signos opuestos lo rompen. Reutiliza grafo_go.descendientes de la Fase 1.
@@ -16,10 +17,9 @@ traslada el efecto a la ruta del Excel:
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
-from ._extraer_info import (OBO_FILE, cargar_go, cargar_nombres, cargar_sinonimos, descendientes,
-                            estados_efectivos)
+from ._extraer_info import (OBO_FILE, SIN_DIRECCION_COMO_PROCESO, cargar_go, cargar_nombres, cargar_sinonimos,
+                            descendientes, estados_efectivos)
 
-SIN_DIRECCION_COMO_PROCESO = True
 SIGNO_REGULA = {"positively_regulates": 1, "negatively_regulates": -1,
                 "regulates": 1 if SIN_DIRECCION_COMO_PROCESO else None}
 SIGNO_ESTADO = {"N": 1, "+": 1, "P": 1, "-": -1}
