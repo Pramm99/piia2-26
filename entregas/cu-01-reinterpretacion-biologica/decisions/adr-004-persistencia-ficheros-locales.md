@@ -1,6 +1,6 @@
 ---
 description: Persistencia mediante ficheros locales (cachés desechables y un registro JSONL de respuestas del LLM) en lugar de ejecución puramente en memoria o bases de datos.
-state: Aceptado (pendiente de implementación del registro de respuestas)
+state: Aceptado (registro implementado el 2026-11-08 en codigo/consulta_gen/registro.py)
 ---
 
 # ADR 004 - Persistencia en Ficheros Locales: Cachés Desechables y Registro de Respuestas del LLM
@@ -16,8 +16,9 @@ El pipeline **no usa bases de datos ni servicios de almacenamiento**. Guarda su 
 
 El **registro de respuestas** sigue estas reglas:
 * **Una línea JSON por llamada**, escrita en cuanto llega la respuesta (*append-only*). Si la ejecución se corta, como mucho se pierde la llamada en curso.
-* **Clave de caso:** (`gen`, `pmid`, `go_id_anotado`, `modelo`). Antes de llamar a un modelo se comprueba si esa clave ya existe; si existe, no se repite la llamada.
-* **Trazabilidad** en cada línea: proveedor, nombre y versión exacta del modelo, fecha y hora, una huella (*hash*) del prompt enviado y el texto crudo de la respuesta, además de la salida ya validada según el ADR-003.
+* **Clave de caso:** (`version` del prompt, `gen`, `pmid`, `go_id`, `modelo`, huella del prompt). `go_id` es la ruta en `v0_original` y el proceso núcleo en `v1_proceso`. Antes de llamar a un modelo se comprueba si esa clave ya existe; si existe, no se repite la llamada.
+* **Trazabilidad** en cada línea: proveedor, nombre exacto del modelo, `system_fingerprint` cuando el proveedor lo da, tokens usados, fecha y hora, la huella (*hash*) del prompt enviado y el texto crudo de la respuesta, además de la salida ya validada según el ADR-003.
+* **Fallo de red:** si un modelo no responde tras los reintentos, no se escribe ninguna línea: el caso queda pendiente y la siguiente ejecución lo retoma.
 * **Invalidación:** si cambia el prompt, cambia su huella y el caso se vuelve a evaluar, sin mezclar respuestas a prompts distintos.
 
 Las cachés desechables ya se escriben de forma atómica (fichero temporal y renombrado), de modo que una interrupción no deja ficheros corruptos.

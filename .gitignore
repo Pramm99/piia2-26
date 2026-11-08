@@ -9,3 +9,4 @@ data/
 *.obo
 *.obo.part
 llm_queue.jsonl
+.env
