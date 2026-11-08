@@ -44,8 +44,10 @@ def vocabularios_rutas(desc_map, sinonimos, rutas, max_profundidad=None):
                 for frase in {nombre, _REGULACION.sub("", nombre)}:
                     clave = normalizar(frase)
                     sigla = len(clave) == 1 and (len(clave[0]) < MIN_LETRAS_SIGLA or frase.isupper())
-                    if 0 < len(clave) <= MAX_PALABRAS and not sigla:
-                        vocab[ruta].setdefault(clave, frase)
+                    # varias frases pueden normalizarse igual ("T-cell" / "T cell"): se guarda siempre la misma
+                    if 0 < len(clave) <= MAX_PALABRAS and not sigla \
+                            and (clave not in vocab[ruta] or frase < vocab[ruta][clave]):
+                        vocab[ruta][clave] = frase
     return vocab
 
 
@@ -111,6 +113,7 @@ def coincidencia_en_frase(texto, patron, vocab_ruta):
 
 
 def coincidencia(gramas, vocab_ruta):
-    """El término más largo de la ruta que aparece en el texto ('' si ninguno)."""
+    """El término más largo de la ruta que aparece en el texto ('' si ninguno). Los empates se resuelven
+    por orden alfabético: el orden de un set de str cambia entre ejecuciones y la salida debe ser fija."""
     comunes = gramas & vocab_ruta.keys()
-    return vocab_ruta[max(comunes, key=len)] if comunes else ""
+    return vocab_ruta[max(comunes, key=lambda k: (len(k), k))] if comunes else ""
