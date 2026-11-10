@@ -7,14 +7,15 @@ signo que dio el modelo (signo_llm).
 """
 import json
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .esquema import (EFECTO_A_SIGNO, ESQUEMA_V1, ESTADO_NO_CONCLUYENTE, ESTADO_RESUELTO, ESTADO_REVISAR,
                       MIN_PALABRAS_CITA, MOTIVO_MODELO_A_ADR, SIGNO_DESCONOCIDO, SIGNO_NEGATIVO,
-                      SIGNO_POSITIVO, V1_PROCESO, PromptLLM)
+                      SIGNO_POSITIVO, VERSIONES_PROCESO, PromptLista, PromptLLM)
 from .limpieza import forma_comparacion
 
 _VALLAS = re.compile(r"```(?:json)?", re.IGNORECASE)
+_NUM_Q = re.compile(r"\s*\[?Q(\d+)\b", re.IGNORECASE)
 _A_SIGNO = {1: SIGNO_POSITIVO, -1: SIGNO_NEGATIVO, None: SIGNO_DESCONOCIDO}
 
 
@@ -118,5 +119,29 @@ def validar_respuesta(prompt: PromptLLM, texto_llm: str) -> Dict[str, Any]:
         crudo = extraer_json(texto_llm)
     except Exception as err:
         return {**base, **_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "error": f"Respuesta no interpretable: {err}"}
-    validar = _validar_v1 if prompt.version == V1_PROCESO else _validar_v0
+    validar = _validar_v1 if prompt.version in VERSIONES_PROCESO else _validar_v0
     return {**base, **validar(prompt, crudo), "error": ""}
+
+
+def repartir_lista(lista: PromptLista, texto_llm: str) -> List[Optional[str]]:
+    """Respuesta de v1_proceso_gen -> el JSON de cada pregunta (Q1..Qn, en orden), listo para validar_respuesta.
+    None = el modelo no respondió esa pregunta (queda pendiente). Si la respuesta entera no se puede leer,
+    todas reciben "" (json_invalido al validarlas: es una respuesta recibida, no un fallo de red)."""
+    try:
+        items = extraer_json(texto_llm).get("respuestas")
+        if not isinstance(items, list):
+            raise ValueError("falta la lista «respuestas»")
+    except Exception:
+        return [""] * len(lista.preguntas)
+    por_q: Dict[str, Dict] = {}
+    for it in items:
+        if isinstance(it, dict):
+            # «Q3», «q3» o la línea entera («Q3. PMID … | PROCESS: …», como hace qwen3:8b); si se repite, la primera
+            m = _NUM_Q.match(str(it.get("q", "")))
+            if m:
+                por_q.setdefault(f"Q{int(m.group(1))}", it)
+    out = []
+    for i in range(1, len(lista.preguntas) + 1):
+        it = por_q.get(f"Q{i}")
+        out.append(None if it is None else json.dumps({k: v for k, v in it.items() if k != "q"}, ensure_ascii=False))
+    return out

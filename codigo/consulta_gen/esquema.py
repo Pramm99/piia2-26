@@ -10,7 +10,9 @@ SIGNOS_VALIDOS = (SIGNO_POSITIVO, SIGNO_NEGATIVO, SIGNO_DESCONOCIDO)
 # Versiones del prompt (se comparan en el benchmark sobre el mismo gold set)
 V0_ORIGINAL = "v0_original"  # línea base congelada: pregunta por la ruta (solo para el benchmark)
 V1_PROCESO = "v1_proceso"    # pregunta por el proceso núcleo; el código compone el signo hasta la ruta
-VERSIONES = (V0_ORIGINAL, V1_PROCESO)
+V1_GEN = "v1_proceso_gen"    # las mismas preguntas que v1, enviadas por gen en una lista (una línea por pregunta)
+VERSIONES = (V0_ORIGINAL, V1_PROCESO, V1_GEN)
+VERSIONES_PROCESO = (V1_PROCESO, V1_GEN)  # respuestas con el esquema de ESQUEMA_V1
 
 # Estado y motivos de la salida (ADR-003)
 ESTADO_RESUELTO, ESTADO_REVISAR, ESTADO_NO_CONCLUYENTE = "resuelto", "revisar", "no_concluyente"
@@ -86,6 +88,27 @@ class PromptLLM:
                 {"role": "user", "content": self.user}]
 
 
+@dataclass(frozen=True)
+class PromptLista:
+    """Lo que se envía en v1_proceso_gen: varias preguntas de un gen en una llamada.
+    `preguntas` son los PromptLLM de cada pregunta (Q1..Qn, en orden): son la unidad del registro y del
+    validador; la lista solo agrupa el envío."""
+    system: str
+    user: str
+    preguntas: Tuple[PromptLLM, ...]
+    esquema_json: Optional[Dict] = field(default=None, compare=False)
+    max_salida: Optional[int] = None  # max_completion_tokens de la llamada (crece con el nº de preguntas)
+    version: str = V1_GEN
+
+    @property
+    def gen(self) -> str:
+        return self.preguntas[0].gen
+
+    def como_mensajes(self) -> List[Dict[str, str]]:
+        return [{"role": "system", "content": self.system},
+                {"role": "user", "content": self.user}]
+
+
 # Esquema de la respuesta de v1_proceso (salida estructurada estricta; en Ollama, el mismo objeto en `format`)
 MOTIVOS_MODELO_V1 = ["none", "gene_not_discussed", "gene_is_the_target", "marker_or_correlation_only",
                      "effect_of_other_molecule", "no_effect_found", "speculation_only",
@@ -106,6 +129,18 @@ ESQUEMA_V1 = {
         "efecto": {"type": "string", "enum": ["INCREASES", "DECREASES", "NO_CLEAR_EFFECT"]},
         "motivo_unknown": {"type": "string", "enum": MOTIVOS_MODELO_V1},
     },
+}
+# v1_proceso_gen: un objeto con la lista de respuestas; cada una dice a qué pregunta (Q1..Qn) responde
+ESQUEMA_LISTA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["respuestas"],
+    "properties": {"respuestas": {"type": "array", "items": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["q"] + ESQUEMA_V1["required"],
+        "properties": {"q": {"type": "string", "description": "Q1, Q2..."}, **ESQUEMA_V1["properties"]},
+    }}},
 }
 EFECTO_A_SIGNO = {"INCREASES": 1, "DECREASES": -1, "NO_CLEAR_EFFECT": None}
 # Motivos del modelo -> motivos del ADR-003 (los cuatro últimos son nuevos y hay que añadirlos al ADR)

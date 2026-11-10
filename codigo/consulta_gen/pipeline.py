@@ -2,6 +2,7 @@
 
   - v0_original: una fila (gen, ruta, PMID) = un prompt.
   - v1_proceso: las filas se agrupan en casos (gen, PMID, proceso núcleo); ver casos.py.
+  - v1_proceso_gen: los mismos casos, como preguntas sueltas; ejecucion.py las envía por gen.
 En las dos, el filtro previo «¿menciona el gen?» se aplica antes del LLM (no_menciona_gen, 0 llamadas),
 para que el benchmark compare solo los prompts.
 """
@@ -11,7 +12,7 @@ import pandas as pd
 
 from ._extraer_info import datos_mygene, menciona_gen, patron_gen
 from .casos import construir_casos
-from .esquema import V1_PROCESO, PromptLLM
+from .esquema import VERSIONES_PROCESO, PromptLLM
 from .lectura import cargar_hoja, fila_a_evidencia, filtrar, iterar_filas, pendientes_de_llm
 from .prompt import CONFIG_V0, ConfigPrompt, construir_prompt
 from .respuesta import validar_respuesta
@@ -44,7 +45,7 @@ def preparar_prompts(ruta_excel: str, cfg: ConfigPrompt = CONFIG_V0, gen: Option
                      go_id: Optional[str] = None) -> Tuple[List[PromptLLM], Dict[str, int]]:
     """(prompts, recuento) de la versión de cfg para las filas que tiene que leer el LLM."""
     df = pendientes_de_llm(filtrar(cargar_hoja(ruta_excel), gen, go_id))
-    if cfg.version == V1_PROCESO:
+    if cfg.version in VERSIONES_PROCESO:  # v1_proceso y v1_proceso_gen: las mismas preguntas
         casos, cuenta = construir_casos(df)
         return [construir_prompt(c, cfg) for c in casos], cuenta
     df, sin_gen = _prefiltro_v0(df)

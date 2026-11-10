@@ -7,11 +7,16 @@ Hay dos versiones, que se comparan en el benchmark sobre el mismo gold set:
   - v1_proceso: informe «Prompt y modelos gratuitos Fase 2» (anexo 1). Pregunta por el efecto del gen
     sobre el proceso núcleo, con el abstract completo en frases numeradas y salida JSON estricta; el
     signo sobre la ruta lo calcula el código (casos.py).
+  - v1_proceso_gen: las mismas preguntas de v1, enviadas por gen en una sola llamada con salida en lista
+    (informe «Coste de una llamada por gen en la Fase 2»). Cada pregunta se registra y se valida sola.
 """
+import json
+import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, List, Optional, Sequence
 
-from .esquema import ESQUEMA_V1, V0_ORIGINAL, V1_PROCESO, CasoProceso, Evidencia, PromptLLM
+from .esquema import (ESQUEMA_LISTA, ESQUEMA_V1, V0_ORIGINAL, V1_GEN, V1_PROCESO, CasoProceso, Evidencia,
+                      PromptLista, PromptLLM)
 
 
 @dataclass(frozen=True)
@@ -25,6 +30,7 @@ class ConfigPrompt:
 
 CONFIG_V0 = ConfigPrompt()
 CONFIG_V1 = ConfigPrompt(version=V1_PROCESO, max_chars_abstract=None, incluir_estado_scrnaseq=False)
+CONFIG_V1_GEN = ConfigPrompt(version=V1_GEN, max_chars_abstract=None, incluir_estado_scrnaseq=False)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -111,17 +117,24 @@ Rules:
     to the gene, or use "none" and "" if no sentence mentions it."""
 
 
+def _lineas_abstract(caso: CasoProceso) -> List[str]:
+    return [f"ABSTRACT (PMID {caso.pmid})", f"[T] {caso.titulo}"] + [f"[S{i}] {f}" for i, f in enumerate(caso.frases, 1)]
+
+
+def _linea_gen(caso: CasoProceso) -> str:
+    otros = f" Other names used in the literature: {', '.join(caso.alias)}." if caso.alias else ""
+    return f"GENE: {caso.gen}.{otros}"
+
+
 def construir_user_v1(caso: CasoProceso, cfg: ConfigPrompt = CONFIG_V1) -> str:
     g, proceso = caso.gen, caso.nucleo_nombre
-    lineas = [f"ABSTRACT (PMID {caso.pmid})", f"[T] {caso.titulo}"]
-    lineas += [f"[S{i}] {f}" for i, f in enumerate(caso.frases, 1)]
+    lineas = _lineas_abstract(caso)
     lineas.append("")
     if cfg.localizador_frase_fuente and caso.frase_fuente:
         lineas += [f"SENTENCE OF INTEREST (found automatically, may be incomplete; decide from the abstract): "
                    f"{caso.frase_fuente}", ""]
-    otros = f" Other names used in the literature: {', '.join(caso.alias)}." if caso.alias else ""
     lineas += [
-        f"GENE: {g}.{otros}",
+        _linea_gen(caso),
         f"The protein encoded by {g} counts as {g}.",
         f"PROCESS: {proceso}",
         "",
@@ -134,9 +147,88 @@ def construir_user_v1(caso: CasoProceso, cfg: ConfigPrompt = CONFIG_V1) -> str:
     return "\n".join(lineas)
 
 
+# --------------------------------------------------------------------------------------------------
+# v1_proceso_gen: las preguntas de v1 de un mismo gen, en una sola llamada
+# --------------------------------------------------------------------------------------------------
+# El sistema es fijo (el de v1 + la regla 13) y va primero: es el prefijo común de todas las llamadas, el
+# que pueden servir de caché los proveedores (Groq, Cerebras, Gemini). Lo que cambia va detrás.
+SYSTEM_LISTA = SYSTEM_V1 + """
+13. SEVERAL QUESTIONS. The message may contain several abstracts and several questions about
+    the gene. Answer every question Q1..Qn, one object per question, in order. Each answer is
+    about the abstract (PMID) and the process named in THAT question only: never use another
+    abstract to answer it. The sentence IDs ([T], [S1]...) refer to that question's abstract."""
+
+SALIDA_BASE_LISTA = 2000    # max_completion_tokens con una pregunta (razonamiento incluido, como en v1)
+SALIDA_POR_PREGUNTA = 600   # cada pregunta más: unos 160 de respuesta (medido con Gemini) + razonamiento
+
+
+def construir_pregunta_gen(caso: CasoProceso) -> PromptLLM:
+    """La pregunta de v1_proceso_gen como unidad del registro y del validador. Su `user` es solo SU parte
+    (abstract, gen y proceso, sin número de pregunta): la huella no depende de con qué otras preguntas
+    se envíe, así que una pregunta respondida no se repite aunque cambien las demás del gen."""
+    user = "\n".join(_lineas_abstract(caso) + ["", _linea_gen(caso), f"PROCESS: {caso.nucleo_nombre}"])
+    return PromptLLM(evidencia=caso, system=SYSTEM_LISTA, user=user, version=V1_GEN, esquema_json=ESQUEMA_LISTA)
+
+
+def construir_prompt_lista(preguntas: Sequence[PromptLLM]) -> PromptLista:
+    """Preguntas de UN gen -> lo que se envía. Orden determinista (PMID, proceso), abstracts sin repetir."""
+    preguntas = tuple(sorted(preguntas, key=lambda p: (p.evidencia.pmid, p.evidencia.nucleo_id)))
+    casos = [p.evidencia for p in preguntas]
+    if len({c.gen for c in casos}) != 1:
+        raise ValueError("Una llamada de v1_proceso_gen solo lleva preguntas de un gen")
+    g, lineas, vistos = casos[0].gen, [], set()
+    for c in casos:
+        if c.pmid not in vistos:
+            vistos.add(c.pmid)
+            lineas += _lineas_abstract(c) + [""]
+    lineas += [
+        _linea_gen(casos[0]),
+        f"The protein encoded by {g} counts as {g}.",
+        "",
+        f"QUESTIONS: According to the given abstract only, does {g} INCREASE or DECREASE the process?",
+        f"- INCREASES: the abstract shows that {g} causes, promotes or is required for the process.",
+        f"- DECREASES: the abstract shows that {g} suppresses, limits or impairs the process.",
+        f"- NO_CLEAR_EFFECT: neither is shown for {g}; choose the reason.",
+    ]
+    lineas += [f"Q{i}. PMID {c.pmid} | PROCESS: {c.nucleo_nombre}" for i, c in enumerate(casos, 1)]
+    lineas.append("Return the JSON object with one answer per question.")
+    return PromptLista(system=SYSTEM_LISTA, user="\n".join(lineas), preguntas=preguntas, esquema_json=ESQUEMA_LISTA,
+                       max_salida=SALIDA_BASE_LISTA + SALIDA_POR_PREGUNTA * (len(preguntas) - 1))
+
+
+CARACTERES_POR_TOKEN = 3.5  # estimación prudente (medido: unos 4 en estos abstracts con el tokenizador de gpt-oss)
+
+
+def tokens_estimados(lista: PromptLista) -> int:
+    """Entrada estimada + max_completion_tokens: lo que puede contar el límite por minuto del proveedor."""
+    texto = lista.system + lista.user + json.dumps(lista.esquema_json)
+    return math.ceil(len(texto) / CARACTERES_POR_TOKEN) + (lista.max_salida or 0)
+
+
+def trocear_por_gen(preguntas: Sequence[PromptLLM], presupuesto: int) -> List[PromptLista]:
+    """Preguntas de v1_proceso_gen -> llamadas: una por gen, troceada en orden (PMID, proceso) para que ninguna
+    pase el presupuesto. Una pregunta que sola ya lo pasa va sola (el proveedor dirá si cabe)."""
+    por_gen: Dict[str, List[PromptLLM]] = {}
+    for p in preguntas:
+        por_gen.setdefault(p.gen, []).append(p)
+    listas = []
+    for ps in por_gen.values():
+        actual: List[PromptLLM] = []
+        for p in sorted(ps, key=lambda p: (p.evidencia.pmid, p.evidencia.nucleo_id)):
+            if actual and tokens_estimados(construir_prompt_lista(actual + [p])) > presupuesto:
+                listas.append(construir_prompt_lista(actual))
+                actual = []
+            actual.append(p)
+        listas.append(construir_prompt_lista(actual))
+    return listas
+
+
 def construir_prompt(ev, cfg: ConfigPrompt = CONFIG_V0) -> PromptLLM:
-    """Evidencia (v0) o CasoProceso (v1) -> PromptLLM con el texto final de esa versión."""
+    """Evidencia (v0) o CasoProceso (v1 y v1_gen) -> PromptLLM con el texto final de esa versión.
+    En v1_proceso_gen es la pregunta suelta; lo que se envía lo arma construir_prompt_lista."""
     if cfg.version == V1_PROCESO:
         return PromptLLM(evidencia=ev, system=SYSTEM_V1, user=construir_user_v1(ev, cfg),
                          version=V1_PROCESO, esquema_json=ESQUEMA_V1)
+    if cfg.version == V1_GEN:
+        return construir_pregunta_gen(ev)
     return PromptLLM(evidencia=ev, system=SYSTEM, user=construir_user(ev, cfg), version=V0_ORIGINAL)

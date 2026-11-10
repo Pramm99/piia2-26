@@ -42,20 +42,32 @@ class ConfigModelo:
     max_tokens: int = 2000            # en gpt-oss el razonamiento cuenta para este límite
     json_schema: bool = True          # salida estructurada estricta con el esquema del prompt
     extra: Dict = field(default_factory=dict)
+    # v1_proceso_gen: tope de tokens de UNA llamada (entrada estimada + max_completion_tokens). Las preguntas de
+    # un gen se trocean para no pasarlo: Groq rechaza una petición mayor que su límite por minuto (8K).
+    presupuesto_llamada: int = 60_000
+    timeout: int = 120                # segundos por petición (un modelo local en CPU tarda minutos con una lista)
 
 
 MODELOS: Dict[str, ConfigModelo] = {c.nombre: c for c in [
     ConfigModelo("cerebras-gpt-oss-120b", "cerebras", "gpt-oss-120b",
-                 "https://api.cerebras.ai/v1/chat/completions", "CEREBRAS_API_KEY", rpm=5, reasoning_effort="low"),
+                 "https://api.cerebras.ai/v1/chat/completions", "CEREBRAS_API_KEY", rpm=5, reasoning_effort="low",
+                 presupuesto_llamada=28_000),   # 30K tokens/min sin caché; contexto gratuito de 65K
     ConfigModelo("groq-gpt-oss-120b", "groq", "openai/gpt-oss-120b",
-                 "https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY", rpm=30, reasoning_effort="low"),
+                 "https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY", rpm=30, reasoning_effort="low",
+                 presupuesto_llamada=7_500),    # 8K tokens/min
     ConfigModelo("groq-qwen3.8-27b", "groq", "qwen/qwen3.8-27b",
-                 "https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY", rpm=30, reasoning_effort="none"),
+                 "https://api.groq.com/openai/v1/chat/completions", "GROQ_API_KEY", rpm=30, reasoning_effort="none",
+                 presupuesto_llamada=7_500),
     ConfigModelo("gemini-3.5-flash-lite", "gemini", "gemini-3.5-flash-lite",
                  "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "GEMINI_API_KEY",
-                 rpm=10, temperatura=None),
+                 rpm=10, temperatura=None, seed=None),  # el modo compatible rechaza `seed` (HTTP 400, 2026-11-09);
+                                                        # contexto de 1M; su límite por minuto solo se ve en AI Studio
     ConfigModelo("ollama-qwen3-8b", "ollama", "qwen3:8b",
-                 "http://localhost:11434/v1/chat/completions", None, rpm=600, reasoning_effort="none"),
+                 "http://localhost:11434/v1/chat/completions", None, rpm=600, reasoning_effort="none",
+                 presupuesto_llamada=14_000, timeout=3_600),
+    # Ollama carga el modelo con 4.096 tokens de contexto salvo que el servidor se arranque con
+    # OLLAMA_CONTEXT_LENGTH (el modo compatible no deja pasar num_ctx) y recorta por el principio sin avisar:
+    # el presupuesto supone OLLAMA_CONTEXT_LENGTH=16384. Unos 100 s por caso en el i7-1355U (2026-11-09).
 ]}
 
 
@@ -97,9 +109,11 @@ class ClienteOpenAICompatible:
         if cfg.var_clave and not self._clave:
             raise RuntimeError(f"Falta {cfg.var_clave}: ponla en el entorno o en {FICHERO_ENV} (ver .env.example)")
 
-    def _payload(self, prompt: PromptLLM) -> Dict:
+    def _payload(self, prompt) -> Dict:
+        """prompt: PromptLLM (un caso) o PromptLista (v1_proceso_gen, con su propio max_salida)."""
         c = self.cfg
-        p = {"model": c.modelo, "messages": prompt.como_mensajes(), "max_completion_tokens": c.max_tokens, **c.extra}
+        p = {"model": c.modelo, "messages": prompt.como_mensajes(),
+             "max_completion_tokens": getattr(prompt, "max_salida", None) or c.max_tokens, **c.extra}
         if c.temperatura is not None:
             p["temperature"] = c.temperatura
         if c.seed is not None:
@@ -119,7 +133,7 @@ class ClienteOpenAICompatible:
             self.dormir(hueco)
         self._ultima = time.monotonic()
 
-    def completar(self, prompt: PromptLLM) -> Respuesta:
+    def completar(self, prompt) -> Respuesta:
         cabeceras = {"Content-Type": "application/json"}
         if self._clave:
             cabeceras["Authorization"] = f"Bearer {self._clave}"
@@ -128,17 +142,25 @@ class ClienteOpenAICompatible:
             self._esperar_turno()
             t0 = time.monotonic()
             try:
-                r = self.sesion.post(self.cfg.url, json=self._payload(prompt), headers=cabeceras, timeout=120)
+                r = self.sesion.post(self.cfg.url, json=self._payload(prompt), headers=cabeceras,
+                                     timeout=self.cfg.timeout)
             except requests.RequestException as e:
                 ultimo = f"red: {e}"
             else:
                 self.llamadas += 1
                 if r.status_code == 200:
                     d = r.json()
-                    return Respuesta(texto=d["choices"][0]["message"].get("content") or "", meta={
+                    eleccion = d["choices"][0]
+                    return Respuesta(texto=eleccion["message"].get("content") or "", meta={
                         "proveedor": self.cfg.proveedor, "modelo": d.get("model", self.cfg.modelo),
                         "system_fingerprint": d.get("system_fingerprint"), "tokens": d.get("usage", {}),
+                        "fin": eleccion.get("finish_reason"),  # "length" = salida cortada por max_completion_tokens
                         "segundos": round(time.monotonic() - t0, 2)})
+                generado = _salida_rechazada(r)
+                if generado is not None:  # el modelo respondió, pero su JSON no cumple el esquema: json_invalido
+                    return Respuesta(texto=generado, meta={
+                        "proveedor": self.cfg.proveedor, "modelo": self.cfg.modelo, "system_fingerprint": None,
+                        "tokens": {}, "fin": "json_validate_failed", "segundos": round(time.monotonic() - t0, 2)})
                 ultimo = f"HTTP {r.status_code}: {r.text[:200]}"
                 if r.status_code not in (408, 429, 500, 502, 503, 504):
                     raise RuntimeError(f"{self.cfg.nombre}: {ultimo}")  # error de configuración: no se reintenta
@@ -150,21 +172,38 @@ class ClienteOpenAICompatible:
         raise ErrorTransitorio(f"{self.cfg.nombre}: sin respuesta tras {self.reintentos} reintentos ({ultimo})")
 
 
+def _salida_rechazada(r) -> Optional[str]:
+    """Groq devuelve HTTP 400 `json_validate_failed` con el texto generado en `failed_generation` cuando la
+    salida no cumple el esquema estricto. Es una respuesta recibida (ADR-003: json_invalido), no un fallo
+    de configuración. Devuelve ese texto, o None si el error es de otro tipo."""
+    if r.status_code != 400:
+        return None
+    try:
+        err = r.json().get("error", {})
+    except ValueError:
+        return None
+    if err.get("code") != "json_validate_failed":
+        return None
+    return err.get("failed_generation") or ""
+
+
 class ClienteSimulado:
     """Cliente sin red para pruebas. `responder(prompt) -> texto`; `fallar(prompt) -> bool` simula un 429
     persistente (lanza ErrorTransitorio). Cuenta las llamadas para comprobar la reanudación."""
 
     def __init__(self, nombre: str, responder: Callable[[PromptLLM], str],
-                 fallar: Optional[Callable[[PromptLLM], bool]] = None):
-        self.cfg = ConfigModelo(nombre, "simulado", nombre, "", None, rpm=10 ** 6, seed=None)
+                 fallar: Optional[Callable[[PromptLLM], bool]] = None, presupuesto_llamada: int = 60_000):
+        self.cfg = ConfigModelo(nombre, "simulado", nombre, "", None, rpm=10 ** 6, seed=None,
+                                presupuesto_llamada=presupuesto_llamada)
         self.responder, self.fallar, self.llamadas = responder, fallar, 0
 
-    def completar(self, prompt: PromptLLM) -> Respuesta:
+    def completar(self, prompt) -> Respuesta:
         self.llamadas += 1
         if self.fallar and self.fallar(prompt):
             raise ErrorTransitorio(f"{self.cfg.nombre}: 429 simulado")
         return Respuesta(texto=self.responder(prompt), meta={"proveedor": "simulado", "modelo": self.cfg.modelo,
-                                                             "system_fingerprint": None, "tokens": {}, "segundos": 0.0})
+                                                             "system_fingerprint": None, "tokens": {}, "fin": "stop",
+                                                             "segundos": 0.0})
 
 
 def crear_cliente(nombre: str, **kw):
