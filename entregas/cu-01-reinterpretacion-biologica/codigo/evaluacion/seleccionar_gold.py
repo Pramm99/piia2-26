@@ -15,9 +15,11 @@ como conjunto de desarrollo para ajustar el prompt.
 12 casos (20 %) se marcan para doble etiquetado.
 
 Uso (desde codigo/):
-  python evaluacion/seleccionar_gold.py <excel de la Fase 1> [carpeta de datos de esa ejecución] [--actualizar]
+  python evaluacion/seleccionar_gold.py <excel de la Fase 1> [carpeta de datos de esa ejecución] [--actualizar|--v4]
 Con --actualizar no se vuelve a sortear: se conservan los casos del gold_casos.jsonl actual que siguen existiendo
 en el Excel nuevo y solo se sustituyen los que han desaparecido (ver actualizar).
+Con --v4 el gold pasa a tener genes up y down (ver version_up_down): 65 casos up del gold v3 (los 60 de la muestra
+aleatoria del v2, los NO_EFFECT y el resto sorteado) y 35 casos nuevos de las rutas suprimidas (genes down).
 Escribe en evaluacion/: gold_casos.jsonl (selección, con la información para evaluar; NO se enseña a los
 anotadores) y plantilla_etiquetado.jsonl / .xlsx (a ciegas).
 """
@@ -47,6 +49,9 @@ SEMILLA = 20261109
 N_GO_POS, N_GO_NEG, N_SIN_GO, MAX_POR_GEN, N_DOBLE = 11, 10, 39, 5, 12
 FORZADO = ("CD7", "10652336")
 DESARROLLO_RUTA, DESARROLLO_GEN = "GO:0002443", "ICAM1"
+# --v4: 65 up + 35 down; los estratos GO de los down, en la proporción de la muestra original (11/10/39 de 60)
+N_UP_V4, CUPO_DOWN = 65, {"+1": 6, "-1": 6, "": 23}
+ETIQUETAS = AQUI / "etiquetas_provisionales"
 
 
 def caso_id(c):
@@ -62,10 +67,11 @@ def polaridad_caso(c, pol):
     return "", "", None
 
 
-def _universo(ruta_excel):
-    """(casos, polaridades GO, candidatos sin el conjunto de desarrollo, caso forzado, nº de desarrollo)."""
+def _universo(ruta_excel, lista="Activada"):
+    """(casos, polaridades GO, candidatos sin el conjunto de desarrollo, caso forzado, nº de desarrollo) de una
+    lista de CIMUS: «Activada» (genes up) o «Suprimida» (genes down)."""
     df = pendientes_de_llm(cargar_hoja(ruta_excel))
-    df = df[df["Estado_Original"] == "Activada"]
+    df = df[df["Estado_Original"] == lista]
     casos, _ = construir_casos(df)
     pol = {(str(g).upper(), str(p).split(".")[0], r): str(v)
            for g, p, r, v in zip(df["Gen"], df["PMID"], df["GO_ID"], df["Polaridad_GO"].fillna(""))}
@@ -109,21 +115,55 @@ def actualizar(ruta_excel, previos):
     return filas, pol, [g["id"] for g in faltan], nuevos, len(casos), n_dev
 
 
+def _sortear(candidatos, pol, cupo, elegidos, semilla):
+    """Añade a elegidos casos al azar por estrato de GO hasta llenar el cupo, con máx. MAX_POR_GEN por gen."""
+    candidatos = list(candidatos)
+    random.Random(semilla).shuffle(candidatos)
+    cupo, por_gen = dict(cupo), Counter(c.gen for c in elegidos)
+    for c in candidatos:
+        estrato = polaridad_caso(c, pol)[0]
+        if cupo[estrato] > 0 and por_gen[c.gen] < MAX_POR_GEN:
+            elegidos.append(c)
+            cupo[estrato] -= 1
+            por_gen[c.gen] += 1
+    if any(cupo.values()):
+        raise ValueError(f"No hay casos suficientes para el cupo: faltan {cupo}")
+    return elegidos
+
+
+def version_up_down(ruta_excel, previos):
+    """Gold v4: N_UP_V4 casos up del gold actual y los casos down de CUPO_DOWN, nuevos.
+    Up: se conservan los 60 de la muestra aleatoria del v2 (los añadidos en el v3 se buscaron por contener una
+    negación) y los NO_EFFECT, la clase rara; el resto hasta N_UP_V4 se sortea entre los demás añadidos del v3.
+    Down: sorteo por estrato de GO entre las preguntas de las rutas suprimidas, con id nuevo y doble etiquetado.
+    Devuelve ([(id, caso, doble)], pol, nº de casos up, nº de casos down)."""
+    ids_v2 = {e["id"] for e in map(json.loads, open(ETIQUETAS / "gold_provisional_v2.jsonl", encoding="utf-8"))}
+    neutros = {e["id"] for e in map(json.loads, open(ETIQUETAS / "gold_provisional_v3.jsonl", encoding="utf-8"))
+               if e["efecto"] == "NO_EFFECT"}
+    casos_up, pol_up, _, _, _ = _universo(ruta_excel, "Activada")
+    por_id = {caso_id(c): c for c in casos_up}
+    faltan = [g["id"] for g in previos if g["caso"] not in por_id]
+    if faltan:
+        raise ValueError(f"Casos del gold que ya no existen en el Excel: {faltan}")
+    fijos = [g for g in previos if g["id"] in ids_v2 | neutros]
+    resto = [g for g in previos if g["id"] not in ids_v2 | neutros]
+    sorteados = random.Random(SEMILLA + 3).sample(resto, N_UP_V4 - len(fijos))
+    filas = [(g["id"], por_id[g["caso"]], g["doble"]) for g in fijos + sorteados]
+
+    casos_down, pol_down, candidatos, _, _ = _universo(ruta_excel, "Suprimida")
+    down = sorted(_sortear(candidatos, pol_down, CUPO_DOWN, [], SEMILLA + 4), key=caso_id)
+    siguiente = max(int(g["id"][1:]) for g in previos) + 1
+    filas += [(f"G{siguiente + i}", c, True) for i, c in enumerate(down)]
+    return filas, {**pol_up, **pol_down}, len(casos_up), len(casos_down)
+
+
 def seleccionar(ruta_excel):
     casos, pol, candidatos, forzado, n_dev = _universo(ruta_excel)
 
-    rng = random.Random(SEMILLA)
-    rng.shuffle(candidatos)
-    elegidos, por_gen = list(forzado), {c.gen: 1 for c in forzado}
     cupo = {"+1": N_GO_POS, "-1": N_GO_NEG, "": N_SIN_GO}
     for c in forzado:
         cupo[polaridad_caso(c, pol)[0]] -= 1
-    for c in candidatos:
-        estrato = polaridad_caso(c, pol)[0]
-        if cupo[estrato] > 0 and por_gen.get(c.gen, 0) < MAX_POR_GEN:
-            elegidos.append(c)
-            cupo[estrato] -= 1
-            por_gen[c.gen] = por_gen.get(c.gen, 0) + 1
+    elegidos = _sortear(candidatos, pol, cupo, list(forzado), SEMILLA)
     elegidos.sort(key=caso_id)
     dobles = set(caso_id(c) for c in random.Random(SEMILLA + 1).sample(elegidos, N_DOBLE))
     return elegidos, pol, dobles, len(casos), n_dev
@@ -135,6 +175,10 @@ if __name__ == "__main__":
         previos = [json.loads(l) for l in open(AQUI / "gold_casos.jsonl", encoding="utf-8")]
         filas, pol, quitados, nuevos, total, n_dev = actualizar(args[0], previos)
         print(f"Actualización: desaparecen {quitados}; nuevos {nuevos}")
+    elif "--v4" in sys.argv:
+        previos = [json.loads(l) for l in open(AQUI / "gold_casos.jsonl", encoding="utf-8")]
+        filas, pol, n_up, n_down = version_up_down(args[0], previos)
+        total, n_dev = f"{n_up} up + {n_down} down", 0
     else:
         elegidos, pol, dobles, total, n_dev = seleccionar(args[0])
         filas = [(f"G{i:02d}", c, caso_id(c) in dobles) for i, c in enumerate(elegidos, 1)]

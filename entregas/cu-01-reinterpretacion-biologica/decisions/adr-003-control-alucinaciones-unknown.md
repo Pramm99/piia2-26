@@ -111,13 +111,28 @@ El sistema no da el `+1` que un modelo complaciente habría dado. Como el veredi
 5. **Las discrepancias son información, no ruido:** la polaridad de GO es curada por expertos y el segundo modelo es independiente del primero. Convertir sus desacuerdos en `UNKNOWN` descartaría justo los casos que más interesa que revise el experto. Cuando discrepan los dos modelos, se conserva el signo del principal, se registran ambas respuestas y el caso queda marcado para que el experto lo resuelva con toda la información.
 6. **La conclusión es del experto:** el sistema extrae y verifica evidencia; los casos `revisar` se entregan al profesional biomédico con las citas y los motivos.
 
-**Validación:** sobre el *gold set* se miden la **precisión de las respuestas dadas** (cuando el sistema da `+1`, `-1` o `neutro`, cuántas acierta), la **cobertura** (porcentaje de casos con estado `resuelto`) y el **recall de `UNKNOWN`** (cuántos casos no concluyentes según el experto detecta el sistema), además de la calibración de `confianza_modelo` y `confianza_final` (spec del benchmark). Medición provisional del 2026-11-10 (gold v3, 124 casos, Gemini 3.5 Flash-Lite, umbral 80): exactitud 82 %, precisión de los signos 66 %, cobertura 45 % y recall de `UNKNOWN` 79 %. Las etiquetas del gold v3 son de anotadores Claude a ciegas; las cifras valdrán cuando etiquete CIMUS. Los umbrales mínimos se acordarán con CIMUS.
+**Validación:** sobre el *gold set* se miden la **precisión de las respuestas dadas** (cuando el sistema da `+1`, `-1` o `neutro`, cuántas acierta), la **cobertura** (porcentaje de casos con estado `resuelto`) y el **recall de `UNKNOWN`** (cuántos casos no concluyentes según el experto detecta el sistema), además de la calibración de `confianza_modelo` y `confianza_final` (spec del benchmark). Medición provisional del 2026-11-10 (umbral 80; Gemini 3.5 Flash-Lite salvo donde se indica):
+
+| Gold | Casos | Exactitud | Precisión de los signos | Cobertura | Recall de `UNKNOWN` |
+|---|---|---|---|---|---|
+| v4 (vigente; 65 de genes *up* y 35 de genes *down*) | 100 | 84 % | 72 % | 40 % | 85 % |
+| v4, con gpt-oss-120b | 100 | 85 % | 79 % | 34 % | 89 % |
+| v3 (histórico; solo genes *up*) | 124 | 82 % | 66 % | 45 % | 79 % |
+
+Las etiquetas de los dos gold son de anotadores Claude a ciegas; las cifras valdrán cuando etiquete CIMUS. Los umbrales mínimos se acordarán con CIMUS.
 
 Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga la ejecución en los planes gratuitos; el filtro previo puede descartar abstracts que nombran el gen de forma no recogida en los alias (un error en la dirección segura, que se medirá en el benchmark); y la cobertura bajará frente a un sistema que siempre responde.
 
 ### Pendiente de decidir
 * **Confianza mínima para `coincide_polaridad_GO`:** hoy se acepta cualquier confianza. En el benchmark v4 (con el prompt anterior) esta regla aceptó veredictos con confianza de 0 a 35 que eran adivinanzas.
-* **Umbral sobre `confianza_final` en lugar de `confianza_modelo`:** en el benchmark v4 separaba mejor los aciertos de los errores. Se decidirá con el benchmark v5 completo.
+* **Umbral sobre `confianza_final` en lugar de `confianza_modelo`:**
+  * en el benchmark v4, `confianza_final` separaba mejor los aciertos de los errores;
+  * en el v6 (gold v4, con los dos modelos) el resultado es mixto:
+    * para Gemini, `confianza_final` separa algo mejor (AUROC de 0,76 frente a 0,72) y está mejor calibrada (ECE de 7 puntos frente a 15);
+    * para gpt-oss es al revés (AUROC de 0,66 frente a 0,74; ECE de 15 frente a 5);
+    * con 40 y 34 signos, ninguna de las diferencias es concluyente.
+
+  Se decidirá con las etiquetas de CIMUS y con los factores de `confianza_final` reajustados sobre respuestas que no se usaron para fijarlos.
 
 ## Alternativas
 * **`UNKNOWN` simple, sin motivo:**

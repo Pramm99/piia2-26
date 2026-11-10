@@ -135,7 +135,7 @@ El orden de ejecución es el de `main.py`.
 | # | Componente | Responsabilidad | Estado |
 |---|---|---|---|
 | 15 | **Agregación y Net Pathway Score** | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con la dirección del gen y su log2 Fold-Change para obtener la contribución neta a la ruta. | Pendiente de especificar: falta decidir la regla de agregación cuando hay signos distintos. |
-| 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | En parte: funciona sobre el gold v3 (124 casos) con etiquetas provisionales de anotadores Claude; faltan las etiquetas de CIMUS y terminar gpt-oss en el benchmark v5. |
+| 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | En parte: funciona sobre el gold v4 (100 casos: 65 de genes *up* y 35 de genes *down*) con etiquetas provisionales de anotadores Claude. Gemini y gpt-oss están completos en el benchmark v6; faltan las etiquetas de CIMUS. |
 
 ## Flujo de principio a fin
 
@@ -164,7 +164,7 @@ Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09.
 5. **Componente 14:** como el veredicto (neutro) no coincide con la `Polaridad_GO` (+1), la fila de `Por_ruta` sale con `Signo_ruta = UNKNOWN`, `Estado = revisar` y los motivos `baja_confianza`, `contexto_ajeno` y `discrepancia_polaridad_GO`. El caso pasa al experto con la cita y las dos fuentes, en vez de aceptar el `+1` que habría dado un modelo complaciente.
 
 ## Pendiente de decidir
-* **Modelo secundario:** el principal es Gemini 3.5 Flash-Lite (decidido el 2026-11-10). El secundario previsto es gpt-oss-120b en Groq, pendiente de terminar el benchmark v5 (ADR-005).
+* **Modelo secundario:** el principal es Gemini 3.5 Flash-Lite (decidido el 2026-11-10). El secundario previsto es gpt-oss-120b en Groq, ya medido en el benchmark v6 y pendiente de que el equipo lo confirme (ADR-005).
 * **Regla de GO y umbral:** si la aceptación por `coincide_polaridad_GO` necesita una confianza mínima, y si el umbral debe aplicarse a `confianza_final` en lugar de a la confianza del modelo (ADR-003).
 * **Fase 3:** regla de agregación de varios PMIDs con signos distintos.
 

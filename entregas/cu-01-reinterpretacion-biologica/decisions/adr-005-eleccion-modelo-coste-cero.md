@@ -1,6 +1,6 @@
 ---
 description: Elección de los modelos de lenguaje con la restricción de coste cero, mediante un benchmark de candidatos gratuitos sobre un gold set; principal Gemini 3.5 Flash-Lite y secundario gpt-oss-120b en prueba.
-state: Aceptado (candidatos actualizados el 2026-11-08; modelo principal decidido el 2026-11-10; secundario pendiente de terminar el benchmark v5)
+state: Aceptado (candidatos actualizados el 2026-11-08; modelo principal decidido el 2026-11-10; secundario medido en el benchmark v6, pendiente de confirmación del equipo)
 ---
 
 # ADR 005 - Elección del Modelo de Lenguaje con Coste Cero mediante Benchmark sobre Gold Set
@@ -11,7 +11,7 @@ El proyecto **solo usa modelos que no exijan pagar ninguna cantidad**. Los model
 | Papel | Modelo | Estado |
 |---|---|---|
 | **Principal** | **Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`, plan gratuito de la API de Gemini) | Decidido por el equipo el 2026-11-10 |
-| **Secundario** | **`gpt-oss-120b`** en el plan gratuito de **Groq** (`groq-gpt-oss-120b`, pesos abiertos, otra familia y otro proveedor) | En prueba: el benchmark v5 se cortó en 6 de 124 preguntas por el límite diario de Groq y se confirmará al terminarlo |
+| **Secundario** | **`gpt-oss-120b`** en el plan gratuito de **Groq** (`groq-gpt-oss-120b`, pesos abiertos, otra familia y otro proveedor) | En prueba: completó el benchmark v6 (gold v4, 100 de 100, sin cortes); falta que el equipo lo confirme |
 | **Contingencia** | **`qwen3:8b`** en **Ollama**, en local y sin GPU | Solo si un plan gratuito cambia o deja de ofrecer los modelos elegidos |
 
 **Candidatos descartados o sin usar:**
@@ -19,13 +19,20 @@ El proyecto **solo usa modelos que no exijan pagar ninguna cantidad**. Los model
 * **`gpt-oss-120b` en Cerebras:** está configurado (1 M tokens/día en el plan gratuito), pero no se ha probado, porque Cerebras pide datos bancarios para mostrar la clave.
 * Ya no están disponibles los Llama del plan gratuito de Groq (`llama3-8b-8192` se retiró el 2025-08-30, y `llama-3.1-8b-instant` y `llama-3.3-70b-versatile` el 2026-08-16) ni GitHub Models (retirado el 2026-07-30). OpenRouter (50 peticiones/día) y Mistral (límites sin verificar) quedan descartados.
 
-**Por qué Gemini es el principal.** El principal da el signo final y tiene que responder a todas las preguntas; si no responde, la pregunta queda `pendiente` (ADR-003). Gemini es el único candidato que ha completado el benchmark v5: 124 de 124 respuestas, todas con JSON válido, 82 % de exactitud y unos 8 minutos de ejecución. En cambio, el plan gratuito de Groq (200 K tokens/día) cortó a gpt-oss antes de terminar en los benchmarks v3 (25 de 60), v4 y v5 (6 de 124), y una pasada completa de producción le llevaría unos 17 días (ver Motivación). Como secundario ese retraso es aceptable: mientras no responde, el caso sigue adelante con el principal y solo pierde el contraste entre modelos.
+**Por qué Gemini es el principal.** El principal da el signo final y tiene que responder a todas las preguntas; si no responde, la pregunta queda `pendiente` (ADR-003). Gemini es el único candidato que ha completado el benchmark v5: 124 de 124 respuestas, todas con JSON válido, 82 % de exactitud y unos 8 minutos de ejecución. También completó el v6, sobre el gold v4 con genes *up* y *down*: 100 de 100 y 84 % de exactitud. En cambio, el plan gratuito de Groq (200 K tokens/día) cortó a gpt-oss antes de terminar en los benchmarks v3 (25 de 60), v4 y v5 (6 de 124), y una pasada completa de producción le llevaría unos 17 días (ver Motivación). Como secundario ese retraso es aceptable: mientras no responde, el caso sigue adelante con el principal y solo pierde el contraste entre modelos.
 
 **Versiones del prompt** comparadas en el benchmark con los mismos casos y el mismo validador: `v2_veredicto` (producción: veredicto obligado y `UNKNOWN` decidido por el código) y `v1_proceso_gen` (el modelo puede abstenerse). Las dos preguntan por el proceso núcleo y se envían por gen (spec de inferencia).
 
 > **Histórico.** Hasta el 2026-11-10 el benchmark comparaba `v0_original` (el prompt de partida, que preguntaba por la ruta) y `v1_proceso`; ya no existen en el código. La propuesta inicial del 2026-11-08 era `gpt-oss-120b` en Cerebras como principal y `qwen3.8-27b` como secundario, y la del benchmark v2 era gpt-oss en Groq como principal y Gemini como secundario.
 
-**Gold set (v3):** 124 preguntas (gen, PMID, proceso núcleo) con casos ambiguos, como el de receptor frente a ligando (CD7 y K12, PMID 10652336), y una mayoría de casos no concluyentes: 27 «+1», 13 «−1», 2 neutros y 82 `UNKNOWN`. Hoy las etiquetas son **provisionales**: las pusieron anotadores Claude a ciegas, con doble etiquetado de todos los casos (kappa 0,92) y un árbitro en los 5 desacuerdos. Su acierto está inflado para cualquier modelo parecido, así que las etiquetas que valen son las del equipo clínico (a través de Luis Pérez, con CIMUS), que se pondrán **sin ver la salida de ningún modelo**, para evitar el sesgo de anclaje. Detalle en la [spec del benchmark](../specs/benchmark-gold-set.md).
+**Gold set (v4, 2026-11-10):** 100 preguntas (gen, PMID, proceso núcleo):
+* **Origen:** 65 de genes *up* y 35 de genes *down*, porque producción procesa las dos listas de CIMUS.
+* **Casos ambiguos:** incluye, por ejemplo, el de receptor frente a ligando (CD7 y K12, PMID 10652336).
+* **Etiquetas:** la mayoría son casos no concluyentes: 20 «+1», 12 «−1», 3 neutros y 65 `UNKNOWN`.
+
+Hoy las etiquetas son **provisionales**. Las pusieron anotadores Claude a ciegas, con doble etiquetado de todos los casos y un árbitro en los desacuerdos (kappa de 0,92 en el v3 y de 0,96 en los 35 *down* nuevos). Su acierto está inflado para cualquier modelo parecido, así que las etiquetas que valen son las del equipo clínico (a través de Luis Pérez, con CIMUS), que se pondrán **sin ver la salida de ningún modelo**, para evitar el sesgo de anclaje. Detalle en la [spec del benchmark](../specs/benchmark-gold-set.md).
+
+> **Histórico.** El gold v3 tenía 124 casos, todos de genes *up*: 27 «+1», 13 «−1», 2 neutros y 82 `UNKNOWN`.
 
 **Métricas** (las del ADR-003 más las de formato y coste):
 * Exactitud, precisión de los veredictos dados (`+1`, `-1` o `neutro`), cobertura y recall de `UNKNOWN`, con intervalos de confianza por *bootstrap* y la matriz de confusión de 4 clases.
@@ -41,8 +48,26 @@ El proyecto **solo usa modelos que no exijan pagar ninguna cantidad**. Los model
 | v2 (2026-11-09, `v1_proceso_gen`) | 60 | exactitud 90 %, precisión 73 %, JSON 60/60, 3,2 min | 87 %, 69 %, 59/60, 7,7 min | 88 %, 67 %, 46/60 | 52 %, 26 %, 79 s por pregunta |
 | v4 (2026-11-10, `v2_veredicto`, umbral 40) | 50 comunes | 72 %, 42 %, 50/50 | 86 %, 60 %, 49/50 | 86 %, 62 %, 34/50 | — |
 | v5 (2026-11-10, `v2_veredicto`, umbral 80) | 124 | 82 %, 66 %, 124/124, 8,1 min | 6/124 (cortado) | — | — |
+| v6 (2026-11-10, gold v4, `v2_veredicto`, umbral 80) | 100 | 84 %, 72 %, 100/100, 5,5 min | 85 %, 79 %, 96/100, 14,9 min | — | — |
 
-Con el prompt de entonces, el v4 favorecía a gpt-oss. El v5 usa el prompt definitivo, sin umbral, y la comparación entre los dos se cerrará al terminar gpt-oss.
+**Desglose del v6 por lista** (exactitud, precisión de los signos, cobertura y recall de `UNKNOWN`):
+
+| Genes | Casos | Gemini 3.5 Flash-Lite | gpt-oss-120b (Groq) |
+|---|---|---|---|
+| *up* | 65 | 83 %, 61 %, 35 %, 82 % | 85 %, 65 %, 31 %, 86 % |
+| *down* | 35 | 86 %, 88 %, 49 %, 94 % | 86 %, 100 %, 40 %, 100 % |
+
+* **Genes *down*:** ninguno de los dos rinde peor.
+  * Gemini tiene 5 errores: uno de signo opuesto y uno en que da signo con la etiqueta `UNKNOWN`.
+  * gpt-oss no da ningún signo equivocado: sus 5 errores son `UNKNOWN` donde la etiqueta tiene signo.
+* **Genes *up*:** el error típico de los dos es dar un signo cuando la etiqueta es `UNKNOWN` (9 de 11 errores en Gemini y 7 de 10 en gpt-oss).
+* **Acuerdo entre los dos modelos:**
+  * dan la misma clase en 87 de 100 casos;
+  * cuando los dos dan signo (31 casos), coinciden en 30;
+  * el único caso de signos opuestos es G133 (CD6 soluble como bloqueante), que también dudaron los anotadores.
+* **Intervalos:** con 35 casos son amplios. La precisión de Gemini en los *down* va del 71 al 100 %, y en los *up*, del 41 al 82 %.
+
+Con el prompt de entonces, el v4 favorecía a gpt-oss. El v5 y el v6 usan el prompt definitivo, sin umbral. En el v6, gpt-oss es algo más preciso y más prudente (cobertura del 34 % frente al 40 %), pero tiene 4 JSON inválidos y tarda casi el triple. Las diferencias de exactitud y precisión caben dentro de los intervalos. El papel de cada modelo no cambia: Gemini principal, porque responde a todo y rápido, y gpt-oss secundario, cuya independencia de errores es lo que usa el ADR-003. Falta que el equipo confirme el secundario.
 
 **Configuración común** (`codigo/consulta_gen/cliente.py`): un único conector compatible con la API de chat de OpenAI (`ClienteOpenAICompatible`) para Groq, Gemini (modo compatible), Cerebras y Ollama. Usa temperatura 0, `seed` y salida JSON estricta con el esquema del prompt cuando el proveedor lo admite. Gemini ignora la temperatura y su modo compatible rechaza `seed` (HTTP 400), así que no se le envía ninguno de los dos. gpt-oss usa `reasoning_effort = "low"`. El nombre exacto del modelo que devuelve el proveedor se guarda en cada llamada (ADR-004). Los mensajes se construyen una sola vez (`PromptLista.como_mensajes()`) y solo cambia la configuración de cada modelo (`MODELOS`). En producción las preguntas de un gen se trocean con el presupuesto por llamada más pequeño de los dos modelos (Groq, 7.500 tokens), para que los dos reciban la misma agrupación.
 
@@ -81,7 +106,7 @@ Aceptamos los compromisos asociados:
   * `codigo/consulta_gen/esquema.py` (`PromptLista.como_mensajes()`, formato de chat estándar `role`/`content`).
   * `codigo/consulta_gen/prompt.py` (`CONFIG_V2` y `CONFIG_V1_GEN`: las dos versiones del prompt).
   * `codigo/consulta_gen/__main__.py` (modelos por defecto de `python -m consulta_gen ejecutar`).
-  * `codigo/evaluacion/evaluar_gold.py` e informes `codigo/evaluacion/informe_gold_provisional_v2.txt`, `_v4.txt` y `_v5.txt`.
+  * `codigo/evaluacion/evaluar_gold.py` e informes `codigo/evaluacion/informe_gold_provisional_v2.txt`, `_v4.txt`, `_v5.txt` y `_v6.txt` (gold v4).
 * **Proveedores** (comprobar límites y catálogo en la consola de cada uno antes de ejecutar):
   * Gemini API, límites de uso: [https://ai.google.dev/gemini-api/docs/rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits)
   * Groq, modelos, límites y retiradas: [https://console.groq.com/docs/models](https://console.groq.com/docs/models), [https://console.groq.com/docs/rate-limits](https://console.groq.com/docs/rate-limits), [https://console.groq.com/docs/deprecations](https://console.groq.com/docs/deprecations)

@@ -73,7 +73,8 @@ def construir_preguntas(ruta_excel):
     """(id, pregunta v1_proceso_gen) de cada caso del gold set, en su orden."""
     sys.path.insert(0, str(AQUI))
     from seleccionar_gold import _universo, caso_id
-    elegidos = {caso_id(c): c for c in _universo(ruta_excel)[0]}  # por clave: vale también tras --actualizar
+    # por clave: vale también tras --actualizar; las dos listas de CIMUS, porque el gold v4 tiene genes up y down
+    elegidos = {caso_id(c): c for lista in ("Activada", "Suprimida") for c in _universo(ruta_excel, lista)[0]}
     return [(g["id"], construir_prompt(elegidos[g["caso"]], CONFIG)) for g in gold_casos()]
 
 

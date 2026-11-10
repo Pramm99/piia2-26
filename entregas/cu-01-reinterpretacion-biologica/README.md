@@ -76,7 +76,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Inferencia estructurada:** Extracción del signo funcional con **dos modelos de lenguaje gratuitos** ([ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md)): Gemini 3.5 Flash-Lite como principal y gpt-oss-120b (Groq) como secundario, en prueba. La salida es JSON estricto y el modelo siempre da un veredicto y su confianza. El código pone `UNKNOWN` cuando la cita no se verifica o la confianza no llega al umbral, y marca para revisión los casos en conflicto ([ADR-003](decisions/adr-003-control-alucinaciones-unknown.md)).
 
-- **Evaluación:** Benchmark de los modelos candidatos sobre un _gold set_ de 124 preguntas, con etiquetado a ciegas. Hoy las etiquetas son provisionales y faltan las del equipo clínico de CIMUS ([spec](specs/benchmark-gold-set.md)).
+- **Evaluación:** Benchmark de los modelos candidatos sobre un _gold set_ de 100 preguntas (65 de genes _up_ y 35 de genes _down_), con etiquetado a ciegas. Hoy las etiquetas son provisionales y faltan las del equipo clínico de CIMUS ([spec](specs/benchmark-gold-set.md)).
 
 - **Métrica de resolución:** Integración del signo inferido con la dirección y el _log2 Fold-Change_ de cada gen en el dataset scRNA-seq original (_Net Pathway Score_). Pendiente de especificar.
 
