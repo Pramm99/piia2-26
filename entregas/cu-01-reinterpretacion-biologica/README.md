@@ -75,8 +75,8 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Reproducibilidad:**
   - registro de todas las respuestas de los modelos, que permite reanudar una ejecución y regenerar los resultados sin volver a llamar ([ADR-004](decisions/adr-004-persistencia-ficheros-locales.md));
-  - un cliente simulado (`ClienteSimulado`) que permite probar el pipeline sin red ni cuotas.
-  - **Pendiente:** el _test harness_ con `pytest` y _fixtures_ locales. Hoy no hay tests en el repositorio.
+  - un cliente simulado (`ClienteSimulado`) que permite probar el pipeline sin red ni cuotas;
+  - pruebas con `pytest` en `codigo/tests/` (limpieza, validación, contraste, ejecución reanudable e ingesta), sin red: las APIs y los modelos se simulan.
 
 ### Qué queda explícitamente fuera
 
@@ -149,7 +149,7 @@ entregas/cu-01-reinterpretacion-biologica/
 │
 ├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md).
 ├── src/                           # Esquema del código fuente (definicion-src.txt).
-└── tests/                         # Pruebas del pipeline (test_pipeline.py, vacío, pendiente).
+└── tests/                         # Vacío (test_pipeline.py): las pruebas están en codigo/tests/.
 
 codigo/                            # Código fuente (raíz del repositorio):
 ├── extraer_info/                  # Fase 1: ingesta (GO, GAF, inmunoglobulinas, triaje del signo GO,
@@ -157,11 +157,12 @@ codigo/                            # Código fuente (raíz del repositorio):
 │   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, UniProt y su caché.
 ├── consulta_gen/                  # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
 ├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
+├── tests/                         # Pruebas con pytest, sin red (python -m pytest desde codigo/).
 ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas y su script de análisis.
 ├── data/                          # Ficheros locales (ignorados por git): OBO, GAF, cachés, registro de
 │                                  #   respuestas, fase2_resultados.xlsx y registros del benchmark.
 ├── .env.example                   # Plantilla de las claves de los modelos y de NCBI.
-└── requirements.txt               # Dependencias de Python (requests, pandas, openpyxl).
+└── requirements.txt               # Dependencias de Python (requests, pandas, openpyxl; pytest para las pruebas).
 ```
 
 El fichero `.gitignore` está en la raíz del repositorio y excluye el entorno virtual, `codigo/data/`, los `.env` y todos los `.xlsx` y `.csv`. Por eso los Excels de entrada y salida de la Fase 1, que están en `codigo/extraer_info/`, no se versionan. Los únicos Excels versionados son los de `codigo/tools_cimus/`.
@@ -174,4 +175,5 @@ Desde la raíz del repositorio, con Python 3 y las dependencias de `codigo/requi
 2. **Fase 1:** `python codigo/extraer_info/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/extraer_info/fase1_dataset_abstracts.xlsx`. La primera ejecución descarga el OBO, el GAF y unos 33.000 _abstracts_ (casi una hora); con las cachés tarda unos minutos.
 3. **Fase 2:** desde `codigo/`, `python -m consulta_gen ejecutar`. Escribe `codigo/data/fase2_resultados.xlsx`. Si se agota el límite diario de un modelo, basta con volver a lanzar el mismo comando. Sin llamar a ningún modelo, `python -m consulta_gen CD7` muestra la primera llamada que se enviaría para un gen.
 4. **Benchmark:** `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
+5. **Pruebas:** desde `codigo/`, `python -m pytest`. No usan la red ni las claves de `.env`.
 

@@ -72,9 +72,14 @@ codigo/
 │   ├── informe_gold_provisional*.txt  # Informes de los benchmarks v1 a v5.
 │   └── v1/                        #   Archivo del gold v1.
 │
-├── tests/                         # PRUEBAS (pytest, sin red)
-│   ├── fixtures/                  #   (previsto) Respuestas simuladas de Europe PMC, NCBI y de los modelos.
-│   └── test_processing.py         #   (previsto) Limpieza, forma de comparación y verificación de citas.
+├── pytest.ini                     # Configuración de pytest (python -m pytest desde codigo/).
+├── tests/                         # PRUEBAS (pytest, sin red ni claves)
+│   ├── conftest.py                #   (hecho) Casos y respuestas de ejemplo comunes.
+│   ├── test_limpieza.py           #   (hecho) Limpieza, forma de comparación, citas, frases y mención del gen.
+│   ├── test_respuesta.py          #   (hecho) Validación v2_veredicto y v1_proceso_gen, signo por ruta y listas.
+│   ├── test_resultados.py         #   (hecho) Contraste con GO y entre modelos, y confianza_final.
+│   ├── test_ejecucion.py          #   (hecho) Registro y ejecución reanudable con el cliente simulado.
+│   └── test_fase1.py              #   (hecho) Entrada, grafo GO, inmunoglobulinas, descarga simulada y .env.
 │
 ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas (los únicos .xlsx versionados)
 │                                  #   y su script de análisis.
@@ -83,7 +88,7 @@ codigo/
 │                                  #   cache_mygene.json, cache_epmc_busquedas.json, cache_uniprot.json,
 │                                  #   hgnc_inmunoglobulinas.json), respuestas_llm.jsonl, llamadas_llm.jsonl,
 │                                  #   fase2_resultados.xlsx y los registros del benchmark (benchmark*/).
-├── requirements.txt               # Dependencias de Python: requests, pandas, openpyxl.
+├── requirements.txt               # Dependencias de Python: requests, pandas, openpyxl (y pytest para las pruebas).
 ├── .env.example                   # Nombres de las claves (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY,
 │                                  #   NCBI_EMAIL, NCBI_API_KEY), vacíos.
 └── .env                           # Las claves reales. Solo en local: está en .gitignore y NUNCA se sube.

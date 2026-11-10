@@ -46,7 +46,7 @@ La dirección del gen se conserva porque el scoring la necesita: el efecto real 
 * **Procesamiento puramente local en CPU:** La limpieza y la normalización se ejecutan con librerías estándar (`html`, `re`, `unicodedata`), sin invocar APIs de IA ni dependencias externas lentas.
 
 ## Criterios de aceptación
-Los marcados se comprobaron a mano el 2026-11-10 con un script sin red. No hay todavía tests en el repositorio.
+Los marcados están cubiertos por `codigo/tests/test_limpieza.py` (pytest, sin red).
 
 * [x] ✅ **Sanitización de etiquetas sin pérdida de texto:**
   * dada una muestra con etiquetas HTML conocidas y entidades (`&amp;`, `&gt;`), el resultado no contiene esas etiquetas;
@@ -65,4 +65,5 @@ Los marcados se comprobaron a mano el 2026-11-10 con un script sin red. No hay t
 * [x] ✅ **Rechazo de citas no válidas:** Sobre el mismo abstract, se rechazan una paráfrasis (*"K12-Fc increased CD25 and CD69 on NK cells"*) y cualquier cita de menos de 6 palabras (p. ej. `CD7`).
 * [x] ✅ **Mención del gen por palabra completa:** En un texto que solo menciona `CD70`, el gen `CD7` no se detecta; en uno que menciona `CD-7`, sí; `cd7` en minúsculas no cuenta.
 * [ ] **Dirección conservada:** todas las filas de `Con_abstract` llevan `Estado_Original` con «Activada» o «Suprimida», ningún gen aparece con los dos valores y cada fila de `Por_ruta` de la Fase 2 se puede unir con su `Estado_Original` por (gen, ruta).
-* [ ] **Cobertura de tests unitarios:** Una suite de `pytest` valida estos criterios y los casos límite (abstracts nulos, abstracts sin etiquetas, cadenas con caracteres no UTF-8), con una cobertura de código $\ge 90\%$ sobre el módulo de limpieza.
+* [ ] **Cobertura de tests unitarios:** La suite de `pytest` (`codigo/tests/test_limpieza.py`) valida estos criterios y algunos casos límite (valores vacíos del Excel, idempotencia). Falta medir la cobertura, que debe ser $\ge 90\%$ sobre el módulo de limpieza.
+* [ ] **Frases tras «et al.»:** `segmentar_frases` no debe cortar la frase después de «et al.». Pendiente de corregir más adelante: cambia la numeración de las frases de esos abstracts y, con ella, las huellas de sus preguntas.
