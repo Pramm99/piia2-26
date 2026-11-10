@@ -43,7 +43,7 @@ La dirección del gen se conserva porque el scoring la necesita: el efecto real 
 * **Reglas de uso de la forma de comparación:**
   * **Verificación de la cita:** la cita normalizada debe aparecer como palabras enteras en la frase indicada del texto enviado al LLM, también normalizada, y tener **al menos 6 palabras**. Una cita más corta no demuestra nada (p. ej. `CD7` aparecería dentro de `CD70`).
 * **La dirección transcriptómica no se envía al LLM:** `Estado_Original` se conserva para el scoring, pero no forma parte del prompt, para no sesgar la respuesta del modelo.
-* **Procesamiento puramente local en CPU:** La limpieza y la normalización se ejecutan con librerías estándar (`html`, `re`, `unicodedata`), sin invocar APIs de IA ni dependencias externas lentas.
+* **Procesamiento local, sin red:** La limpieza y la normalización (`limpiar_texto`, `limpiar_abstract`, `forma_comparacion`, `segmentar_frases` y la mención del gen) solo usan la librería estándar (`html`, `re`, `unicodedata`). La única excepción es `pandas`, que se usa para reconocer las celdas vacías del Excel. No hacen ninguna petición de red ni llaman a ningún modelo.
 
 ## Criterios de aceptación
 Los marcados están cubiertos por `codigo/tests/test_limpieza.py` (pytest, sin red).
@@ -64,6 +64,7 @@ Los marcados están cubiertos por `codigo/tests/test_limpieza.py` (pytest, sin r
   Un guion suprimido sin espacio (`K12Fc`) **no** se verifica.
 * [x] ✅ **Rechazo de citas no válidas:** Sobre el mismo abstract, se rechazan una paráfrasis (*"K12-Fc increased CD25 and CD69 on NK cells"*) y cualquier cita de menos de 6 palabras (p. ej. `CD7`).
 * [x] ✅ **Mención del gen por palabra completa:** En un texto que solo menciona `CD70`, el gen `CD7` no se detecta; en uno que menciona `CD-7`, sí; `cd7` en minúsculas no cuenta.
+* [x] ✅ **Sin red:** `consulta_gen/limpieza.py` y la parte de limpieza de `extraer_info/abstracts.py` no usan la red: ninguna de sus funciones llama a `requests` ni a un cliente de LLM. `test_limpieza.py` se ejecuta sin conexión.
 * [ ] **Dirección conservada:** todas las filas de `Con_abstract` llevan `Estado_Original` con «Activada» o «Suprimida», ningún gen aparece con los dos valores y cada fila de `Por_ruta` de la Fase 2 se puede unir con su `Estado_Original` por (gen, ruta).
 * [ ] **Cobertura de tests unitarios:** La suite de `pytest` (`codigo/tests/test_limpieza.py`) valida estos criterios y algunos casos límite (valores vacíos del Excel, idempotencia). Falta medir la cobertura, que debe ser $\ge 90\%$ sobre el módulo de limpieza.
 * [ ] **Frases tras «et al.»:** `segmentar_frases` no debe cortar la frase después de «et al.». Pendiente de corregir más adelante: cambia la numeración de las frases de esos abstracts y, con ella, las huellas de sus preguntas.

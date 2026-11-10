@@ -58,6 +58,13 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Dominio específico:** Células NK del microambiente tumoral de cabeza y cuello (HNSC: laringe y faringe).
 
+- **Tamaño que sí entra:** una ejecución con las dos listas de CIMUS:
+  - 392 rutas: 314 en la de genes _up_ y 78 en la de genes _down_. Son 352 términos GO distintos, porque 40 salen en las dos listas.
+  - 3.172 pares gen–ruta de 224 genes.
+  - Entre 2 y 26 genes por ruta, con una mediana de 7.
+
+  Listas mucho mayores o de otro tejido no se han probado.
+
 - **Ingesta de evidencias** ([ADR-002](decisions/adr-002-europe-pmc-api.md)):
   - PMIDs de las anotaciones de Gene Ontology (fichero GAF), propagando cada ruta a todo su subárbol de términos.
   - Para los pares sin _abstract_ en el GAF, PMIDs de **NCBI GeneRIF** (vía MyGene.info) y de una búsqueda dirigida en **Europe PMC**.

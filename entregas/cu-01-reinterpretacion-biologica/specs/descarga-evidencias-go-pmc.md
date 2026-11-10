@@ -61,7 +61,25 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
   * las cachés de abstracts (`cache_abstracts.json`), MyGene y GeneRIF (`cache_mygene.json`), búsquedas de Europe PMC (`cache_epmc_busquedas.json`), UniProt (`cache_uniprot.json`) y la lista de inmunoglobulinas de HGNC (`hgnc_inmunoglobulinas.json`).
 
   Se reutilizan entre ejecuciones. Borrar la caché de abstracts o los ficheros de GO solo alarga la ejecución; borrar las de GeneRIF o Europe PMC puede cambiar el resultado, porque esas APIs cambian con el tiempo y Europe PMC ordena por relevancia. Las cachés y las descargas del OBO y el GAF se escriben de forma atómica (fichero temporal y renombrado) para que una interrupción no deje ficheros corruptos. El Excel de salida no se escribe de forma atómica.
-* **Control de tasa de peticiones (*Rate Limiting*):** Las llamadas a Europe PMC se hacen en lotes de **40 identificadores** por petición y las de NCBI en lotes de 100 (valores fijos en `abstracts.py`), con pausas entre lotes, más cortas en NCBI si hay `NCBI_API_KEY`. Las peticiones a las APIs usan reintentos con espera exponencial (*exponential backoff*) ante respuestas HTTP `429`, `500`, `502`, `503` y `504`. La descarga del OBO y el GAF no tiene reintentos.
+* **Control de tasa de peticiones (*Rate Limiting*):**
+  * **Lotes:** 40 PMIDs por petición en Europe PMC y 100 en NCBI (valores fijos en `abstracts.py`).
+  * **Pausas:**
+    * entre lotes de Europe PMC, 0,2 s;
+    * entre lotes de NCBI, 0,35 s sin `NCBI_API_KEY` y 0,12 s con ella, por debajo del límite de NCBI (3 peticiones/s sin clave y 10 con clave);
+    * entre consultas de la búsqueda dirigida de Europe PMC, 0,1 s.
+  * **Reintentos con espera exponencial (*exponential backoff*):** todas las peticiones a las APIs usan la sesión de `red.configurar_sesion` (Europe PMC, NCBI, MyGene, HGNC y UniProt).
+    * Esa sesión reintenta hasta **5 veces** (`Retry(total=5, backoff_factor=1)`) ante HTTP `429`, `500`, `502`, `503` y `504`, tanto en GET como en POST.
+    * Con urllib3 2.x, la espera antes de cada reintento es de 0, 2, 4, 8 y 16 s, unos 30 s como máximo. Si el servidor envía la cabecera `Retry-After`, se respeta.
+  * **Tiempos de espera por petición:**
+    * Europe PMC (abstracts): 30 s;
+    * NCBI, búsqueda dirigida, HGNC y UniProt: 60 s;
+    * MyGene: 120 s, porque pide hasta 1.000 genes a la vez.
+  * **Si se agotan los reintentos:**
+    * el lote de Europe PMC se salta y sus PMIDs pasan a NCBI;
+    * un lote de NCBI fallido se repite PMID a PMID;
+    * un PMID que sigue fallando no se guarda en la caché, así que se vuelve a pedir en la siguiente ejecución.
+  * **Guardado parcial:** la caché de abstracts se guarda cada 25 lotes, para que un corte no obligue a repetir lo ya descargado.
+  * **OBO y GAF:** su descarga no tiene reintentos (15 s de conexión y 120 s de lectura). Si falla, se relanza la ejecución, y como la escritura es atómica no queda ningún fichero a medias.
 * **Solo referencias PubMed:** Se descartan las referencias que no sean `PMID` (p. ej. `GO_REF`, `DOI`, `Reactome`), las anotaciones con calificador `NOT` y las de taxón distinto de humano (`9606`).
 * **Códigos de evidencia:** Se aceptan **todos los códigos de evidencia** que lleven `PMID`. Las anotaciones automáticas `IEA` quedan fuera de forma natural, porque nunca llevan PMID. Cada fila indica en la columna `Experimental` si su evidencia es experimental (`EXP`, `IDA`, `IPI`, `IMP`, `IGI`, `IEP` y sus equivalentes de alto rendimiento). El filtro estricto (`SOLO_EXPERIMENTAL`) es configurable y está desactivado por defecto.
 * **Resolución de genes:** Un gen se identifica por su símbolo oficial y, solo si no hay ambigüedad, por un sinónimo del GAF (un sinónimo que sea el símbolo oficial de otro gen no se usa).
@@ -70,7 +88,16 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
 * **Gestión de credenciales y red:** El correo de contacto y la clave de API de NCBI (`NCBI_EMAIL`, `NCBI_API_KEY`) se leen de las variables de entorno o del fichero `codigo/.env` (documentado en `codigo/.env.example`), sin escribir datos privados en el código. `codigo/.env` no se sube al repositorio. Si no hay correo, no se envía ninguno.
 
 ## Criterios de aceptación
-* [ ] **Carga y validación de la entrada:** Dado un fichero de prueba con al menos una ruta y 5 genes, el parser extrae correctamente la lista de pares `(GO_ID, GENE_SYMBOL)` y rechaza con un error descriptivo (`ValueError`) cualquier fichero al que le falte alguna de las columnas obligatorias. (La extracción funciona; falta el `ValueError`.)
+* [x] ✅ **Carga de la entrada:** Dado un Excel con una sola ruta, `GO:0000001` (obsoleta, sustituida por `GO:0000002`), y `geneID` = `CD7/gzmb/PRF1/NKG7/KLRD1`, el parser devuelve exactamente estas 5 filas, en este orden y todas con `Estado_Original = "Activada"`: `(GO:0000002, CD7)`, `(GO:0000002, GZMB)`, `(GO:0000002, PRF1)`, `(GO:0000002, NKG7)` y `(GO:0000002, KLRD1)`. (`tests/test_fase1.py`.)
+* [x] ✅ **Entrada de CIMUS:** Con los dos Excels de `codigo/tools_cimus/`, la carga da 3.172 pares y 224 genes, y ningún gen aparece en las dos listas. (`tests/test_fase1.py`.)
+* [ ] **Validación de columnas:** Un fichero al que le falte `ID`, `Description` o `geneID` se rechaza con un `ValueError` que nombra la columna que falta, antes de ninguna petición de red. (Hoy da `KeyError`, y se lee después de descargar el OBO y el GAF.)
+* [ ] **Entrada `.csv`:** Un `.csv` con las mismas columnas y el mismo contenido que un `.xlsx` da exactamente los mismos pares. (No implementado.)
+* [x] ✅ **Reintentos:** La sesión de `red.configurar_sesion` reintenta 5 veces con `backoff_factor` 1 ante los códigos `429`, `500`, `502`, `503` y `504`, en GET y POST, y sus esperas son 0, 2, 4, 8 y 16 s. (`tests/test_red.py`.)
+* [x] ✅ **Credenciales:**
+  * `NCBI_EMAIL` y `NCBI_API_KEY` se leen de `codigo/.env`, que ignora los comentarios y las líneas sin `=`;
+  * una variable de entorno tiene prioridad sobre el fichero;
+  * sin fichero ni variable, el valor es `None` (`tests/test_fase1.py`);
+  * `git check-ignore codigo/.env` confirma que no se versiona.
 * [x] ✅ **Resolución gen–ruta → PMID:** Para el par de referencia (`CD7`, `GO:0002443` *leukocyte mediated immunity*), la salida contiene el `PMID` `10652336`, anotado en el término descendiente `GO:0002726` con evidencia `IDA` y `Polaridad_GO = +1`. Ninguna fila de la hoja `Con_abstract` contiene un `PMID` no numérico. (Comprobado en la ejecución del 2026-11-09.)
 * [x] ✅ **Composición de la polaridad en el grafo:** Para un término alcanzado a través de una única relación `negatively_regulates`, `Polaridad_GO` es `-1`; a través de dos relaciones `negatively_regulates` encadenadas, es `+1`; si el término se alcanza por caminos de signo opuesto, es `conflicto`. (`tests/test_fase1.py`, con un OBO mínimo.)
 * [ ] **Inmunoglobulinas:** los pares de genes de inmunoglobulina (p. ej. IGKC, IGHM) aparecen en la hoja `Inmunoglobulinas` con signo `neutro` y no aparecen en `Con_abstract`; IGFBP7, que empieza por «IG» pero no es una inmunoglobulina, no se aparta.
