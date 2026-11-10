@@ -13,6 +13,10 @@ A cada modelo se le envían solo las preguntas del grupo que le faltan; cada una
 Una pregunta que el modelo se salta queda pendiente; si la salida se corta por max_completion_tokens, la lista
 se parte en dos y se repite.
 
+Con solo_respaldo=True el secundario no se usa para contrastar: solo recibe las preguntas que el principal no ha
+respondido (cupo agotado) o respondió con un JSON que no vale (resultados.elegir). Así el cupo diario de Groq se
+reserva para los fallos de Gemini; una ejecución posterior sin la opción completa el contraste.
+
 El resumen cuenta los tokens de cada modelo, incluidos los servidos de la caché del proveedor y los de
 razonamiento, cuando el proveedor los da (`usage.prompt_tokens_details.cached_tokens`,
 `usage.completion_tokens_details.reasoning_tokens`).
@@ -55,14 +59,14 @@ def _sumar_tokens(resumen: Resumen, modelo: str, meta: Dict) -> None:
 
 
 def ejecutar(prompts: Sequence[PromptLLM], clientes: Sequence, registro: Optional[Registro] = None,
-             cada: int = 25) -> (List[ResultadoCaso], Resumen):
+             cada: int = 25, solo_respaldo: bool = False) -> (List[ResultadoCaso], Resumen):
     """prompts: preguntas sueltas de una sola versión del prompt; se envían por gen.
     clientes: objetos con `.cfg` (nombre, presupuesto_llamada) y `.completar(lista)` (ClienteOpenAICompatible
     o ClienteSimulado)."""
     registro = registro if registro is not None else Registro()
     if len({p.version for p in prompts}) > 1:
         raise ValueError("No se pueden mezclar preguntas de versiones distintas")
-    return _ejecutar_por_gen(prompts, clientes, registro, cada)
+    return _ejecutar_por_gen(prompts, clientes, registro, cada, solo_respaldo)
 
 
 def _llamar_lista(cli, lista: PromptLista, registro: Registro, resumen: Resumen) -> None:
@@ -82,9 +86,17 @@ def _llamar_lista(cli, lista: PromptLista, registro: Registro, resumen: Resumen)
     registro.anadir_lista(lista, nombre, r.texto, r.meta, crudos, salidas)
 
 
+def _principal_valido(p: PromptLLM, principal: str, registro: Registro) -> bool:
+    linea = registro.get(clave(p, principal))
+    return linea is not None and "json_invalido" not in validar_respuesta(p, linea["respuesta_cruda"])["motivos"]
+
+
 def _ejecutar_por_gen(preguntas: Sequence[PromptLLM], clientes: Sequence, registro: Registro,
-                      cada: int) -> (List[ResultadoCaso], Resumen):
+                      cada: int, solo_respaldo: bool = False) -> (List[ResultadoCaso], Resumen):
     resumen, agotados = Resumen(), set()
+    principal = clientes[0].cfg.nombre
+    # Con solo_respaldo, el secundario solo hace falta donde el principal no tiene una respuesta válida
+    hace_falta = (lambda p, cli: cli.cfg.nombre == principal or not _principal_valido(p, principal, registro))         if solo_respaldo else (lambda p, cli: True)
     resumen.reutilizadas = sum(clave(p, c.cfg.nombre) in registro for p in preguntas for c in clientes)
     faltan_a_alguno = [p for p in preguntas if any(clave(p, c.cfg.nombre) not in registro for c in clientes)]
     presupuesto = min(c.cfg.presupuesto_llamada for c in clientes)
@@ -92,7 +104,7 @@ def _ejecutar_por_gen(preguntas: Sequence[PromptLLM], clientes: Sequence, regist
     for i, grupo in enumerate(grupos, 1):
         for cli in clientes:
             nombre = cli.cfg.nombre
-            faltan = [p for p in grupo.preguntas if clave(p, nombre) not in registro]
+            faltan = [p for p in grupo.preguntas if clave(p, nombre) not in registro and hace_falta(p, cli)]
             if not faltan or nombre in agotados:
                 continue
             lista = grupo if len(faltan) == len(grupo.preguntas) else construir_prompt_lista(faltan)
@@ -110,7 +122,7 @@ def _ejecutar_por_gen(preguntas: Sequence[PromptLLM], clientes: Sequence, regist
         for cli in clientes:
             linea = registro.get(clave(p, cli.cfg.nombre))
             res.salidas[cli.cfg.nombre] = validar_respuesta(p, linea["respuesta_cruda"]) if linea else None
-            resumen.pendientes += linea is None
+            resumen.pendientes += linea is None and hace_falta(p, cli)
         resultados.append(res)
     resumen.agotados = sorted(agotados)
     return resultados, resumen

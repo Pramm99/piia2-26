@@ -44,6 +44,29 @@ def test_limite_diario_deja_pendiente_no_unknown(tmp_path):
     assert all(r.salidas["sim"] is None for r in resultados)
 
 
+def _preguntas_dos_genes():
+    return [construir_prompt(caso(gen=g, pmid=str(i))) for g in ("CD7", "GZMB") for i in (1, 2)]
+
+
+def test_solo_respaldo_el_secundario_solo_recibe_lo_que_falla(tmp_path):
+    # El principal agota su cupo al llegar al segundo gen: el secundario responde solo a GZMB
+    principal = ClienteSimulado("principal", _responder, fallar=lambda lista: lista.gen == "GZMB")
+    enviadas = []
+    secundario = ClienteSimulado("secundario", lambda lista: enviadas.append(lista.gen) or _responder(lista))
+    resultados, resumen = ejecutar(_preguntas_dos_genes(), [principal, secundario], Registro(tmp_path / "r.jsonl"),
+                                   cada=0, solo_respaldo=True)
+    assert enviadas == ["GZMB"] and resumen.agotados == ["principal"]
+    assert resumen.pendientes == 2  # las del principal en GZMB; el secundario no debe nada en CD7
+    assert all(r.salidas["secundario"] is None for r in resultados if r.prompt.gen == "CD7")
+
+
+def test_sin_solo_respaldo_el_secundario_contrasta_todo(tmp_path):
+    secundario = ClienteSimulado("secundario", _responder)
+    ejecutar(_preguntas_dos_genes(), [ClienteSimulado("principal", _responder), secundario],
+             Registro(tmp_path / "r.jsonl"), cada=0)
+    assert secundario.llamadas == 2
+
+
 def test_pregunta_saltada_queda_pendiente(tmp_path):
     def solo_la_primera(lista):
         return json.dumps({"respuestas": [{"q": "Q1", **json.loads(respuesta())}]})

@@ -1,9 +1,11 @@
 """Fase 2 desde la línea de comandos.
 
 Ejecución completa (llama a los modelos; reanudable, el registro va a codigo/data/):
-  python -m consulta_gen ejecutar [principal|-] [secundario|-|ninguno] [gen|-] [GO:XXXXXXX|-] [ruta_excel|-]
+  python -m consulta_gen ejecutar [principal|-] [secundario|-|ninguno] [gen|-] [GO:XXXXXXX|-] [ruta_excel|-] [--solo-respaldo]
   Escribe codigo/data/fase2_resultados.xlsx (hojas Por_ruta, Preguntas y Resumen). Los modelos son los
   nombres de cliente.MODELOS; por defecto, los del ADR-005 (principal Gemini, secundario gpt-oss en Groq).
+  Si el principal no responde (cupo agotado) o su JSON no vale, decide el secundario (respaldo_secundario).
+  --solo-respaldo: el secundario solo recibe esas preguntas, sin contrastar las demás (ahorra su cupo).
 Demo: imprime la primera llamada que se enviaría para un gen (sin llamar a ningún modelo):
   python -m consulta_gen CD7 [GO:XXXXXXX|-] [ruta_excel|-]
 Se puede lanzar también como script (python consulta_gen/__main__.py …, p. ej. el botón Run del IDE).
@@ -42,7 +44,8 @@ def ejecutar_cli(arg) -> None:
     from consulta_gen.resultados import FICHERO_RESULTADOS
     nombres = [arg(2) or PRINCIPAL] + ([] if arg(3) == "ninguno" else [arg(3) or SECUNDARIO])
     clientes = [ClienteOpenAICompatible(MODELOS[n]) for n in nombres]
-    df_p, df_r, resumen, cuenta = ejecutar_fase2(str(localizar_excel(arg(6))), clientes, arg(4), arg(5))
+    df_p, df_r, resumen, cuenta = ejecutar_fase2(str(localizar_excel(arg(6))), clientes, arg(4), arg(5),
+                                                 solo_respaldo=SOLO_RESPALDO)
     print(f"Casos: {cuenta}")
     print(f"Llamadas {resumen.llamadas} | reutilizadas {resumen.reutilizadas} | pendientes {resumen.pendientes} "
           f"| tokens {resumen.tokens}")
@@ -52,6 +55,8 @@ def ejecutar_cli(arg) -> None:
 
 
 if __name__ == "__main__":
+    SOLO_RESPALDO = "--solo-respaldo" in sys.argv
+    sys.argv = [a for a in sys.argv if a != "--solo-respaldo"]
     arg = lambda i: sys.argv[i] if len(sys.argv) > i and sys.argv[i] != "-" else None
     if arg(1) == "ejecutar":
         ejecutar_cli(arg)

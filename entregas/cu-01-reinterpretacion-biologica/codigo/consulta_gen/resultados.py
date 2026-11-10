@@ -6,7 +6,10 @@ Por pregunta (gen, PMID, proceso núcleo):
     y el caso queda en revisar (ADR-003). Una respuesta del secundario con json_invalido no cuenta como
     discrepancia: no dice nada sobre el abstract, solo que ese modelo falló el formato;
   - confianza_final (confianza.py) usa la respuesta del secundario;
-  - si el principal no ha respondido todavía (límite del plan gratuito), el estado es «pendiente», no UNKNOWN.
+  - si el principal no ha respondido todavía (límite del plan gratuito), el estado es «pendiente», no UNKNOWN;
+  - respaldo (ADR-005): si el principal no responde o su JSON no vale y el secundario sí da una respuesta
+    válida, decide la del secundario, con el motivo respaldo_secundario (no pide revisión: sin segundo modelo
+    con el que contrastar, confianza_final aplica el factor sin_segundo).
 Por ruta (gen, ruta, PMID), lo que lee el scoring: signo_ruta = veredicto × factor de la ruta (composición de
 casos.py, calculada en respuesta.py), contrastado con la Polaridad_GO de esa anotación (Con_abstract, mismo gen,
 ruta y PMID). Como el modelo siempre da un veredicto (+1, -1 o neutro):
@@ -59,6 +62,14 @@ def contrastar(principal: Optional[Dict], secundaria: Optional[Dict] = None) -> 
             "signo_principal": principal["signo"], "signo_secundario": sec}
 
 
+def elegir(principal: Optional[Dict], secundaria: Optional[Dict]) -> Tuple[Optional[Dict], Optional[Dict], bool]:
+    """(respuesta que decide, la otra para el contraste, ¿es el respaldo?). Gemini puede agotar su cupo o fallar
+    el formato: entonces decide el secundario, y no queda otra respuesta con la que contrastar."""
+    if not _valida(principal) and _valida(secundaria):
+        return secundaria, None, True
+    return principal, secundaria, False
+
+
 def polaridades_go(df: pd.DataFrame) -> Dict[Tuple[str, str, str], str]:
     """(gen, GO_ID ruta, PMID) -> «+1» / «-1» de las filas de Con_abstract (las anotaciones GO de ese PMID).
     Si las filas no dan un único signo, no hay polaridad con la que contrastar."""
@@ -103,8 +114,14 @@ def tablas(resultados, principal: str, secundario: Optional[str], cerrados: Sequ
     preguntas, rutas = [], []
     filas = [(r.prompt.evidencia, r.salidas.get(principal), r.salidas.get(secundario) if secundario else None)
              for r in resultados]
-    for caso, p, s in filas:
+    for caso, p_real, s_real in filas:
+        p, s, respaldo = elegir(p_real, s_real)
         c = contrastar(p, s)
+        modelo = secundario if respaldo else principal
+        if respaldo:
+            c["motivos"].append("respaldo_secundario")
+            c["signo_principal"] = p_real["signo"] if p_real else None
+            c["signo_secundario"] = s_real["signo"]
         p = p or {}
         preguntas.append({
             "Gen": caso.gen, "PMID": caso.pmid, "Proceso_ID": caso.nucleo_id, "Proceso": caso.nucleo_nombre,
@@ -116,7 +133,8 @@ def tablas(resultados, principal: str, secundario: Optional[str], cerrados: Sequ
             "Cita_verificada": p.get("cita_verificada"), "Tipo_evidencia": p.get("tipo_evidencia"),
             "Organismo": p.get("organismo"), "Tipo_celular": p.get("tipo_celular"),
             "Razonamiento": p.get("razonamiento_corto"), "Termino_origen": caso.termino_origen,
-            "Respaldo_ruta": caso.respaldo_ruta, "Modelo_principal": principal, "Modelo_secundario": secundario})
+            "Respaldo_ruta": caso.respaldo_ruta, "Modelo_respuesta": modelo, "Modelo_principal": principal,
+            "Modelo_secundario": secundario})
         por_ruta = {r["go_id"]: r for r in p.get("rutas", [])}
         for go_id, nombre_ruta, _ in caso.rutas:
             r = por_ruta.get(go_id, {})
@@ -136,7 +154,7 @@ def tablas(resultados, principal: str, secundario: Optional[str], cerrados: Sequ
                 "Confianza_final": conf_final if signo_ruta != SIGNO_DESCONOCIDO else None,
                 "Polaridad_GO": pol, "Destino": destinos.get((caso.gen, go_id), ""),
                 "Signo_principal": c["signo_principal"], "Signo_secundario": c["signo_secundario"],
-                "Frases": _frases(p), "Razonamiento": p.get("razonamiento_corto"),
+                "Modelo_respuesta": modelo, "Frases": _frases(p), "Razonamiento": p.get("razonamiento_corto"),
                 "Id_frase": p.get("id_frase"), "Cita": p.get("justificacion_literal")})
     for caso in cerrados:  # filtro previo: UNKNOWN sin llamar al LLM
         base = {"Gen": caso.gen, "PMID": caso.pmid, "Proceso_ID": caso.nucleo_id, "Proceso": caso.nucleo_nombre,

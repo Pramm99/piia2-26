@@ -57,6 +57,37 @@ def test_principal_sin_responder_queda_pendiente():
     assert (c["signo"], c["estado"]) == ("UNKNOWN", "pendiente")
 
 
+# --- Respaldo del secundario (ADR-005: Gemini principal, gpt-oss si falla) ---
+def _fila_respaldo(prompt, principal, secundario_txt):
+    salidas = {"principal": principal, "secundario": validar_respuesta(prompt, secundario_txt)}
+    preguntas, por_ruta = tablas([ResultadoCaso(prompt, salidas)], "principal", "secundario", [], hoja_fase1(""))
+    return preguntas.iloc[0], por_ruta.iloc[0]
+
+
+def test_respaldo_si_el_principal_no_responde(prompt):
+    q, f = _fila_respaldo(prompt, None, respuesta("DECREASES", 90))
+    assert (f.Signo_ruta, f.Estado, f.Motivos) == ("-1", "resuelto", "respaldo_secundario")
+    assert (f.Modelo_respuesta, f.Signo_principal, f.Signo_secundario) == ("secundario", None, "-1")
+    assert q.Efecto == "DECREASES" and f.Confianza_final == 73  # 90 × 0,9 (frase S1) × 0,9 (sin_segundo)
+
+
+def test_respaldo_si_el_json_del_principal_no_vale(prompt):
+    q, f = _fila_respaldo(prompt, validar_respuesta(prompt, "no es JSON"), respuesta("INCREASES", 90))
+    assert (f.Signo_ruta, f.Estado, f.Modelo_respuesta) == ("+1", "resuelto", "secundario")
+    assert f.Signo_principal == "UNKNOWN" and "respaldo_secundario" in f.Motivos
+
+
+def test_sin_respaldo_si_el_principal_responde(prompt):
+    _, f = _fila_respaldo(prompt, validar_respuesta(prompt, respuesta("INCREASES", 90)), respuesta("INCREASES", 90))
+    assert (f.Modelo_respuesta, f.Motivos) == ("principal", "")
+
+
+def test_ambos_sin_responder_sigue_pendiente(prompt):
+    salidas = {"principal": None, "secundario": None}
+    _, por_ruta = tablas([ResultadoCaso(prompt, salidas)], "principal", "secundario", [], hoja_fase1(""))
+    assert por_ruta.iloc[0].Estado == "pendiente"
+
+
 def test_preguntas_cerradas_por_el_filtro_previo(prompt):
     preguntas, por_ruta = tablas([], "principal", None, [caso()], hoja_fase1())
     assert preguntas.iloc[0].Motivos == "no_menciona_gen" and por_ruta.iloc[0].Signo_ruta == "UNKNOWN"
