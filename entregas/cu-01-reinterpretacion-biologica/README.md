@@ -78,7 +78,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Evaluación:** Benchmark de los modelos candidatos sobre un _gold set_ de 100 preguntas (65 de genes _up_ y 35 de genes _down_), con etiquetado a ciegas. Hoy las etiquetas son provisionales y faltan las del equipo clínico de CIMUS ([spec](specs/benchmark-gold-set.md)).
 
-- **Métrica de resolución:** Integración del signo inferido con la dirección y el _log2 Fold-Change_ de cada gen en el dataset scRNA-seq original (_Net Pathway Score_). Pendiente de especificar.
+- **Métrica de resolución:** Integración del signo inferido con la dirección y el _log2 Fold-Change_ de cada gen en el dataset scRNA-seq original (_Net Pathway Score_), especificada en la [spec de scoring](specs/scoring-net-pathway-score.md). El código está pendiente.
 
 - **Reproducibilidad:**
   - registro de todas las respuestas de los modelos, que permite reanudar una ejecución y regenerar los resultados sin volver a llamar ([ADR-004](decisions/adr-004-persistencia-ficheros-locales.md));
@@ -128,6 +128,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
   | [`limpieza-abstracts-particion-genica.md`](specs/limpieza-abstracts-particion-genica.md) | Limpieza de abstracts, normalización para comparar y dirección del gen. |
   | [`inferencia-llm.md`](specs/inferencia-llm.md) | Inferencia del signo con LLM y validación de la respuesta. |
   | [`benchmark-gold-set.md`](specs/benchmark-gold-set.md) | Gold set etiquetado a ciegas y benchmark de modelos. |
+  | [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md) | Agregación de los artículos de cada par y *Net Pathway Score* de cada ruta (Fase 3). |
 
 - **Limitaciones conocidas:** [`docs/limitacion-pares-sin-abstract.md`](docs/limitacion-pares-sin-abstract.md) (pares gen–ruta sin ningún _abstract_).
 
@@ -140,7 +141,7 @@ entregas/cu-01-reinterpretacion-biologica/
 ├── README.md                      # Puerta de entrada: visión de conjunto, objetivos y estructura.
 ├── .gitignore                     # Excluye el entorno virtual, codigo/data/, los .env, los .xlsx y los .csv.
 ├── ARCHITECTURE.md                # Diagrama de componentes y recorrido del dato.
-├── AGENTS.md                      # Instrucciones operativas para asistentes de IA y colaboradores (vacío, pendiente).
+├── AGENTS.md                      # Instrucciones operativas para asistentes de IA y colaboradores: estructura, comandos y reglas.
 │
 ├── decisions/                     # Architecture Decision Records (ADRs):
 │   ├── adr-001-rag-stateless.md                  # Pipeline RAG con LLM externo.
@@ -153,7 +154,8 @@ entregas/cu-01-reinterpretacion-biologica/
 │   ├── descarga-evidencias-go-pmc.md
 │   ├── limpieza-abstracts-particion-genica.md
 │   ├── inferencia-llm.md
-│   └── benchmark-gold-set.md
+│   ├── benchmark-gold-set.md
+│   └── scoring-net-pathway-score.md
 │
 ├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md).
 ├── PlanesViables/                 # Análisis de las dos arquitecturas candidatas (OpcionA.md, OpcionB.md; ADR-001).
