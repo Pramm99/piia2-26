@@ -1,60 +1,97 @@
 # Spec: Gold Set Etiquetado por Expertos y Benchmark de Modelos
 
 ## Qué hay que construir
-Un procedimiento de evaluación reproducible que permita elegir los modelos de producción ([ADR-005](../decisions/adr-005-eleccion-modelo-coste-cero.md)), medir la eficacia del control de alucinaciones ([ADR-003](../decisions/adr-003-control-alucinaciones-unknown.md)) y decidir la definición de caso pendiente en la [spec de inferencia](inferencia-llm.md). Consta de cuatro partes:
+Un procedimiento de evaluación reproducible que permita elegir los modelos de producción ([ADR-005](../decisions/adr-005-eleccion-modelo-coste-cero.md)), medir la eficacia del control de alucinaciones ([ADR-003](../decisions/adr-003-control-alucinaciones-unknown.md)) y comparar las dos versiones del prompt de la [spec de inferencia](inferencia-llm.md). Consta de cuatro partes. El código está en `codigo/evaluacion/`.
 
-1. **Selección del *gold set*:** un script que extrae **60 casos** de la hoja `Con_abstract` generada por la Fase 1 sobre **las 314 rutas activadas**, con una semilla aleatoria fija y estratificados así:
-   * **21 casos (35 %)** con `Polaridad_GO` de signo conocido (`+1` y `-1` equilibrados), para poder medir el acuerdo con GO.
-   * **39 casos (65 %)** sin polaridad de GO (vacía o `conflicto`), que es la situación del 77 % de las filas.
-   * Como máximo 5 casos por gen, para que los genes más repetidos (p. ej. LGALS9, presente en 158 rutas) no dominen la muestra.
-   * Se incluyen deliberadamente casos difíciles conocidos, como el de receptor frente a ligando (CD7 y K12, PMID 10652336).
-2. **Etiquetado a ciegas:** el equipo clínico (a través de Luis Pérez, con CIMUS) etiqueta cada caso con:
-   * `etiqueta`: `+1`, `-1` o `UNKNOWN`.
-   * `motivo`: uno de los motivos del ADR-003 si la etiqueta es `UNKNOWN`.
-   * `cita`: la frase del abstract que justifica la etiqueta (vacía si es `UNKNOWN`).
+1. **Selección del *gold set*.** La unidad de caso es la misma pregunta que responden los modelos: **(gen, PMID, proceso núcleo)**. La etiqueta es el efecto del gen sobre ese proceso según el abstract, y el signo sobre cada ruta lo compone el código igual que con los modelos.
+   * **Selección inicial (gold v1 y v2, `seleccionar_gold.py`):** 60 casos de las rutas de genes *up* (lista «activadas» de CIMUS), con la semilla fija 20261109:
+     * 21 con `Polaridad_GO` de signo conocido en alguna de sus rutas (11 «+1» y 10 «−1», tomando la primera ruta con signo), para poder medir el acuerdo con GO;
+     * 39 sin ella;
+     * como máximo 5 casos por gen, para que los genes más repetidos no dominen la muestra;
+     * el caso de receptor frente a ligando (CD7 y K12, PMID 10652336) siempre dentro;
+     * 12 casos (20 %) marcados para doble etiquetado.
 
-   La plantilla de etiquetado muestra solo el gen, la ruta (o el término, según la opción evaluada), el título y el abstract. **No muestra la salida de ningún modelo ni la `Polaridad_GO`**, para que la etiqueta no se ancle en ninguna de las dos fuentes que se van a evaluar. Un subconjunto de **12 casos (20 %)** lo etiqueta además una segunda persona del equipo, de forma independiente, para medir el acuerdo entre anotadores.
-3. **Ejecución del benchmark:** los tres candidatos del ADR-005 (modelo abierto en Groq, Gemini Flash y modelo pequeño en Ollama) evalúan todos los casos del *gold set* con el mismo prompt y el mismo proceso de validación de la spec de inferencia. Si la composición del signo de la opción B está definida, se evalúan las dos formulaciones (A y B) sobre los mismos casos.
-4. **Informe de resultados:** por cada modelo y formulación se calculan:
-   * **Precisión de las respuestas dadas:** de los casos en que el sistema da `+1` o `-1`, cuántos coinciden con la etiqueta del experto.
-   * **Cobertura:** porcentaje de casos con estado `resuelto`.
-   * **Recall de `UNKNOWN`:** de los casos que el experto etiquetó como `UNKNOWN`, cuántos detecta el sistema.
-   * **Matriz de confusión** 4×4 (`+1`, `-1`, `neutro`, `UNKNOWN`). Una etiqueta `NO_CLEAR_EFFECT` con el motivo `no_effect_found` cuenta como `neutro`; el resto, como `UNKNOWN`. El *gold set* provisional no tiene ningún caso neutro: hay que incluirlos al ampliarlo. En `v2_veredicto` (`--prompt=v2_veredicto`) se aplica la misma regla de GO que en producción: un veredicto que coincide con la `Polaridad_GO` del caso se acepta aunque su confianza no llegue al umbral. Si alguna ejecución se corta por el límite diario, `--comunes=N` calcula el informe sobre los N primeros casos que han respondido todos los modelos, para compararlos sobre los mismos casos.
-   * **Porcentaje de JSON válido** y **porcentaje de citas verificadas**.
-   * **Acuerdo con `Polaridad_GO`** en los casos que la tienen.
-   * **Latencia media por llamada** y número de casos por día que permiten los límites del plan gratuito.
-   * **Calibración del porcentaje de seguridad**, sobre los signos que da cada modelo (acierto = mismo signo que la etiqueta), por separado para `confianza_modelo` (la que declara el modelo) y `confianza_final` (corregida con el tipo de evidencia, la frase citada y el acuerdo con el otro modelo; [spec de inferencia](inferencia-llm.md)):
-     * **tabla de fiabilidad** por tramos (0-49, 50-69, 70-89 y 90-100, los de las anclas del prompt): número de signos, confianza media y acierto. Si está bien calibrada, las respuestas con un 80 % aciertan un 80 %;
+     Quedan fuera los pares que no llegan al LLM (`aceptar_GO` y `sin_evidencia` en el triaje de la Fase 1, y los que el filtro previo cierra con `no_menciona_gen`) y el **conjunto de desarrollo**: las preguntas de la ruta GO:0002443 y del gen ICAM1, usadas para ajustar el prompt, salvo CD7/10652336. Con `--actualizar`, el script rehace la selección sobre una Fase 1 nueva sin volver a sortear: conserva los casos que siguen existiendo y solo sustituye los que han desaparecido.
+   * **Gold v3, el vigente (2026-11-10):** **124 casos**, formados por los 60 del v2 más los candidatos a neutro de `buscar_neutros.py`: 51 de la primera ronda y 13 de la segunda (`--amplia`) que pasaron una criba previa. El script busca abstracts con una frase de negación («did not affect», «was dispensable»…) que nombra al gen, entre las preguntas que no están en el gold ni en el conjunto de desarrollo. El v2 no tenía ningún neutro, así que la clase no se podía medir. Composición del v3:
+     * por `Polaridad_GO`: 18 con «+1», 7 con «−1» y 99 sin ella;
+     * por etiqueta: 27 «+1», 13 «−1», 2 neutros y 82 `UNKNOWN`. Los abstracts casi nunca informan de que un gen no cambia un proceso: solo 2 de 174 candidatos lo hacían;
+     * 50 genes, con un máximo de 7 casos por gen (CCR7 y CD83), así que el v3 ya no cumple el máximo de 5;
+     * los 124 casos con doble etiquetado.
+
+     El v3 se montó con `construir_gold_v3.py`, que hoy está fuera del repositorio (`research_notes/Gold v3 etiquetado/`). El detalle está en `etiquetas_provisionales/CAMBIOS_v3.md`.
+   * **Pendiente:** ampliar el *gold set* con casos de las rutas de genes *down* (lista «suprimidas»), que también se procesan en producción. `seleccionar_gold.py` y `buscar_neutros.py` solo eligen rutas de genes *up*.
+2. **Etiquetado a ciegas** según la guía `codigo/evaluacion/guia_etiquetado.md`. Cada caso se etiqueta con:
+   * `efecto`: `INCREASES` (+1), `DECREASES` (−1), `NO_EFFECT` (neutro: el abstract muestra que el gen no cambia el proceso) o `NO_CLEAR_EFFECT` (`UNKNOWN`);
+   * `motivo`: si el efecto es `NO_CLEAR_EFFECT`, una de las limitaciones del prompt (`gene_not_discussed`, `gene_is_the_target`, `marker_or_correlation_only`, `effect_of_other_molecule`, `speculation_only`, `conflicting_results`, `process_not_addressed`); si no, `none`;
+   * `id_frase` y `cita`: la frase que justifica la etiqueta y un fragmento literal de 6 palabras o más;
+   * `confianza` (`alta`, `media` o `baja`), una `nota` opcional y el `anotador`.
+
+   La plantilla (`plantilla_etiquetado.jsonl` y `.xlsx`) muestra solo el gen, sus otros nombres, el PMID, el **proceso núcleo**, el título `[T]` y las frases del abstract `[S1]…[Sn]`. **No muestra la salida de ningún modelo, la `Polaridad_GO` ni la dirección del gen en scRNA-seq**, para que la etiqueta no se ancle en ninguna de las fuentes que se van a evaluar. Los casos marcados con `doble_etiquetado` los etiqueta además una segunda persona, de forma independiente.
+
+   **Estado actual: las etiquetas son provisionales.** Las pusieron anotadores Claude a ciegas, con ids anónimos y mezclados: dos anotadores independientes por caso (A y B) y un árbitro en los desacuerdos. El acuerdo fue de 119 sobre 124, con kappa 0,92, y hubo 5 desacuerdos arbitrados. Como esos anotadores son modelos parecidos a los evaluados, su acierto está inflado: las etiquetas que valen son las del equipo clínico (a través de Luis Pérez, con CIMUS), que siguen pendientes.
+3. **Ejecución del benchmark:** `evaluar_gold.py ejecutar` hace que cada candidato responda a todas las preguntas del *gold set* con la versión del prompt elegida y el mismo validador de la spec de inferencia. Las preguntas se envían por gen, troceadas con el presupuesto por llamada de cada modelo. Por eso la agrupación del mensaje puede variar entre modelos, aunque cada pregunta y su huella son idénticas. En producción sí es común, porque se usa el presupuesto más pequeño de la pareja. Candidatos evaluados:
+   * **benchmarks v1 a v3** (60 casos, `v1_proceso_gen`): `groq-gpt-oss-120b`, `groq-qwen3.8-27b`, `gemini-3.5-flash-lite` y `ollama-qwen3-8b`;
+   * **benchmark v4** (`v2_veredicto`): los mismos sin Ollama, más `claude-opus-5.5` como referencia. Claude no es un plan gratuito: sus respuestas son una lectura manual dentro de una sesión de trabajo, y no se pueden repetir a ciegas;
+   * **benchmark v5** (gold v3, `v2_veredicto` con el prompt sin umbral): Gemini completo (124 de 124) y gpt-oss en 6 de 124, cortado por el límite diario de Groq.
+
+   `qwen3.8-27b` está descartado (ADR-005).
+4. **Informe de resultados:** `evaluar_gold.py informe` vuelve a validar las respuestas crudas del registro, **sin llamar a ningún modelo**, y las compara con las etiquetas. La etiqueta `NO_EFFECT` cuenta como `neutro`, y también un `NO_CLEAR_EFFECT` con el motivo `no_effect_found` de las etiquetas v1 y v2. El resto de `NO_CLEAR_EFFECT` cuenta como `UNKNOWN`. Por cada modelo calcula:
+   * **Exactitud:** porcentaje de casos en que la clase del sistema coincide con la etiqueta.
+   * **Precisión de las respuestas dadas:** de los casos en que el sistema no da `UNKNOWN` (`+1`, `-1` o `neutro`), cuántos coinciden con la etiqueta.
+   * **Cobertura:** porcentaje de casos en que el sistema no da `UNKNOWN`, incluidos los que quedan en `revisar`.
+   * **Recall de `UNKNOWN`:** de los casos etiquetados como `UNKNOWN`, cuántos detecta el sistema.
+   * **Matriz de confusión** 4×4 (`+1`, `-1`, `neutro`, `UNKNOWN`).
+   * **JSON válido**, **citas verificadas** y **acuerdo con `Polaridad_GO`** en los casos que la tienen.
+   * **Llamadas, latencia media por llamada, tiempo total y tokens** (entrada y salida).
+   * **Calibración del porcentaje de seguridad**, sobre los veredictos que da cada modelo (acierto = misma clase que la etiqueta), por separado para `confianza_modelo` (la que declara el modelo) y `confianza_final` (corregida con el tipo de evidencia, la frase citada y el acuerdo con el otro modelo; ADR-003):
+     * **tabla de fiabilidad** por tramos (0-49, 50-69, 70-89 y 90-100, los de las anclas de `v1_proceso_gen`; `v2_veredicto` no tiene anclas): número de signos, confianza media y acierto. Si está bien calibrada, las respuestas con un 80 % aciertan un 80 %;
      * **ECE** (error de calibración esperado): la diferencia media, ponderada por tramo, entre la confianza y el acierto;
      * **AUROC** de la confianza frente al acierto: la probabilidad de que un signo correcto tenga más confianza que uno erróneo (0,5 = no separa);
-     * **curva riesgo-cobertura:** para cada umbral (50, 60, 70, 80 y 90), cuántos signos quedan por encima y qué precisión tienen. De ella sale el umbral de `baja_confianza` del ADR-003 (70 por defecto).
+     * **curva riesgo-cobertura:** para cada umbral (0, 50, 60, 70, 80 y 90), cuántos signos quedan por encima y qué precisión tienen. De ella salió `UMBRAL_VEREDICTO = 80` de `v2_veredicto` (prueba de Gemini sobre el gold v3, 2026-11-10). El 70 es solo el umbral de `baja_confianza` de `v1_proceso_gen` (`UMBRAL_CONFIANZA_V1_GEN`).
 
-     Para `confianza_final` se usa como otro modelo el de la pareja propuesta para producción (gpt-oss con Gemini y al revés; las alternativas se emparejan con Gemini). Con pocos signos en el *gold set* (13 en el provisional) la calibración es solo orientativa: una calibración fiable necesita el *gold set* ampliado y estratificado por etiqueta (más de 100 casos, unos 30-40 por clase). Los factores de `confianza_final` se ajustaron con el benchmark v2, así que evaluarlos sobre esas mismas respuestas es optimista: hay que medirlos en respuestas nuevas.
+     Para `confianza_final` se usa como otro modelo el de la pareja de producción: Gemini con gpt-oss y al revés; las alternativas se emparejan con Gemini. La calibración sigue siendo orientativa (56 veredictos de Gemini en el v5), y los factores de `confianza_final` se ajustaron con el benchmark v2, así que evaluarlos sobre esas mismas respuestas es optimista: hay que medirlos en respuestas nuevas.
 
-   Cada métrica se acompaña de su **intervalo de confianza al 95 %** calculado por *bootstrap*, y se reporta el **acuerdo entre anotadores** (kappa de Cohen) sobre el subconjunto doble.
+   Cada métrica se acompaña de su **intervalo de confianza al 95 %** calculado por *bootstrap* (2.000 remuestreos, semilla fija), y se reporta el **acuerdo entre anotadores** (kappa de Cohen) sobre los casos dobles. En `v2_veredicto` el informe aplica la misma regla de GO que producción: un veredicto con cita verificada que coincide con la `Polaridad_GO` del caso se acepta aunque su confianza no llegue al umbral. La versión se toma de la clave guardada en el registro, y la `Polaridad_GO` es la de la primera ruta del caso con signo (`ruta_go` y `factor_ruta_go`), no la de cada ruta.
 
-Con el informe se aplica la regla de selección del ADR-005 (modelo principal, modelo secundario y, en su caso, opción A o B), y el resultado se documenta actualizando ese ADR.
+**Uso** (desde `codigo/`):
+
+```
+python evaluacion/evaluar_gold.py ejecutar <modelo> <excel de la Fase 1> [carpeta de datos] [presupuesto] [--dir=<nombre>] [--prompt=v2_veredicto]
+python evaluacion/evaluar_gold.py informe <etiquetas.jsonl> [<etiquetas_doble.jsonl>] [--dir=<nombre>] [--comunes=N]
+```
+
+* `--dir=<nombre>`: carpeta de los registros dentro de `codigo/data/`; por defecto `benchmark`.
+* `--prompt=v2_veredicto`: ejecuta la versión de producción en vez de `v1_proceso_gen`. Solo afecta a `ejecutar`.
+* `--comunes=N`: calcula el informe sobre los N primeros casos que han respondido todos los modelos de la carpeta, para comparar sobre los mismos casos cuando alguna ejecución se ha cortado por el límite diario.
+* `ejecutar` es reanudable: si se corta por el límite diario, volver a lanzarlo solo hace lo pendiente.
+* Un modelo cuya carpeta no tiene `claves.json` (porque su ejecución no terminó ninguna vez) no aparece en el informe.
+
+Con el informe se aplica la regla de selección del ADR-005 y el resultado se documenta actualizando ese ADR.
 
 ## Por qué
-Elegir un modelo por rankings generales o por reputación no mide lo que importa en este proyecto: distinguir el efecto del gen del de otra molécula, abstenerse cuando el abstract no es concluyente y citar literalmente. Solo un conjunto de casos reales etiquetados por un experto permite comparar los candidatos en la tarea concreta y justificar la elección ante CIMUS y ante el tribunal.
+Elegir un modelo por rankings generales o por reputación no mide lo que importa en este proyecto: distinguir el efecto del gen del de otra molécula, no dar un signo cuando el abstract no es concluyente y citar literalmente. Solo un conjunto de casos reales etiquetados por un experto permite comparar los candidatos en la tarea concreta y justificar la elección ante CIMUS y ante el tribunal.
 
-El etiquetado a ciegas es imprescindible: si el experto ve la respuesta de un modelo o la polaridad de GO, tiende a aceptarla, y el benchmark acaba midiendo el acuerdo con esa fuente en lugar de la calidad real. Los intervalos de confianza evitan sobreinterpretar diferencias pequeñas: con 60 casos, una diferencia de varios puntos entre dos modelos puede no ser significativa. El acuerdo entre anotadores indica cuánto de difícil es la tarea incluso para personas, y sirve de techo razonable para lo que se puede exigir a un modelo.
+El etiquetado a ciegas es imprescindible: si el experto ve la respuesta de un modelo o la polaridad de GO, tiende a aceptarla, y el benchmark acaba midiendo el acuerdo con esa fuente en lugar de la calidad real. Los intervalos de confianza evitan sobreinterpretar diferencias pequeñas: con 60 o 124 casos, una diferencia de varios puntos entre dos modelos puede no ser significativa. El acuerdo entre anotadores indica cuánto de difícil es la tarea incluso para personas, y sirve de techo razonable para lo que se puede exigir a un modelo.
 
 ## Restricciones
-* **Depende de la Fase 1 completa:** el *gold set* se extrae de la ejecución de la Fase 1 sobre las 314 rutas activadas. Hasta ahora solo se ha ejecutado sobre una ruta de prueba, que no es representativa (en ella todas las filas tenían polaridad de GO).
-* **El *gold set* se congela antes de ejecutar ningún modelo:** una vez etiquetado, no se modifica en función de los resultados. Si hay que corregir una etiqueta, se registra el cambio y su motivo.
-* **Versionado:** el *gold set* y su script de selección se guardan en el repositorio en un formato de texto (p. ej. `codigo/evaluacion/gold_set.jsonl`). El `.gitignore` actual excluye los ficheros `.csv` y `.xlsx`, por lo que la plantilla de etiquetado en Excel no se versiona; solo su resultado en JSONL.
-* **Mismos casos y mismo abstract para todos:** cada candidato recibe exactamente los mismos casos, con el mismo abstract completo que verá en producción.
-* **Coste cero:** todas las ejecuciones usan planes gratuitos o Ollama en local (ADR-005), y sus respuestas se guardan en el registro del [ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md), con el nombre y la versión exacta de cada modelo.
-* **Esfuerzo del experto acotado:** 72 etiquetados en total (60 más 12 dobles), del orden de unas pocas horas de trabajo, que hay que acordar con CIMUS con antelación.
+* **Depende de la Fase 1 completa:** el *gold set* se extrae de la salida de la Fase 1 sobre todas las rutas de CIMUS. La selección vigente usa la ejecución completa del 2026-11-09, con la limpieza de abstracts corregida.
+* **El *gold set* se congela antes de evaluar:** una vez etiquetado, no se modifica en función de los resultados. Cada versión de las etiquetas se guarda con su huella SHA-256 (`gold_provisional_v3.sha256`: `a782025b…`), y cada cambio de casos o etiquetas se registra con su motivo en `CAMBIOS_vN.md`.
+* **Versionado:**
+  * se versionan en el repositorio `gold_casos.jsonl` (la selección, que no se enseña a los anotadores), `plantilla_etiquetado.jsonl`, `guia_etiquetado.md`, las etiquetas en `etiquetas_provisionales/` (`gold_provisional_v3.jsonl`, `doble_v3.jsonl` y su `.sha256`), los informes `informe_gold_provisional_v*.txt` y los scripts;
+  * no se versionan la plantilla en Excel (el `.gitignore` excluye los `.xlsx`) ni los registros del benchmark, que están en `codigo/data/benchmark*/` y `data/` está excluida.
+* **Mismos casos y mismo abstract para todos:** cada candidato recibe exactamente las mismas preguntas, con el mismo abstract completo que verá en producción.
+* **Coste cero:** todas las ejecuciones usan planes gratuitos o Ollama en local (ADR-005), y sus respuestas se guardan en el registro del [ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md), con el nombre exacto de cada modelo. La única excepción es la referencia `claude-opus-5.5` del v4, que no es un candidato de producción.
+* **Esfuerzo del experto:** etiquetar los 124 casos del v3, más el doble etiquetado que se acuerde, lleva unas horas de trabajo que hay que acordar con CIMUS con antelación.
 
 ## Criterios de aceptación
-* [ ] **Selección reproducible:** ejecutar dos veces el script de selección con la misma semilla produce exactamente los mismos casos. La muestra tiene 60 casos y cumple los estratos (21 con polaridad de GO conocida y equilibrada, 39 sin ella) y ningún gen aparece más de 5 veces.
-* [ ] **Plantilla a ciegas:** la plantilla de etiquetado contiene el gen, la ruta o término, el título y el abstract, y **no** contiene `Polaridad_GO`, la dirección de scRNA-seq ni ninguna salida de modelo.
-* [ ] ***Gold set* completo:** el fichero final tiene, para cada caso, un identificador, `gen`, `pmid`, la ruta o término, `etiqueta`, `motivo`, `cita` y `anotador`; el 100 % de los casos tiene etiqueta válida (`+1`, `-1` o `UNKNOWN`).
-* [ ] **Acuerdo entre anotadores:** los 12 casos con doble etiquetado tienen las dos etiquetas registradas y el informe incluye su kappa de Cohen.
-* [ ] **Cobertura de la evaluación:** cada candidato tiene una respuesta registrada para el 100 % de los casos del *gold set* (los casos pendientes por límites de uso se reintentan hasta completarse).
-* [ ] **Informe completo:** para cada modelo y formulación evaluada, el informe incluye todas las métricas de la parte 4 con su intervalo de confianza al 95 % y la matriz de confusión.
+* [ ] **Selección reproducible:** `seleccionar_gold.py` con la misma semilla produce exactamente los mismos 60 casos iniciales, con los estratos 11/10/39, como máximo 5 por gen y 12 dobles (la semilla es fija, pero no se ha comprobado volviendo a ejecutarlo). El montaje del v3 depende de `construir_gold_v3.py`, que está fuera del repositorio.
+* [x] ✅ **Plantilla a ciegas:** la plantilla contiene el gen, sus otros nombres, el PMID, el proceso núcleo, el título y las frases del abstract, y **no** contiene `Polaridad_GO`, la dirección de scRNA-seq ni ninguna salida de modelo.
+* [x] ✅ ***Gold set* completo (provisional):** `gold_provisional_v3.jsonl` tiene, para los 124 casos, `id`, `efecto` válido de las 4 clases, `motivo`, `id_frase`, `cita`, `confianza`, `nota` y `anotador`.
+* [x] ✅ **Acuerdo entre anotadores (provisional):** los 124 casos tienen las dos etiquetas registradas (`doble_v3.jsonl`) y el informe incluye su kappa de Cohen (0,92).
+* [ ] **Etiquetas de CIMUS:** el equipo clínico etiqueta los casos a ciegas y el informe se regenera con sus etiquetas.
+* [ ] **Casos de las rutas de genes *down*** en el *gold set*.
+* [ ] **Cobertura de la evaluación:** cada candidato tiene una respuesta registrada para el 100 % de los casos (Gemini: 124 de 124; gpt-oss: 6 de 124, pendiente de reanudar).
+* [ ] **Informe completo:** para cada modelo evaluado, el informe incluye todas las métricas de la parte 4 con su intervalo de confianza al 95 % y la matriz de confusión (falta gpt-oss en el v5).
 * [x] ✅ **Calibración en el informe:** `evaluar_gold.py informe` añade, por modelo, la tabla de fiabilidad, el ECE, el AUROC y la curva riesgo-cobertura de `confianza_modelo` y `confianza_final`, a partir del registro y sin llamar a los modelos.
-* [ ] **Reproducibilidad del informe:** regenerar el informe a partir del registro de respuestas, sin ninguna llamada nueva a los modelos, produce exactamente las mismas cifras.
-* [ ] **Decisión documentada:** el ADR-005 se actualiza con los modelos principal y secundario elegidos, la formulación elegida (A o B) y las cifras del informe que justifican la elección.
+* [x] ✅ **Reproducibilidad del informe:** regenerar el informe v5 a partir del registro, sin ninguna llamada nueva, da un texto idéntico a `informe_gold_provisional_v5.txt` (comprobado el 2026-11-10).
+* [ ] **Decisión documentada:** el ADR-005 recoge el modelo principal (Gemini 3.5 Flash-Lite, decidido el 2026-11-10); falta confirmar el secundario con el benchmark v5 completo.

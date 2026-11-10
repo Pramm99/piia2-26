@@ -4,8 +4,8 @@ Este documento describe las piezas del pipeline, de qué se responsabiliza cada 
 
 El código vive en `codigo/` (en la raíz del repositorio) y se organiza en tres fases:
 
-* **Fase 1, ingesta** (`codigo/extraer_info/`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta. **Implementada.**
-* **Fase 2, inferencia** (`codigo/consulta_gen/`): de cada evidencia a un signo funcional validado. **Implementada** (`python -m consulta_gen ejecutar`); falta confirmar los modelos de producción con el benchmark definitivo.
+* **Fase 1, ingesta** (`codigo/extraer_info/`, `python codigo/extraer_info/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
+* **Fase 2, inferencia** (`codigo/consulta_gen/`, `python -m consulta_gen ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**; el modelo secundario está pendiente de confirmar con el benchmark (ADR-005).
 * **Fase 3, scoring**: de los signos por evidencia al *Net Pathway Score* de cada ruta. **Pendiente de especificar.**
 
 ## Diagrama
@@ -13,68 +13,80 @@ El código vive en `codigo/` (en la raíz del repositorio) y se organiza en tres
 ```mermaid
 flowchart TD
     subgraph EXT["Fuentes externas"]
-        CIMUS[("Excels de enriquecimiento GO<br/>rutas activadas / suprimidas")]
+        CIMUS[("Excels de enriquecimiento GO de CIMUS<br/>rutas de genes up (activadas) y down (suprimidas)")]
         GOF[("Gene Ontology<br/>go-basic.obo + goa_human.gaf.gz")]
-        EPMC["API Europe PMC"]
-        NCBI["NCBI E-utilities"]
-        LLMS["Modelos gratuitos<br/>Groq · Gemini · Ollama"]
+        HGNC["HGNC · UniProt"]
+        EXTB["MyGene.info (GeneRIF)<br/>Europe PMC búsqueda dirigida"]
+        EPMC["Europe PMC · NCBI E-utilities<br/>(abstracts)"]
+        LLMS["Modelos gratuitos<br/>Gemini · Groq · Ollama"]
     end
 
     subgraph F1["Fase 1 · Ingesta · codigo/extraer_info"]
         E1["1. Entrada<br/>entrada_excel.py"]
-        E2["2. Grafo GO<br/>grafo_go.py"]
-        E3["3. Cruce con el GAF<br/>cruce_gaf.py"]
-        E4["4. Descarga de abstracts<br/>abstracts.py"]
-        E5["5. Salida de Fase 1<br/>salida.py"]
+        E2["2. Grafo GO<br/>grafo_go.py · red.py"]
+        E3["3. Inmunoglobulinas<br/>inmunoglobulinas.py"]
+        E4["4. Cruce con el GAF<br/>cruce_gaf.py"]
+        E5["5. Triaje del signo GO<br/>polaridad.py"]
+        E6["6. Fuentes externas<br/>pmid_externos.py · relevancia.py · fuentes/"]
+        E7["7. Descarga de abstracts<br/>abstracts.py"]
+        E8["8. Salida de Fase 1<br/>salida.py"]
     end
 
-    subgraph DATA["Ficheros locales · codigo/data"]
-        CACHE[("Cachés desechables<br/>OBO · GAF · cache_abstracts.json")]
-        XLSX[("fase1_dataset_abstracts.xlsx")]
-        REG[("respuestas_llm.jsonl<br/>llamadas_llm.jsonl")]
-        RES[("fase2_resultados.xlsx")]
+    subgraph DATA["Ficheros locales"]
+        CACHE[("codigo/data: cachés desechables<br/>OBO · GAF · abstracts · MyGene · Europe PMC · UniProt · HGNC")]
+        XLSX[("codigo/extraer_info/<br/>fase1_dataset_abstracts.xlsx")]
+        REG[("codigo/data: respuestas_llm.jsonl<br/>llamadas_llm.jsonl")]
+        RES[("codigo/data: fase2_resultados.xlsx")]
     end
 
     subgraph F2["Fase 2 · Inferencia · codigo/consulta_gen"]
-        L1["6. Lectura y limpieza<br/>lectura.py · limpieza.py"]
-        L2["7. Casos y filtro de mención del gen<br/>casos.py · proceso.py"]
-        L3["8. Construcción del prompt<br/>prompt.py"]
-        L4["9. Cliente LLM y ejecución<br/>cliente.py · ejecucion.py"]
-        L5["10. Validación y confianza<br/>respuesta.py · confianza.py"]
-        L6["11. Contraste y salida<br/>resultados.py"]
+        L1["9. Lectura y limpieza<br/>lectura.py · limpieza.py"]
+        L2["10. Casos y filtro de mención del gen<br/>casos.py · proceso.py"]
+        L3["11. Construcción del prompt<br/>prompt.py · esquema.py"]
+        L4["12. Cliente LLM y ejecución<br/>cliente.py · ejecucion.py · registro.py"]
+        L5["13. Validación y confianza<br/>respuesta.py · confianza.py"]
+        L6["14. Contraste y salida<br/>resultados.py · pipeline.py"]
     end
 
     subgraph F3["Fase 3 · Scoring"]
-        S1["12. Agregación y<br/>Net Pathway Score"]
+        S1["15. Agregación y<br/>Net Pathway Score"]
     end
 
-    B1["13. Benchmark<br/>gold set"]
+    B1["16. Benchmark<br/>codigo/evaluacion"]
 
     CIMUS --> E1
     GOF --> E2
-    GOF --> E3
+    GOF --> E4
     E1 -->|"pares (gen, ruta)"| E3
-    E2 -->|"descendientes + Polaridad_GO"| E3
-    E3 -->|"PMIDs únicos"| E4
-    EPMC --> E4
-    NCBI --> E4
-    E4 -.->|"lee / escribe"| CACHE
-    E3 -->|"evidencias"| E5
-    E4 -->|"título + abstract"| E5
-    E5 --> XLSX
+    HGNC --> E3
+    E3 -->|"pares sin Ig"| E4
+    E2 -->|"descendientes con profundidad y signo"| E4
+    E4 -->|"anotaciones"| E5
+    E4 -->|"PMIDs del GAF"| E7
+    E7 -->|"pares sin abstract"| E6
+    EXTB --> E6
+    E6 -->|"PMIDs externos"| E7
+    EPMC --> E7
+    E2 -.->|"lee / escribe"| CACHE
+    E6 -.->|"lee / escribe"| CACHE
+    E7 -.->|"lee / escribe"| CACHE
+    E3 -->|"hoja Inmunoglobulinas (neutro)"| E8
+    E5 -->|"Destino de cada par"| E8
+    E7 -->|"título + abstract"| E8
+    E8 --> XLSX
 
-    XLSX -->|"hoja Con_abstract"| L1
-    L1 -->|"Evidencia"| L2
-    L2 -->|"el gen aparece"| L3
+    XLSX -->|"hoja Con_abstract (Destino LLM)"| L1
+    L1 -->|"filas limpias"| L2
+    L2 -->|"CasoProceso"| L3
     L2 -->|"no_menciona_gen"| L6
-    L3 -->|"mensajes de chat"| L4
+    L3 -->|"PromptLista (una llamada por gen)"| L4
     L4 <-->|"prompt / respuesta"| LLMS
     L4 -.->|"cada respuesta"| REG
-    REG -.->|"casos ya evaluados"| L4
-    L4 -->|"texto de dos modelos"| L5
-    L5 -->|"signo, cita, motivos"| L6
+    REG -.->|"preguntas ya evaluadas"| L4
+    L4 -->|"respuestas de dos modelos"| L5
+    L5 -->|"veredicto, citas, motivos"| L6
     L6 --> RES
-    RES -->|"hoja Por_ruta: signo · estado · motivos · confianza"| S1
+    RES -->|"hoja Por_ruta: Signo_ruta · Estado · Motivos · Confianza_final"| S1
 
     B1 -.->|"evalúa con el gold set"| L3
     B1 -.->|"calibra la confianza"| L5
@@ -82,62 +94,78 @@ flowchart TD
     classDef hecho fill:#d8f0dc,stroke:#2e7d32,color:#111
     classDef parcial fill:#fff1c7,stroke:#a77b00,color:#111
     classDef pendiente fill:#f9dada,stroke:#b3261e,color:#111,stroke-dasharray:5 5
-    class E1,E2,E3,E4,E5 hecho
+    class E1,E2,E3,E4,E5,E6,E7,E8 hecho
     class L1,L2,L3,L4,L5,L6,REG,RES hecho
     class B1 parcial
     class S1 pendiente
 ```
 
-**Leyenda:** verde = implementado · amarillo = implementado en parte, con cambios acordados pendientes · rojo discontinuo = pendiente. Las flechas discontinuas indican lectura o escritura de ficheros y evaluación.
+**Leyenda:** verde = implementado · amarillo = implementado en parte · rojo discontinuo = pendiente. Las flechas discontinuas indican lectura o escritura de ficheros y evaluación.
 
 ## Componentes
 
 ### Fase 1 · Ingesta ([spec](specs/descarga-evidencias-go-pmc.md) · [ADR-002](decisions/adr-002-europe-pmc-api.md))
 
-| # | Componente | Responsabilidad | Recibe | Produce | Estado |
-|---|---|---|---|---|---|
-| 1 | **Entrada** (`entrada_excel.py`) | Leer los Excels de enriquecimiento GO de CIMUS, separar los genes de cada ruta y traducir identificadores GO obsoletos. | Ficheros con columnas `ID`, `Description`, `geneID`. | Tabla (`Gen`, `GO_ID`, `Ruta_Nombre`, `Estado_Original`) y conjunto de pares (gen, ruta). | Hecho. Pendiente: aceptar `.csv` y validar columnas con `ValueError`. |
-| 2 | **Grafo GO** (`grafo_go.py`, `red.py`) | Descargar el OBO, construir el grafo de términos y propagar cada ruta a sus descendientes calculando el signo del camino. | `go-basic.obo`. | Para cada ruta, sus términos descendientes con `Polaridad_GO` (`+1`, `-1`, `conflicto` o vacía). | Hecho. |
-| 3 | **Cruce con el GAF** (`cruce_gaf.py`) | Leer el GAF humano en una pasada y quedarse con las anotaciones de cada gen a la ruta o a sus descendientes que tengan PMID. | GAF, pares (gen, ruta) y descendientes. | Evidencias (`Gen`, `GO_ID`, `PMID`, `GO_ID_anotado`, `Evidencia`, `Polaridad_GO`, `Experimental`), anotaciones sin PMID y genes no encontrados. | Hecho. |
-| 4 | **Descarga de abstracts** (`abstracts.py`) | Obtener título y abstract de cada PMID: Europe PMC en lotes de 40 y NCBI como respaldo, con reintentos y caché. | Lista de PMIDs únicos. | Tabla (`PMID`, `Titulo`, `Abstract`); actualiza `cache_abstracts.json`, que guarda el texto en crudo. | Hecho (`limpiar_texto` corregido el 2026-11-09). |
-| 5 | **Salida de Fase 1** (`salida.py`) | Unir entrada, evidencias y abstracts, mostrar el embudo por consola y escribir el Excel. | Salidas de 1, 3 y 4. | `fase1_dataset_abstracts.xlsx` con las hojas `Con_abstract`, `PMID_sin_abstract`, `Anotado_sin_PMID` y `Genes_no_encontrados`. | Hecho. |
-
-### Fase 2 · Inferencia ([spec de limpieza](specs/limpieza-abstracts-particion-genica.md) · [spec de inferencia](specs/inferencia-llm.md) · [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md) · [ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md))
+El orden de ejecución es el de `main.py`.
 
 | # | Componente | Responsabilidad | Recibe | Produce | Estado |
 |---|---|---|---|---|---|
-| 6 | **Lectura y limpieza** (`lectura.py`, `limpieza.py`, `esquema.py`) | Leer la hoja `Con_abstract` (solo rutas activadas y pares que van al LLM), limpiar el abstract, partirlo en frases y ofrecer la forma de comparación usada por 7 y 10. | Hoja `Con_abstract`. | Filas limpias. | Hecho. El recorte a 1.800 caracteres queda solo en la línea base `v0_original`. |
-| 7 | **Casos y filtro de mención del gen** (`casos.py`, `proceso.py`) | Agrupar las filas en preguntas (gen, PMID, proceso núcleo), guardar el factor que traduce el efecto en el signo de cada ruta y cerrar sin LLM los casos cuyo texto no nombra al gen ni a sus alias. | Filas limpias y alias de MyGene. | `CasoProceso`, o caso cerrado con `no_menciona_gen`. | Hecho. |
-| 8 | **Construcción del prompt** (`prompt.py`) | Generar el mismo prompt para todos los modelos: abstract completo en frases numeradas, sin dirección de scRNA-seq, sin polaridad de GO y sin contexto HNSC; 14 reglas, lista de campos del JSON y cita, razonamiento y confianza antes del efecto. En producción (`v2_veredicto`) el modelo siempre da un veredicto (+1, −1 o neutro), su confianza y las frases que lo motivan, y van juntas las preguntas de un gen, troceadas según el límite de cada modelo. | `CasoProceso`. | `PromptLLM` por pregunta y `PromptLista` por llamada. | Hecho. |
-| 9 | **Cliente LLM** | Enviar cada caso a los dos modelos (principal y secundario) con un conector por proveedor, reintentos ante `429` y sin repetir casos ya registrados. | `PromptLLM` y registro. | Texto de respuesta de cada modelo; una línea por pregunta en `respuestas_llm.jsonl` y una por llamada en `llamadas_llm.jsonl`. | Hecho y probado con llamadas reales a Groq, Gemini y Ollama. |
-| 10 | **Validación y confianza** (`respuesta.py`, `confianza.py`) | Extraer el JSON, comprobar el esquema, verificar las citas (≥6 palabras, en la frase indicada), decidir el `UNKNOWN` (sin cita verificada o con confianza por debajo de 40), componer el signo de cada ruta y calcular `confianza_final`. | Texto de respuesta y `CasoProceso`. | Por modelo: signo, estado, motivos, cita, `confianza_modelo` y signo por ruta. | Hecho. |
-| 11 | **Contraste y salida** (`resultados.py`, `pipeline.ejecutar_fase2`) | Combinar los dos modelos (`discrepancia_entre_modelos`), comparar el veredicto de cada ruta con `Polaridad_GO` (si coincide se acepta; si no, `discrepancia_polaridad_GO`) y escribir la salida. | Resultados validados de ambos modelos y `Polaridad_GO`. | `fase2_resultados.xlsx`: hojas `Por_ruta` (entrada del scoring), `Preguntas` y `Resumen`, con `signo` (el del principal), `estado` (`resuelto` / `revisar` / `no_concluyente` / `pendiente`), `motivos` y `confianza_final`. | Hecho. |
+| 1 | **Entrada** (`entrada_excel.py`) | Leer los dos Excels de enriquecimiento GO, separar los genes de cada ruta y traducir identificadores GO obsoletos. | Ficheros con columnas `ID`, `Description`, `geneID`, en `codigo/tools_cimus/` (`config.EXCEL_ACTIVADAS` y `EXCEL_SUPRIMIDAS`). | Tabla (`Gen`, `GO_ID`, `Ruta_Nombre`, `Estado_Original`) y conjunto de pares (gen, ruta). `Estado_Original` («Activada» / «Suprimida») indica la lista de origen, y de ella sale la dirección del gen (*up* / *down*). | Hecho. Pendiente: aceptar `.csv` y validar columnas con `ValueError`. |
+| 2 | **Grafo GO** (`grafo_go.py`, `red.py`) | Descargar el OBO y el GAF, construir el grafo de términos y propagar cada ruta a todo su subárbol (`is_a`, `part_of`, `regulates`…), con la profundidad y el signo del camino. | `go-basic.obo`. | Para cada ruta, sus descendientes con profundidad y estado de signo. Reglas: signo por pertenencia en «positive/negative regulation of X»; «regulation of X» sin dirección tratada como X (`SIN_DIRECCION_COMO_PROCESO`); sin propagar la regulación tras `part_of` ni por aristas sin signo. | Hecho. |
+| 3 | **Inmunoglobulinas** (`inmunoglobulinas.py`, `fuentes/uniprot.py`) | Apartar los genes de inmunoglobulina antes del cruce: se evalúa la Ig completa, que no activa ni inhibe la ruta. | Genes de la entrada; lista HGNC `immunoglobulin gene` más JCHAIN y PIGR. | Hoja `Inmunoglobulinas`, con signo `neutro` y la función de la Ig completa según UniProt. Estos pares no llegan al LLM. | Hecho. |
+| 4 | **Cruce con el GAF** (`cruce_gaf.py`) | Leer el GAF humano en una pasada y quedarse con las anotaciones de cada gen a la ruta o a sus descendientes. | GAF, pares (gen, ruta) y descendientes. | Evidencias con PMID (`Gen`, `GO_ID`, `PMID`, `GO_ID_anotado`, `Profundidad`, `Evidencia`, `Polaridad_GO`, `Experimental`…), anotaciones sin PMID, genes no encontrados y una tabla por anotación con el calificador y la extensión, para el triaje. | Hecho. |
+| 5 | **Triaje del signo GO** (`polaridad.py`) | Decidir, para cada par, si el signo de GO basta o hace falta el LLM. | Anotaciones del componente 4. | Columna `Destino`: `aceptar_GO` (signo de GO aceptado, sin LLM), `LLM`, `LLM_y_revision` o `sin_evidencia` (el par no tiene ningún abstract y se cierra como `UNKNOWN`), con su motivo, la profundidad y la bandera de freno o retroalimentación. Hoja `Triaje_polaridad`. | Hecho. |
+| 6 | **Fuentes externas** (`pmid_externos.py`, `relevancia.py`, `fuentes/generif.py`, `fuentes/europepmc.py`) | Buscar PMIDs para los pares sin abstract utilizable en el GAF. | Pares sin abstract, subárbol de cada ruta y sinónimos del OBO. | PMIDs de NCBI GeneRIF (vía MyGene.info, solo si el texto nombra al gen) y, para los que siguen vacíos, de una búsqueda dirigida en Europe PMC (el gen y un término del subárbol en la misma frase). Como máximo 10 PMIDs por par. | Hecho. |
+| 7 | **Descarga de abstracts** (`abstracts.py`) | Obtener título y abstract de cada PMID: Europe PMC por lotes y NCBI como respaldo, con reintentos y caché. | Lista de PMIDs únicos. | Tabla (`PMID`, `Titulo`, `Abstract`). `cache_abstracts.json` guarda el texto en crudo, y `limpiar_texto` se aplica al leerlo. | Hecho. |
+| 8 | **Salida de Fase 1** (`salida.py`) | Unir entrada, evidencias, triaje y abstracts, mostrar el embudo por consola y escribir el Excel. | Salidas de 1 a 7. | `codigo/extraer_info/fase1_dataset_abstracts.xlsx` con 7 hojas: `Con_abstract`, `PMID_sin_abstract`, `Anotado_sin_PMID`, `Genes_no_encontrados`, `Triaje_polaridad`, `Inmunoglobulinas` y `Sin_evidencia`. Las tres primeras llevan el `Destino` del triaje. | Hecho. |
+
+### Fase 2 · Inferencia ([spec de limpieza](specs/limpieza-abstracts-particion-genica.md) · [spec de inferencia](specs/inferencia-llm.md) · [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md) · [ADR-004](decisions/adr-004-persistencia-ficheros-locales.md) · [ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md))
+
+| # | Componente | Responsabilidad | Recibe | Produce | Estado |
+|---|---|---|---|---|---|
+| 9 | **Lectura y limpieza** (`lectura.py`, `limpieza.py`) | Leer la hoja `Con_abstract` de las dos listas, quedarse con los pares que van al LLM (no `aceptar_GO` ni `sin_evidencia`), limpiar el abstract sin recortarlo, partirlo en frases y ofrecer la forma de comparación que usan 10 y 13. | Hoja `Con_abstract`. | Filas limpias. | Hecho. |
+| 10 | **Casos y filtro de mención del gen** (`casos.py`, `proceso.py`) | Agrupar las filas en preguntas (gen, PMID, proceso núcleo), guardar el factor que traduce el efecto en el signo de cada ruta y cerrar sin LLM las preguntas cuyo texto no nombra al gen por su símbolo, sus alias o su nombre completo. | Filas limpias y datos de MyGene. | `CasoProceso`, o pregunta cerrada con `no_menciona_gen`. | Hecho. |
+| 11 | **Construcción del prompt** (`prompt.py`, `esquema.py`) | Generar el mismo prompt para todos los modelos: abstract completo en frases numeradas, sin dirección de scRNA-seq, sin polaridad de GO y sin contexto HNSC, con 14 reglas y la lista de campos del JSON. En producción (`v2_veredicto`) el modelo siempre da un veredicto (+1, −1 o neutro), su confianza y de 1 a 3 frases con su cita; el prompt no menciona ningún umbral. Las preguntas de un gen van juntas, troceadas según el presupuesto por llamada. | `CasoProceso`. | `PromptLLM` por pregunta y `PromptLista` por llamada. | Hecho. |
+| 12 | **Cliente LLM y ejecución** (`cliente.py`, `ejecucion.py`, `registro.py`) | Enviar cada lista a los dos modelos (principal y secundario) con un único conector compatible con la API de chat de OpenAI, reintentar ante `408`, `429` y `5xx`, y no repetir preguntas ya registradas. | `PromptLista` y registro. | Una línea por pregunta en `respuestas_llm.jsonl` y una por llamada en `llamadas_llm.jsonl`. Un modelo que agota su límite diario deja sus preguntas pendientes. | Hecho y probado con llamadas reales a Gemini, Groq y Ollama. |
+| 13 | **Validación y confianza** (`respuesta.py`, `confianza.py`) | Extraer el JSON, comprobar el esquema, verificar las citas (≥6 palabras, en la frase indicada), decidir el `UNKNOWN` (sin cita verificada o con confianza por debajo de `UMBRAL_VEREDICTO = 80`), componer el signo de cada ruta y calcular `confianza_final`. | Texto de respuesta y `CasoProceso`. | Por modelo: veredicto, signo, estado, motivos, citas, `confianza_modelo` y signo por ruta. | Hecho. |
+| 14 | **Contraste y salida** (`resultados.py`, `pipeline.ejecutar_fase2`) | Combinar los dos modelos (`discrepancia_entre_modelos`) y comparar el veredicto de cada ruta con `Polaridad_GO`: si coincide se acepta aunque la confianza no llegue al umbral (`coincide_polaridad_GO`); si no, `discrepancia_polaridad_GO`. Escribir la salida. | Resultados validados de ambos modelos y `Polaridad_GO`. | `codigo/data/fase2_resultados.xlsx`: hojas `Por_ruta` (entrada del scoring), `Preguntas` y `Resumen`, con el signo del principal, `Estado` (`resuelto` / `revisar` / `no_concluyente` / `pendiente`), `Motivos` y `Confianza_final`. | Hecho. |
 
 ### Fase 3 y evaluación
 
 | # | Componente | Responsabilidad | Estado |
 |---|---|---|---|
-| 12 | **Agregación y Net Pathway Score** | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con el log2 Fold-Change para obtener la contribución neta de la ruta. | Pendiente de especificar: falta decidir la regla de agregación cuando hay signos distintos. |
-| 13 | **Benchmark** ([spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* de 60 casos etiquetado a ciegas por expertos, medir la calibración de la confianza y elegir los modelos de producción. | En parte: `codigo/evaluacion/` funciona con etiquetas provisionales; faltan las etiquetas de CIMUS. |
+| 15 | **Agregación y Net Pathway Score** | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con la dirección del gen y su log2 Fold-Change para obtener la contribución neta a la ruta. | Pendiente de especificar: falta decidir la regla de agregación cuando hay signos distintos. |
+| 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | En parte: funciona sobre el gold v3 (124 casos) con etiquetas provisionales de anotadores Claude; faltan las etiquetas de CIMUS y terminar gpt-oss en el benchmark v5. |
 
 ## Flujo de principio a fin
 
-1. **Entrada.** El componente 1 lee los Excels de CIMUS. En las rutas activadas hay **314 rutas** y **2.489 pares** gen–ruta de **126 genes**.
-2. **Grafo.** El componente 2 descarga el OBO (solo la primera vez) y, para cada ruta, calcula todos sus términos descendientes y el signo del camino que los une a ella.
-3. **Evidencias.** El componente 3 recorre el GAF una sola vez y conserva las anotaciones de cada gen a la ruta o a un descendiente que tengan PMID. Resultado: **1.332 pares** con al menos un PMID y **1.868 filas** (gen, ruta, PMID). Solo el 23 % tiene `Polaridad_GO`.
-4. **Abstracts.** El componente 4 consulta primero la caché local; los PMIDs que faltan los pide a Europe PMC por lotes y, los que esta no devuelve, a NCBI. Cada respuesta se guarda en la caché.
-5. **Excel de Fase 1.** El componente 5 escribe `fase1_dataset_abstracts.xlsx`, que es el contrato entre las dos fases.
-6. **Evidencias limpias.** El componente 6 lee la hoja `Con_abstract`: solo las rutas activadas y los pares que no resolvió ya el triaje de la Fase 1.
-7. **Casos y filtro.** El componente 7 agrupa las filas en preguntas (gen, PMID, proceso núcleo) y cierra sin coste las que no mencionan el gen.
-8. **Prompt y modelos.** El componente 8 construye el prompt (las preguntas de un gen van juntas) y el 9 lo envía a los dos modelos. Antes de cada llamada consulta el registro: si el caso ya se evaluó con ese mismo prompt, no lo repite. Cada respuesta se escribe en el registro en cuanto llega, de modo que una ejecución interrumpida (por ejemplo, al agotar el límite diario gratuito) se reanuda donde se quedó.
-9. **Validación.** El componente 10 valida cada respuesta por separado: fuerza `UNKNOWN` si la cita no aparece en la frase indicada o el JSON no es interpretable, manda a `revisar` las respuestas incoherentes o con baja confianza y traduce el efecto sobre el proceso al signo de cada ruta.
-10. **Contraste.** El componente 11 fija el signo final (el del modelo principal), marca el caso como `revisar` si los modelos discrepan entre sí o con GO, calcula `confianza_final` y escribe `fase2_resultados.xlsx`. Lo que no ha respondido por el límite diario queda `pendiente` y la siguiente ejecución lo completa.
-11. **Scoring.** El componente 12 agregará los casos de cada par gen–ruta y calculará el *Net Pathway Score* (pendiente).
+Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09.
 
-**Ejemplo, CD7 en *leukocyte mediated immunity* (GO:0002443):** el componente 3 encuentra que CD7 está anotado con evidencia `IDA` (PMID 10652336) al término descendiente GO:0002726, *positive regulation of T cell cytokine production*, por lo que `Polaridad_GO = +1`. El componente 4 descarga el abstract, que describe a CD7 como receptor de la proteína K12. Si un modelo responde `+1` y el otro `UNKNOWN` (porque el efecto lo produce el ligando K12, no CD7), el componente 11 devuelve `signo = +1`, `estado = revisar` y el motivo `discrepancia_entre_modelos`, y el caso pasa al experto con las dos respuestas y la cita.
+1. **Entrada.** El componente 1 lee los dos Excels de CIMUS. La lista de rutas de genes *up* (activadas) tiene **314 rutas**, **2.489 pares** gen–ruta y **126 genes**; la de genes *down* (suprimidas), **78 rutas**, **683 pares** y **98 genes**. En total son **3.172 pares** de **224 genes**, y ningún gen está en las dos listas.
+2. **Grafo.** El componente 2 descarga el OBO y el GAF (solo la primera vez) y, para cada ruta, calcula todos sus descendientes con su profundidad y el signo del camino.
+3. **Inmunoglobulinas.** El componente 3 aparta **103 pares** de inmunoglobulinas como neutros. Quedan **3.069 pares**.
+4. **Evidencias.** El componente 4 recorre el GAF una sola vez: **1.547 pares** tienen al menos un PMID en el GAF.
+5. **Triaje.** El componente 5 decide el destino de cada par: **332** `aceptar_GO`, **2.003** `LLM`, **66** `LLM_y_revision` y, al final, **668** `sin_evidencia`.
+6. **Fuentes externas.** Para los **1.523 pares** sin abstract utilizable del GAF, el componente 6 busca en GeneRIF y en Europe PMC: **855 pares** consiguen algún PMID.
+7. **Abstracts.** El componente 7 consulta primero la caché local; los PMIDs que faltan los pide a Europe PMC por lotes y, los que esta no devuelve, a NCBI. En total son **1.420 PMIDs** y **2.401 pares** con al menos un abstract. Los **668 pares** que siguen sin ninguno se cierran como `UNKNOWN` (`sin_evidencia`).
+8. **Excel de Fase 1.** El componente 8 escribe `fase1_dataset_abstracts.xlsx`, que es el contrato entre las dos fases: **5.014 filas** (gen, ruta, PMID) en `Con_abstract`, el 26 % con `Polaridad_GO` +1 o −1.
+9. **Evidencias limpias.** El componente 9 lee la hoja `Con_abstract` de las dos listas y se queda con los pares que el triaje manda al LLM.
+10. **Casos y filtro.** El componente 10 agrupa las filas en preguntas (gen, PMID, proceso núcleo) y cierra sin coste las 134 que no mencionan el gen. Quedan **1.694 preguntas** para el LLM, de **174 genes**: 1.123 de las rutas de genes *up* y 571 de las de genes *down*.
+11. **Prompt y modelos.** El componente 11 construye el prompt (las preguntas de un gen van juntas) y el 12 lo envía a los dos modelos. Antes de cada llamada consulta el registro: si la pregunta ya se evaluó con ese mismo prompt, no la repite. Cada respuesta se escribe en el registro en cuanto llega, de modo que una ejecución interrumpida (por ejemplo, al agotar el límite diario gratuito) se reanuda donde se quedó.
+12. **Validación.** El componente 13 valida cada respuesta por separado. Fuerza `UNKNOWN` si ninguna cita aparece en su frase, si el JSON no es interpretable o si la confianza no llega al umbral. Manda a `revisar` un veredicto que llega al umbral pero trae una limitación, y traduce el efecto sobre el proceso al signo de cada ruta.
+13. **Contraste.** El componente 14 fija el signo final (el del modelo principal), acepta los veredictos que coinciden con GO, marca el caso como `revisar` si los modelos discrepan entre sí o con GO, calcula `confianza_final` y escribe `fase2_resultados.xlsx`. Lo que el principal no ha respondido por el límite diario queda `pendiente` y la siguiente ejecución lo completa.
+14. **Scoring.** El componente 15 agregará los casos de cada par gen–ruta y calculará el *Net Pathway Score* (pendiente).
+
+**Ejemplo, CD7 en *leukocyte mediated immunity* (GO:0002443):**
+1. **Componente 4:** encuentra que CD7 está anotado con evidencia `IDA` (PMID 10652336) al término descendiente GO:0002726, *positive regulation of T cell cytokine production*, por lo que `Polaridad_GO = +1`.
+2. **Componente 5:** manda el par al LLM con el motivo `lejano`, porque la anotación está a profundidad 4.
+3. **Componente 10:** pregunta por el proceso núcleo, *T cell cytokine production* (GO:0002369). El abstract describe a CD7 como receptor de la proteína K12, y el efecto sobre las células lo produce K12-Fc, no CD7.
+4. **Componente 13:** en el benchmark v5, Gemini respondió `NO_EFFECT` con confianza 0 y la limitación `process_not_addressed`, citando una frase verificada. Al quedar por debajo del umbral, el código lo convierte en `UNKNOWN`.
+5. **Componente 14:** como el veredicto (neutro) no coincide con la `Polaridad_GO` (+1), la fila de `Por_ruta` sale con `Signo_ruta = UNKNOWN`, `Estado = revisar` y los motivos `baja_confianza`, `contexto_ajeno` y `discrepancia_polaridad_GO`. El caso pasa al experto con la cita y las dos fuentes, en vez de aceptar el `+1` que habría dado un modelo complaciente.
 
 ## Pendiente de decidir
-* **Modelos de producción:** la propuesta es gpt-oss-120b (Groq) como principal y Gemini 3.5 Flash-Lite como secundario; se confirmará en el ADR-005 con el benchmark definitivo.
+* **Modelo secundario:** el principal es Gemini 3.5 Flash-Lite (decidido el 2026-11-10). El secundario previsto es gpt-oss-120b en Groq, pendiente de terminar el benchmark v5 (ADR-005).
+* **Regla de GO y umbral:** si la aceptación por `coincide_polaridad_GO` necesita una confianza mínima, y si el umbral debe aplicarse a `confianza_final` en lugar de a la confianza del modelo (ADR-003).
 * **Fase 3:** regla de agregación de varios PMIDs con signos distintos.
 
 ## Decisiones de arquitectura
@@ -145,6 +173,6 @@ flowchart TD
 |---|---|
 | [ADR-001](decisions/adr-001-rag-stateless.md) | Pipeline RAG con un LLM externo en lugar de un clasificador biomédico entrenado. |
 | [ADR-002](decisions/adr-002-europe-pmc-api.md) | Evidencias desde el GAF de Gene Ontology y abstracts de Europe PMC con respaldo en NCBI. |
-| [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md) | Control de alucinaciones: signo, estado y motivos, con verificación de citas y contraste con GO y entre modelos. |
+| [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md) | Control de alucinaciones: signo, estado y motivos, con verificación de citas, umbral de confianza y contraste con GO y entre modelos. |
 | [ADR-004](decisions/adr-004-persistencia-ficheros-locales.md) | Persistencia en ficheros locales: cachés desechables y registro JSONL de respuestas, sin bases de datos. |
-| [ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md) | Elección de modelos con coste cero mediante benchmark de tres candidatos gratuitos. |
+| [ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md) | Elección de modelos con coste cero mediante benchmark: principal Gemini 3.5 Flash-Lite y secundario gpt-oss-120b en prueba. |

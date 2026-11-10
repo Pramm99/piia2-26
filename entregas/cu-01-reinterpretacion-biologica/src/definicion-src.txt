@@ -2,55 +2,92 @@ Definición de la estructura del código fuente
 ==============================================
 
 El código del pipeline no vive en esta carpeta src/, sino en la carpeta codigo/ de la raíz
-del repositorio. Este fichero describe esa estructura: qué módulos existen ya y cuáles están
+del repositorio. Este fichero describe esa estructura: qué módulos existen y cuáles están
 previstos, siguiendo ARCHITECTURE.md (los números entre corchetes son los componentes de su
-diagrama).
+diagrama). Estado a 2026-11-10.
 
 Leyenda: (hecho) implementado · (en parte) implementado con cambios pendientes ·
          (previsto) pendiente; el nombre del fichero es una propuesta.
 
 codigo/
 ├── extraer_info/                  # FASE 1 · Ingesta (spec descarga-evidencias-go-pmc, ADR-002)
+│   │                              #   Se ejecuta con: python codigo/extraer_info/main.py
 │   ├── main.py                    #   (hecho) Orquesta la Fase 1 en orden.
-│   ├── config.py                  #   (hecho) Rutas, URLs, tamaños de lote y opciones de filtrado.
-│   ├── red.py                     #   (hecho) Sesión HTTP con reintentos y descarga atómica.
-│   ├── entrada_excel.py           #   (en parte) [1] Lectura de los Excels de rutas -> pares (gen, ruta).
-│   ├── grafo_go.py                #   (hecho) [2] Grafo GO, propagación a descendientes y Polaridad_GO.
-│   ├── cruce_gaf.py               #   (hecho) [3] Cruce con el GAF -> evidencias con PMID.
-│   ├── abstracts.py               #   (en parte) [4] Europe PMC + NCBI con caché de abstracts.
-│   └── salida.py                  #   (hecho) [5] Embudo por consola y Excel de la Fase 1.
+│   ├── config.py                  #   (hecho) Rutas (entrada: los Excels de tools_cimus/), URLs, umbrales y opciones
+│   │                              #   de filtrado; lee NCBI_EMAIL y NCBI_API_KEY de codigo/.env.
+│   ├── red.py                     #   (hecho) Sesión HTTP con reintentos y descarga atómica del OBO y el GAF.
+│   ├── entrada_excel.py           #   (en parte) [1] Lectura de los dos Excels de rutas -> pares (gen, ruta) con
+│   │                              #   Estado_Original. Pendiente: aceptar .csv y validar columnas con ValueError.
+│   ├── grafo_go.py                #   (hecho) [2] Grafo GO, propagación al subárbol con profundidad y signo.
+│   ├── inmunoglobulinas.py        #   (hecho) [3] Genes de inmunoglobulina (HGNC) -> hoja Inmunoglobulinas, neutros.
+│   ├── cruce_gaf.py               #   (hecho) [4] Cruce con el GAF -> evidencias con PMID y tabla de anotaciones.
+│   ├── polaridad.py               #   (hecho) [5] Triaje del signo GO (Destino) y cierre de los pares sin_evidencia.
+│   ├── pmid_externos.py           #   (hecho) [6] PMIDs de GeneRIF y Europe PMC para los pares sin abstract del GAF.
+│   ├── relevancia.py              #   (hecho) [6] Mención del gen y coincidencia gen-proceso en la misma frase
+│   │                              #   (también la usa la Fase 2 para el filtro de mención).
+│   ├── fuentes/                   #   (hecho) [3, 6] Clientes de las fuentes externas:
+│   │   ├── generif.py             #     MyGene.info (alias, nombre y GeneRIF).
+│   │   ├── europepmc.py           #     Búsqueda dirigida en Europe PMC.
+│   │   ├── uniprot.py             #     Función de las inmunoglobulinas (UniProt Swiss-Prot).
+│   │   └── cache.py               #     Escritura atómica de las cachés JSON.
+│   ├── abstracts.py               #   (hecho) [7] Europe PMC + NCBI con caché de abstracts en crudo y limpiar_texto.
+│   ├── salida.py                  #   (hecho) [8] Embudo por consola y Excel de la Fase 1 (7 hojas).
+│   └── fase1_dataset_abstracts.xlsx  # Salida de la Fase 1 y entrada de la Fase 2 (no se versiona).
 │
 ├── consulta_gen/                  # FASE 2 · Inferencia (specs limpieza e inferencia-llm, ADR-003/004/005)
-│   ├── esquema.py                 #   (en parte) Tipos inmutables: Evidencia, PromptLLM y constantes de signo.
-│   ├── lectura.py                 #   (hecho) [6] Hoja Con_abstract -> Evidencia.
-│   ├── limpieza.py                #   (en parte) [6] Limpieza conservadora + forma de comparación (pendiente).
-│   ├── filtro_gen.py              #   (previsto) [7] Mención del gen o sus alias como palabra completa.
-│   ├── prompt.py                  #   (en parte) [8] Construcción del prompt, igual para todos los modelos.
-│   ├── cliente_llm.py             #   (previsto) [9] Conectores Groq / Gemini / Ollama con reintentos ante 429.
-│   ├── registro.py                #   (previsto) [9] Registro respuestas_llm.jsonl y reanudación (ADR-004).
-│   ├── respuesta.py               #   (en parte) [10] Extracción del JSON, normalización del signo y verificación de la cita.
-│   ├── contraste.py               #   (previsto) [11] Signo final, estado y motivos (GO y entre modelos).
-│   ├── pipeline.py                #   (en parte) Orquestación de la Fase 2.
+│   │                              #   Se ejecuta desde codigo/ con: python -m consulta_gen ejecutar
+│   ├── esquema.py                 #   (hecho) Tipos inmutables (CasoProceso, PromptLLM, PromptLista), esquemas
+│   │                              #   JSON de las dos versiones, motivos y umbrales (UMBRAL_VEREDICTO = 80).
+│   ├── lectura.py                 #   (hecho) [9] Hoja Con_abstract de las dos listas -> filas que van al LLM.
+│   ├── limpieza.py                #   (hecho) [9] Limpieza conservadora, forma de comparación y frases numeradas.
+│   ├── casos.py                   #   (hecho) [10] Filas -> preguntas (gen, PMID, proceso núcleo) y filtro de
+│   │                              #   mención del gen (no_menciona_gen).
+│   ├── proceso.py                 #   (hecho) [10] Proceso núcleo de un término GO y signo del camino hasta la ruta.
+│   ├── prompt.py                  #   (hecho) [11] Prompts v2_veredicto (producción) y v1_proceso_gen (benchmark),
+│   │                              #   enviados por gen y troceados según el presupuesto por llamada.
+│   ├── cliente.py                 #   (hecho) [12] Conector único compatible con OpenAI (Gemini, Groq, Cerebras,
+│   │                              #   Ollama), reintentos ante 408/429/5xx y cliente simulado para pruebas.
+│   ├── ejecucion.py               #   (hecho) [12] Ejecución reanudable, revalidación y partición de salidas cortadas.
+│   ├── registro.py                #   (hecho) [12] respuestas_llm.jsonl y llamadas_llm.jsonl (ADR-004).
+│   ├── respuesta.py               #   (hecho) [13] Extracción del JSON, verificación de las citas y decisión de UNKNOWN.
+│   ├── confianza.py               #   (hecho) [13] confianza_final (factores provisionales).
+│   ├── resultados.py              #   (hecho) [14] Contraste entre modelos y con GO; fase2_resultados.xlsx.
+│   ├── pipeline.py                #   (hecho) [14] Orquestación de la Fase 2 (ejecutar_fase2).
 │   ├── _extraer_info.py           #   (hecho) Puente hacia los módulos de la Fase 1.
-│   ├── __init__.py / __main__.py  #   (hecho) API del paquete y demo por línea de comandos.
-│   └── consultar_gen.py           #   (en parte) Primera versión con Groq; se sustituirá por cliente_llm.py.
+│   └── __init__.py / __main__.py  #   (hecho) API del paquete, ejecución completa y demo por línea de comandos.
 │
-├── scoring/                       # FASE 3 · Agregación y Net Pathway Score [12]
+├── scoring/                       # FASE 3 · Agregación y Net Pathway Score [15]
 │                                  #   (previsto) Sin especificar: falta la regla de agregación.
 │
-├── evaluacion/                    # BENCHMARK [13] (spec benchmark-gold-set, ADR-005)
-│   ├── seleccion_gold_set.py      #   (previsto) Muestra estratificada de 60 casos con semilla fija.
-│   ├── gold_set.jsonl             #   (previsto) Etiquetas del experto (versionado en git).
-│   └── informe.py                 #   (previsto) Métricas con intervalos de confianza a partir del registro.
+├── evaluacion/                    # BENCHMARK [16] (spec benchmark-gold-set, ADR-005)
+│   ├── seleccionar_gold.py        #   (hecho) Muestra estratificada inicial de 60 casos con semilla fija.
+│   ├── buscar_neutros.py          #   (hecho) Candidatos a caso neutro para ampliar el gold set.
+│   ├── evaluar_gold.py            #   (hecho) Ejecución del benchmark e informe con IC, matriz y calibración.
+│   ├── gold_casos.jsonl           #   (hecho) Selección del gold v3 (124 casos; no se enseña a los anotadores).
+│   ├── plantilla_etiquetado.*     #   (hecho) Plantilla a ciegas (.jsonl versionado; .xlsx, con las columnas de la
+│   │                              #   guía, incluidas confianza y nota, no se versiona).
+│   ├── guia_etiquetado.md         #   (hecho) Guía de etiquetado a 4 clases.
+│   ├── etiquetas_provisionales/   #   (en parte) Etiquetas de anotadores Claude, con su SHA-256 y CAMBIOS_vN.md.
+│   │                              #   Faltan las etiquetas de CIMUS.
+│   ├── informe_gold_provisional*.txt  # Informes de los benchmarks v1 a v5.
+│   └── v1/                        #   Archivo del gold v1.
 │
 ├── tests/                         # PRUEBAS (pytest, sin red)
 │   ├── fixtures/                  #   (previsto) Respuestas simuladas de Europe PMC, NCBI y de los modelos.
 │   └── test_processing.py         #   (previsto) Limpieza, forma de comparación y verificación de citas.
 │
-├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas y su script de análisis.
+├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas (los únicos .xlsx versionados)
+│                                  #   y su script de análisis.
 ├── data/                          # Ficheros locales, ignorados por git (ADR-004):
-│                                  #   go-basic.obo, goa_human.gaf.gz, cache_abstracts.json,
-│                                  #   respuestas_llm.jsonl (previsto).
-├── ApiREST_OFICIAL.py             # Prototipo inicial contra AmiGO/GOlr (descartado en el ADR-002).
-├── requirements.txt               # Dependencias de Python (pendiente: añadir pandas y openpyxl).
-└── .env.example                   # (previsto) NCBI_EMAIL, NCBI_API_KEY, GROQ_API_KEY, GEMINI_API_KEY.
+│                                  #   go-basic.obo, goa_human.gaf.gz, cachés (cache_abstracts.json,
+│                                  #   cache_mygene.json, cache_epmc_busquedas.json, cache_uniprot.json,
+│                                  #   hgnc_inmunoglobulinas.json), respuestas_llm.jsonl, llamadas_llm.jsonl,
+│                                  #   fase2_resultados.xlsx y los registros del benchmark (benchmark*/).
+├── requirements.txt               # Dependencias de Python: requests, pandas, openpyxl.
+├── .env.example                   # Nombres de las claves (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY,
+│                                  #   NCBI_EMAIL, NCBI_API_KEY), vacíos.
+└── .env                           # Las claves reales. Solo en local: está en .gitignore y NUNCA se sube.
+
+Eliminados (siguen en el historial de git):
+  - ApiREST_OFICIAL.py             # Prototipo inicial contra AmiGO/GOlr (descartado en el ADR-002).
+  - consulta_gen/consultar_gen.py  # Primera versión con Groq y llama3-8b-8192; sustituida por cliente.py.

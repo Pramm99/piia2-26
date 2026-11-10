@@ -10,11 +10,21 @@ El análisis transcriptómico de célula única (**scRNA-seq**) permite estudiar
 
 En los métodos bioinformáticos convencionales, las anotaciones de las rutas son cualitativas (presencia o ausencia de un gen en la ruta), sin indicar si un gen concreto actúa como **activador** o **inhibidor/represor** de dicha ruta.
 
-Esto genera contradicciones metodológicas directas: si en una ruta conformada por 100 genes encontramos 10 genes sobre-expresados (_up-regulated_) y 12 genes infra-expresados (_down-regulated_), las herramientas clásicas de enriquecimiento reportan que la ruta se encuentra simultáneamente activada e inhibida, y resolver estas contradicciones a mano resulta tedioso y, a veces, inviable.
+Esto genera contradicciones metodológicas directas: si en una ruta conformada por 100 genes encontramos 10 genes sobre-expresados (_up-regulated_) y 12 genes infra-expresados (_down-regulated_), las herramientas clásicas de enriquecimiento reportan que la ruta se encuentra simultáneamente activada e inhibida, y resolver estas contradicciones a mano resulta tedioso y, a veces, inviable. CIMUS entrega dos listas de rutas enriquecidas: las de genes _up_ («rutas activadas») y las de genes _down_ («rutas suprimidas»). Esos nombres son la lectura ingenua que este proyecto pone en duda, no una conclusión.
 
 ### La solución
 
-Este proyecto desarrolla un pipeline asistido por **Inteligencia Artificial** que extrae de forma automatizada el rol mecanístico de cada gen a partir de bases curadas (Gene Ontology) y de la literatura biomédica. Para cada gen y ruta, el sistema determina el signo funcional de su contribución (+1 si activa la ruta, -1 si la inhibe, o `UNKNOWN` si la evidencia no es concluyente), siempre respaldado por una **cita literal verificada** del artículo y contrastado con la polaridad curada de Gene Ontology y entre dos modelos de lenguaje. Los casos con evidencia en conflicto se marcan para revisión experta. A partir de esos signos se calcula un **Net Pathway Score** integrado con el _log2 Fold-Change_ de scRNA-seq, transformando las discrepancias en una conclusión biológica cuantitativa y explicable.
+Este proyecto desarrolla un pipeline asistido por **Inteligencia Artificial** que extrae de forma automatizada el rol mecanístico de cada gen a partir de bases curadas (Gene Ontology) y de la literatura biomédica. Para cada gen y ruta, el sistema determina el signo funcional de su contribución:
+- `+1` si el gen activa la ruta;
+- `-1` si la inhibe;
+- `neutro` si la evidencia muestra que no la cambia (también las inmunoglobulinas, que no activan ni inhiben ninguna ruta);
+- `UNKNOWN` si la evidencia no es concluyente o no la hay.
+
+El signo puede venir de dos sitios:
+- **De Gene Ontology**, cuando su polaridad curada basta (triaje `aceptar_GO`). En ese caso no se consulta ningún modelo.
+- **De dos modelos de lenguaje que leen los _abstracts_.** Su veredicto solo se acepta con una **cita literal verificada** del artículo y la confianza suficiente, y se contrasta con la polaridad de Gene Ontology y entre los dos modelos. Los casos con evidencia en conflicto se marcan para revisión experta.
+
+A partir de esos signos se calcula un **Net Pathway Score**, integrado con la dirección y el _log2 Fold-Change_ de cada gen en scRNA-seq, que transforma las discrepancias en una conclusión biológica cuantitativa y explicable.
 
 La arquitectura completa está descrita en [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
@@ -32,11 +42,11 @@ Escogimos este proyecto por 2 motivos principales:
 
 Al concluir el proyecto, queremos disponer de un **MVP funcional, reproducible y portable** que:
 
-- Tome como entrada los resultados de enriquecimiento funcional en Gene Ontology que proporciona CIMUS para los genes diferencialmente expresados en células NK de tumores de laringe y faringe.
+- Tome como entrada los resultados de enriquecimiento funcional en Gene Ontology que proporciona CIMUS para los genes diferencialmente expresados en células NK de tumores de laringe y faringe: las dos listas, la de genes _up_ y la de genes _down_.
 
-- Identifique automáticamente los genes en conflicto para rutas ambiguas.
+- Determine el signo funcional de **cada par gen–ruta** de esas listas (3.172 pares de 224 genes en la ejecución del 2026-11-09), para poder resolver las rutas ambiguas.
 
-- Recupere la evidencia curada de Gene Ontology y los _abstracts_ de los artículos que la respaldan mediante APIs abiertas (Europe PMC y NCBI), y los procese con dos modelos de lenguaje gratuitos a temperatura 0, con justificación literal verificada (citas trazables).
+- Recupere la evidencia curada de Gene Ontology y los _abstracts_ que la respaldan mediante APIs abiertas y gratuitas, y los procese con dos modelos de lenguaje gratuitos con justificación literal verificada (citas trazables).
 
 - Genere un _score_ neto de ruta mecanístico que resuelva, para cada ruta, si los genes implicados la activan o la inhiben en conjunto.
 
@@ -48,17 +58,25 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Dominio específico:** Células NK del microambiente tumoral de cabeza y cuello (HNSC: laringe y faringe).
 
-- **Ingesta de evidencias:** PMIDs obtenidos de las anotaciones de Gene Ontology (fichero GAF), propagando cada ruta a sus términos descendientes, y descarga de los _abstracts_ desde **Europe PMC** con **NCBI** como respaldo ([ADR-002](decisions/adr-002-europe-pmc-api.md)).
+- **Ingesta de evidencias** ([ADR-002](decisions/adr-002-europe-pmc-api.md)):
+  - PMIDs de las anotaciones de Gene Ontology (fichero GAF), propagando cada ruta a todo su subárbol de términos.
+  - Para los pares sin _abstract_ en el GAF, PMIDs de **NCBI GeneRIF** (vía MyGene.info) y de una búsqueda dirigida en **Europe PMC**.
+  - Descarga del título y el _abstract_ desde **Europe PMC**, con **NCBI** como respaldo.
+  - Las **inmunoglobulinas** (lista de HGNC) se apartan como neutras, con la función de la Ig completa según **UniProt**.
+  - Un **triaje del signo GO** acepta sin LLM los pares cuya polaridad curada basta y cierra como `UNKNOWN` los que no tienen ningún _abstract_.
 
-- **Limpieza y partición génica:** Limpieza de los formatos HTML de los _abstracts_ sin alterar la nomenclatura biomédica, una normalización aparte usada solo para verificar citas, y la partición de los genes en dos conjuntos según sean _up_ o _down_, para no mezclar su procedencia.
+- **Limpieza:** Limpieza de los formatos HTML de los _abstracts_ sin alterar la nomenclatura biomédica ni recortar el texto, y una normalización aparte usada solo para verificar citas. Cada fila conserva su lista de origen (`Estado_Original`), de la que sale la dirección del gen (_up_ o _down_) que usará el scoring.
 
-- **Inferencia estructurada:** Extracción del signo funcional del gen con **dos modelos de lenguaje gratuitos** ([ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md)) a temperatura 0, con salida JSON estricta y un esquema de signo, estado y motivos que devuelve `UNKNOWN` ante falta de evidencia y marca para revisión los casos en conflicto ([ADR-003](decisions/adr-003-control-alucinaciones-unknown.md)).
+- **Inferencia estructurada:** Extracción del signo funcional con **dos modelos de lenguaje gratuitos** ([ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md)): Gemini 3.5 Flash-Lite como principal y gpt-oss-120b (Groq) como secundario, en prueba. La salida es JSON estricto y el modelo siempre da un veredicto y su confianza. El código pone `UNKNOWN` cuando la cita no se verifica o la confianza no llega al umbral, y marca para revisión los casos en conflicto ([ADR-003](decisions/adr-003-control-alucinaciones-unknown.md)).
 
-- **Evaluación:** Benchmark de tres modelos candidatos sobre un _gold set_ de 60 casos etiquetados a ciegas por expertos.
+- **Evaluación:** Benchmark de los modelos candidatos sobre un _gold set_ de 124 preguntas, con etiquetado a ciegas. Hoy las etiquetas son provisionales y faltan las del equipo clínico de CIMUS ([spec](specs/benchmark-gold-set.md)).
 
-- **Métrica de resolución:** Integración del signo inferido ponderado por el _log2 Fold-Change_ del dataset scRNA-seq original (_Net Pathway Score_).
+- **Métrica de resolución:** Integración del signo inferido con la dirección y el _log2 Fold-Change_ de cada gen en el dataset scRNA-seq original (_Net Pathway Score_). Pendiente de especificar.
 
-- **Entorno de pruebas y reproducibilidad:** _Test harness_ con respuestas emuladas (fixtures/mocks locales) para garantizar testing sin conexión ni dependencia de cuotas de red externas, y registro de todas las respuestas de los modelos ([ADR-004](decisions/adr-004-persistencia-ficheros-locales.md)).
+- **Reproducibilidad:**
+  - registro de todas las respuestas de los modelos, que permite reanudar una ejecución y regenerar los resultados sin volver a llamar ([ADR-004](decisions/adr-004-persistencia-ficheros-locales.md));
+  - un cliente simulado (`ClienteSimulado`) que permite probar el pipeline sin red ni cuotas.
+  - **Pendiente:** el _test harness_ con `pytest` y _fixtures_ locales. Hoy no hay tests en el repositorio.
 
 ### Qué queda explícitamente fuera
 
@@ -68,11 +86,11 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Entrenamiento o Fine-Tuning de modelos propios:** No se entrenarán clasificadores BERT biomédicos desde cero ni se ajustarán pesos de LLMs. Se usan modelos ya preentrenados, vía API externa o en local.
 
-- **Acceso a artículos de pago (Paywalls):** La ingesta se limita exclusivamente a resúmenes y artículos _Open Access_ de acceso público.
+- **Texto completo de los artículos:** Solo se descargan el título y el _abstract_ de PubMed. No se descarga ningún artículo completo, ni de acceso abierto ni de pago.
 
 - **Modelado biológico no lineal / combinatorio:** No se contemplan interacciones génicas de orden superior complejas (efectos epistáticos o condicionales no lineales); el score se fundamenta en una agregación mecanicista sumativa y transparente.
 
-- **Escalado al transcriptoma global (>20.000 genes simultáneos):** El pipeline está diseñado para resolver conjuntos acotados de genes en conflicto por ruta, no para reprocesar el genoma completo en una sola corrida.
+- **Escalado al transcriptoma global (>20.000 genes simultáneos):** El pipeline está diseñado para los genes de las rutas enriquecidas que entrega CIMUS (unos cientos de genes), no para reprocesar el genoma completo en una sola corrida.
 
 ## 4. Equipo y roles
 
@@ -91,7 +109,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
   |---|---|
   | [ADR-001](decisions/adr-001-rag-stateless.md) | Pipeline RAG con un LLM externo en lugar de un clasificador biomédico entrenado. |
   | [ADR-002](decisions/adr-002-europe-pmc-api.md) | Evidencias desde el GAF de Gene Ontology y abstracts de Europe PMC con respaldo en NCBI. |
-  | [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md) | Control de alucinaciones: signo, estado y motivos, con verificación de citas y contraste con GO y entre modelos. |
+  | [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md) | Control de alucinaciones: signo, estado y motivos, con verificación de citas, umbral de confianza y contraste con GO y entre modelos. |
   | [ADR-004](decisions/adr-004-persistencia-ficheros-locales.md) | Persistencia en ficheros locales, sin bases de datos. |
   | [ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md) | Elección de modelos con coste cero mediante benchmark. |
 
@@ -100,9 +118,11 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
   | Spec | Funcionalidad |
   |---|---|
   | [`descarga-evidencias-go-pmc.md`](specs/descarga-evidencias-go-pmc.md) | Ingesta de evidencias GO y descarga de abstracts. |
-  | [`limpieza-abstracts-particion-genica.md`](specs/limpieza-abstracts-particion-genica.md) | Limpieza de abstracts, normalización para comparar y partición Up/Down. |
+  | [`limpieza-abstracts-particion-genica.md`](specs/limpieza-abstracts-particion-genica.md) | Limpieza de abstracts, normalización para comparar y dirección del gen. |
   | [`inferencia-llm.md`](specs/inferencia-llm.md) | Inferencia del signo con LLM y validación de la respuesta. |
-  | [`benchmark-gold-set.md`](specs/benchmark-gold-set.md) | Gold set etiquetado por expertos y benchmark de modelos. |
+  | [`benchmark-gold-set.md`](specs/benchmark-gold-set.md) | Gold set etiquetado a ciegas y benchmark de modelos. |
+
+- **Limitaciones conocidas:** [`docs/limitacion-pares-sin-abstract.md`](docs/limitacion-pares-sin-abstract.md) (pares gen–ruta sin ningún _abstract_).
 
 ## 6. Estructura del repositorio
 
@@ -112,7 +132,7 @@ La documentación de la entrega vive en esta carpeta; el código fuente está en
 entregas/cu-01-reinterpretacion-biologica/
 ├── README.md                      # Puerta de entrada: visión de conjunto, objetivos y estructura.
 ├── ARCHITECTURE.md                # Diagrama de componentes y recorrido del dato.
-├── AGENTS.md                      # Instrucciones operativas para asistentes de IA y colaboradores (pendiente).
+├── AGENTS.md                      # Instrucciones operativas para asistentes de IA y colaboradores (vacío, pendiente).
 │
 ├── decisions/                     # Architecture Decision Records (ADRs):
 │   ├── adr-001-rag-stateless.md                  # Pipeline RAG con LLM externo.
@@ -127,15 +147,31 @@ entregas/cu-01-reinterpretacion-biologica/
 │   ├── inferencia-llm.md
 │   └── benchmark-gold-set.md
 │
-├── src/                           # Esquema previsto del código fuente (definicion-src.txt).
-└── tests/                         # Pruebas del pipeline (test_pipeline.py, pendiente).
+├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md).
+├── src/                           # Esquema del código fuente (definicion-src.txt).
+└── tests/                         # Pruebas del pipeline (test_pipeline.py, vacío, pendiente).
 
 codigo/                            # Código fuente (raíz del repositorio):
-├── extraer_info/                  # Fase 1: ingesta (GO, GAF, Europe PMC, NCBI) y Excel de salida.
-├── consulta_gen/                  # Fase 2: limpieza, prompts y validación de respuestas del LLM.
+├── extraer_info/                  # Fase 1: ingesta (GO, GAF, inmunoglobulinas, triaje del signo GO,
+│   │                              #   GeneRIF y Europe PMC, abstracts) y Excel de salida.
+│   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, UniProt y su caché.
+├── consulta_gen/                  # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
+├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
 ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas y su script de análisis.
-├── data/                          # Ficheros locales (ignorados por git): OBO, GAF y cachés.
-└── requirements.txt               # Dependencias de Python.
+├── data/                          # Ficheros locales (ignorados por git): OBO, GAF, cachés, registro de
+│                                  #   respuestas, fase2_resultados.xlsx y registros del benchmark.
+├── .env.example                   # Plantilla de las claves de los modelos y de NCBI.
+└── requirements.txt               # Dependencias de Python (requests, pandas, openpyxl).
 ```
 
-El fichero `.gitignore` está en la raíz del repositorio y excluye el entorno virtual, los ficheros de datos y los temporales. La plantilla de variables de entorno (`.env.example`, con `NCBI_EMAIL`, `NCBI_API_KEY`, `GROQ_API_KEY` y `GEMINI_API_KEY`) está pendiente de crear.
+El fichero `.gitignore` está en la raíz del repositorio y excluye el entorno virtual, `codigo/data/`, los `.env` y todos los `.xlsx` y `.csv`. Por eso los Excels de entrada y salida de la Fase 1, que están en `codigo/extraer_info/`, no se versionan. Los únicos Excels versionados son los de `codigo/tools_cimus/`.
+
+## 7. Cómo se ejecuta
+
+Desde la raíz del repositorio, con Python 3 y las dependencias de `codigo/requirements.txt`:
+
+1. **Claves:** copiar `codigo/.env.example` como `codigo/.env` y rellenar `GEMINI_API_KEY`, `GROQ_API_KEY` y, para la Fase 1, `NCBI_EMAIL` y `NCBI_API_KEY` (opcional). `codigo/.env` no se sube al repositorio: está en el `.gitignore`. Las variables de entorno del sistema tienen prioridad sobre el fichero.
+2. **Fase 1:** `python codigo/extraer_info/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/extraer_info/fase1_dataset_abstracts.xlsx`. La primera ejecución descarga el OBO, el GAF y unos 33.000 _abstracts_ (casi una hora); con las cachés tarda unos minutos.
+3. **Fase 2:** desde `codigo/`, `python -m consulta_gen ejecutar`. Escribe `codigo/data/fase2_resultados.xlsx`. Si se agota el límite diario de un modelo, basta con volver a lanzar el mismo comando. Sin llamar a ningún modelo, `python -m consulta_gen CD7` muestra la primera llamada que se enviaría para un gen.
+4. **Benchmark:** `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
+

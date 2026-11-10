@@ -1,6 +1,6 @@
 # Limitación: pares (gen, ruta) sin ningún abstract
 
-> Estado: **vigente** (2026-11-08). Afecta a la Fase 1 (ingesta) y a cómo la Fase 2 y el Net Pathway Score
+> Estado: **vigente** (2026-11-08; cifras actualizadas con la ejecución completa del 2026-11-09). Afecta a la Fase 1 (ingesta) y a cómo la Fase 2 y el Net Pathway Score
 > tratan estos pares. Código: `codigo/extraer_info/polaridad.py` (`cerrar_sin_evidencia`).
 
 ## 1. El problema
@@ -14,25 +14,31 @@ La Fase 1 busca abstracts en tres fuentes, en cascada:
 2. **NCBI GeneRIF:** frases curadas sobre el gen, a través de MyGene.info.
 3. **Europe PMC dirigida:** el gen y un término de la ruta en la misma frase.
 
-Aun así, en la ejecución completa sobre los Excels de CIMUS (`fase1_ejecucion_completa/`, 2026-11-08)
-quedan sin evidencia **634 de 3.069 pares** (21 %), que afectan a 123 genes y 253 rutas:
+Aun así, en la ejecución completa sobre los Excels de CIMUS (`fase1_ejecucion_completa/`, 2026-11-09)
+quedan sin evidencia **668 de 3.069 pares** (22 %, sin contar las inmunoglobulinas), que afectan a 124 genes y
+261 rutas. Las columnas son las dos listas de CIMUS: rutas de genes *up* («activadas») y de genes *down*
+(«suprimidas»).
 
 | | Activadas | Suprimidas | Total |
 |---|---|---|---|
-| Pares sin ningún abstract | 459 (de 2.386) | 175 (de 683) | 634 |
-| `anotado_sin_PMID`: el gen solo está en la ruta por anotaciones GO sin artículo | 252 | 119 | 371 |
-| `sin_anotacion_GAF`: el gen no tiene anotación a la ruta en el GAF actual | 207 | 56 | 263 |
-| Con signo GO (solo como pista; ver § 2) | 36 | 24 | 60 |
+| Pares sin ningún abstract | 488 (de 2.386) | 180 (de 683) | 668 |
+| `anotado_sin_PMID`: el gen solo está en la ruta por anotaciones GO sin artículo | 272 | 123 | 395 |
+| `sin_anotacion_GAF`: el gen no tiene anotación a la ruta en el GAF actual | 216 | 57 | 273 |
+| `PMID_sin_abstract`: el par tiene PMIDs, pero ninguno tiene abstract en PubMed | 0 | 0 | 0 |
+| Con signo GO (solo como pista; ver § 2) | 100 | 38 | 138 |
+
+La tercera causa existe en el código, pero en esta ejecución no aparece: las fuentes externas encontraron otro
+abstract para todos los pares cuyos PMIDs no lo tenían.
 
 Códigos de evidencia de las anotaciones de esos pares:
-- IEA (electrónica): 214
-- ISS (por similitud, casi siempre heredada de ratón, rata o vaca): 182
-- IBA (filogenética): 92
+- IEA (electrónica): 234
+- ISS (por similitud, casi siempre heredada de ratón, rata o vaca): 200
+- IBA (filogenética): 93
 - TAS de Reactome (la referencia es un ID de Reactome, no un PMID): 14
 
 Un par puede tener varias de estas anotaciones.
 
-**Por qué no tienen evidencia.** Hay tres causas, una por cada tipo de caso:
+**Por qué no tienen evidencia.** Hay tres razones de fondo:
 
 - **Anotación sin artículo detrás.** Es una consecuencia de cómo se construyen las anotaciones. Una IEA, una ISS o
   una IBA trasladan una función desde otra especie o desde un árbol filogenético, sin ningún artículo humano detrás.
@@ -56,9 +62,15 @@ Estos pares se cierran de forma determinista en la Fase 1 y nunca generan prompt
   y PMID.
 - **`Evidencias_GO`, `Referencias_GO` y `With_From_GO`**: las anotaciones de origen. Permiten auditar el par y
   son la entrada de la resolución del § 3. Por ejemplo, `Reactome:R-HSA-…` o la proteína de ratón de una ISS.
-- En la hoja `Triaje_polaridad`, estos pares tienen `Destino = sin_evidencia`, sin `Contribucion` y sin bandera
-  de freno. **No cuentan en el Net Pathway Score.** Cada ruta debe informar su cobertura (`n_con_signo / n_total`)
-  para que se vea qué parte de la ruta queda sin evidencia.
+- En la hoja `Triaje_polaridad`, estos pares tienen `Destino = sin_evidencia` (y «sin_evidencia» añadido a su
+  `Motivo`), sin `Contribucion` y sin bandera de freno. **No cuentan en el Net Pathway Score.** Cada ruta debe
+  informar su cobertura (`n_con_signo / n_total`) para que se vea qué parte de la ruta queda sin evidencia. Esto
+  lo tendrá que calcular la Fase 3, que está pendiente.
+
+**Excepción: pares `aceptar_GO` sin abstract.** Si el triaje ya había aceptado el signo GO de un par (una anotación
+experimental con PMID, a poca profundidad) y ese PMID no tiene abstract, el par no se cierra como `UNKNOWN`: sale
+con `Resultado` = el signo GO, `Estado = resuelto_GO` y `Motivo = aceptar_GO`, porque su signo no depende de leer
+el abstract. En la ejecución del 2026-11-09 no hay ningún caso así.
 
 Opciones descartadas:
 - **Enviar al LLM la función general del gen** (UniProt o el resumen de NCBI) en lugar del abstract. El texto no
@@ -66,10 +78,10 @@ Opciones descartadas:
   verificar como cita.
 - **Usar la `Pista_GO` como resultado.** Ese signo sale de IEA, ISS o IBA, que es justo lo que el triaje no acepta.
 
-## 3. Posible resolución para reducir los 634
+## 3. Posible resolución para reducir los 668
 
-La investigación «Bases gratuitas para pares sin PMID» se probó con los 12 genes que no tenían ningún PMID
-(está en `PIA2/reports/`, fuera del repo). Su conclusión es que **falta sobre todo vocabulario, no bases**.
+La investigación «Bases gratuitas para pares sin PMID» se probó con los 12 genes que no tenían ningún PMID en la
+ejecución del 2026-11-08 (está en `PIA2/reports/`, fuera del repo). Su conclusión es que **falta sobre todo vocabulario, no bases**.
 Con los nombres GO, Europe PMC devolvía 0 resultados para esos genes. Con palabras clave de autor sí aparecían
 los artículos buenos.
 
@@ -86,7 +98,7 @@ Cada uno sería una etapa más de `pmid_externos.py`, y solo actuaría sobre los
   con los IDs `R-HSA`. Los datos de Reactome son CC0.
 - **Filtro:** se acepta el PMID solo si su abstract nombra el gen. Por ejemplo, las referencias de la vía de
   SEC11A no lo nombran y se descartan.
-- **Alcance:** 14 pares de los 634, pocos pero muy limpios. En la prueba resolvió CTSZ → procesamiento de hormonas
+- **Alcance:** 14 pares de los 668, pocos pero muy limpios. En la prueba resolvió CTSZ → procesamiento de hormonas
   peptídicas (PMID 19800993).
 - **Coste:** una petición por ID de Reactome distinto, con caché. Es el paso más barato.
 
@@ -102,7 +114,7 @@ Cada uno sería una etapa más de `pmid_externos.py`, y solo actuaría sobre los
 
   Ejemplo: `BCL2A1[tiab] AND "Apoptosis"[MeSH]`.
 - **Requisito:** una **tabla ruta GO → MeSH**, que no está publicada. Hay que construirla una vez para las rutas
-  afectadas (253, o menos si se agrupan por ancestro común). Se guardaría como un TSV versionado junto al código,
+  afectadas (261, o menos si se agrupan por ancestro común). Se guardaría como un TSV versionado junto al código,
   con una persona revisándola.
 - **Alcance en la prueba:** 3 de los 12 genes (ACP5, BCL2A1, MAP2K3).
 - **Coste:** unas 2 peticiones por gen y ruta, con caché. Sin clave de NCBI, el límite es de 3 por segundo;
@@ -142,7 +154,7 @@ Para estos pares, lo correcto es el UNKNOWN actual con su `Detalle`, no forzar u
 
 ## 4. Cómo medirlo
 
-Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 634 pares y medir dos cosas:
+Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 668 pares y medir dos cosas:
 
 1. **Cobertura:** cuántos pares pasan de `sin_evidencia` a tener un abstract.
 2. **Precisión:** en una muestra de unos 30 pares por etapa, leída a mano, si el abstract trata del gen en el
