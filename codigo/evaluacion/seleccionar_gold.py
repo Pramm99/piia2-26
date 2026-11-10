@@ -1,6 +1,6 @@
 """Selección del gold set y plantilla de etiquetado a ciegas (spec «benchmark-gold-set»).
 
-Unidad de caso: la pregunta de v1_proceso (gen, PMID, proceso núcleo), la misma que responden v1_proceso y
+Unidad de caso: la pregunta (gen, PMID, proceso núcleo), la misma que responden v2_veredicto y
 v1_proceso_gen. La etiqueta es el efecto del gen sobre ese proceso según el abstract (INCREASES / DECREASES /
 NO_CLEAR_EFFECT); el signo sobre cada ruta lo compone el código igual que con los modelos.
 
@@ -156,7 +156,7 @@ if __name__ == "__main__":
               "proceso": p["proceso"], "titulo": p["titulo"],
               "abstract": "\n".join(f"[{k}] {v}" for k, v in p["frases"].items()),
               "doble_etiquetado": "sí" if p["doble"] else "", "efecto": "", "motivo": "", "id_frase": "", "cita": "",
-              "anotador": ""} for p in plantilla]
+              "confianza": "", "nota": "", "anotador": ""} for p in plantilla]  # campos de guia_etiquetado.md
     pd.DataFrame(filas).to_excel(AQUI / "plantilla_etiquetado.xlsx", index=False)
     estratos = {k: sum(x["polaridad_go"] == k for x in casos_out) for k in ("+1", "-1", "")}
     genes = pd.Series([x["gen"] for x in casos_out]).value_counts()

@@ -1,4 +1,4 @@
-"""Casos de v1_proceso: filas (gen, ruta, PMID) de Con_abstract -> preguntas (gen, PMID, proceso núcleo).
+"""Casos: filas (gen, ruta, PMID) de Con_abstract -> preguntas (gen, PMID, proceso núcleo).
 
 Opción B con respaldo A (informe «Prompt y modelos gratuitos Fase 2»):
   - el término estrecho de cada fila es su GO_ID_anotado (filas del GAF; uno por término si hay varios)
@@ -69,8 +69,7 @@ def construir_casos_y_cerrados(df: pd.DataFrame) -> Tuple[List[CasoProceso], Lis
             c = casos.setdefault((gen, pmid, nucleo), {
                 "gen": gen, "pmid": pmid, "nucleo": nucleo, "titulo": limpiar_abstract(fila.get("Titulo")),
                 "frases": tuple(segmentar_frases(abstract)), "termino": termino, "respaldo": respaldo,
-                "rutas": OrderedDict(), "frase_fuente": valor_texto(fila.get("Frase_fuente")),
-                "texto": f"{fila.get('Titulo', '')} {abstract}"})
+                "rutas": OrderedDict(), "texto": f"{fila.get('Titulo', '')} {abstract}"})
             c["rutas"].setdefault(ruta, (ruta, valor_texto(fila.get("Ruta_Nombre")),
                                          None if pol_r is None else s * pol_r))
 
@@ -79,8 +78,7 @@ def construir_casos_y_cerrados(df: pd.DataFrame) -> Tuple[List[CasoProceso], Lis
         caso = CasoProceso(
             gen=c["gen"], alias=_alias(c["gen"], mg[c["gen"]]), pmid=c["pmid"], titulo=c["titulo"],
             frases=c["frases"], nucleo_id=c["nucleo"], nucleo_nombre=nombre(c["nucleo"]),
-            rutas=tuple(c["rutas"].values()), termino_origen=c["termino"], respaldo_ruta=c["respaldo"],
-            frase_fuente=c["frase_fuente"])
+            rutas=tuple(c["rutas"].values()), termino_origen=c["termino"], respaldo_ruta=c["respaldo"])
         # no_menciona_gen: se cierra sin llamar al LLM
         (lista if menciona_gen(c["texto"], patrones[c["gen"]]) else cerrados).append(caso)
     cuenta.update({"casos": len(lista), "casos_no_menciona_gen": len(cerrados),

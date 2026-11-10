@@ -1,4 +1,4 @@
-"""Proceso núcleo de un término GO y signo del camino entre dos procesos (para v1_proceso).
+"""Proceso núcleo de un término GO y signo del camino entre dos procesos (para las preguntas de la Fase 2).
 
 El LLM no recibe «(positive/negative) regulation of X»: se le pregunta por X (el núcleo) y el código
 traslada el efecto a la ruta del Excel:

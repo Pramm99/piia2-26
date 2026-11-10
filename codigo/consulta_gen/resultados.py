@@ -123,8 +123,13 @@ def tablas(resultados, principal: str, secundario: Optional[str], cerrados: Sequ
         for go_id, nombre_ruta, _ in caso.rutas:
             r = por_ruta.get(go_id, {})
             pol = pol_go.get((caso.gen, go_id, caso.pmid), "")
+            conf_final = c["confianza_final"]
             if p.get("version") == V2_VEREDICTO:
                 signo_ruta, motivos = ruta_v2(r, c["motivos"], pol, p.get("cita_verificada", False))
+                if "coincide_polaridad_GO" in motivos and conf_final is None:
+                    # El principal quedó en UNKNOWN por baja confianza, pero GO acepta su veredicto: el porcentaje
+                    # se calcula sobre ese veredicto (será bajo, porque parte de la confianza del modelo)
+                    conf_final = confianza_final({**p, "signo": p["signo_llm"]}, s if _valida(s) else None)
             else:
                 signo_ruta = r.get("signo_ruta", SIGNO_DESCONOCIDO)
                 motivos = c["motivos"] + ([r["motivo_ruta"]] if r.get("motivo_ruta") else [])
@@ -136,7 +141,7 @@ def tablas(resultados, principal: str, secundario: Optional[str], cerrados: Sequ
                 "Proceso_ID": caso.nucleo_id, "Proceso": caso.nucleo_nombre, "Signo_ruta": signo_ruta,
                 "Estado": estado, "Motivos": _texto(motivos),
                 "Veredicto_LLM": r.get("signo_llm_ruta", r.get("signo_ruta")), "Confianza_modelo": p.get("confianza_modelo"),
-                "Confianza_final": c["confianza_final"] if signo_ruta != SIGNO_DESCONOCIDO else None,
+                "Confianza_final": conf_final if signo_ruta != SIGNO_DESCONOCIDO else None,
                 "Polaridad_GO": pol, "Destino": destinos.get((caso.gen, go_id), ""),
                 "Signo_principal": c["signo_principal"], "Signo_secundario": c["signo_secundario"],
                 "Frases": _frases(p), "Razonamiento": p.get("razonamiento_corto"),

@@ -1,13 +1,13 @@
-"""Ejecución de los prompts con uno o varios modelos, reanudable (ADR-004).
+"""Ejecución de las preguntas con uno o varios modelos, reanudable (ADR-004).
 
-Para cada prompt y cada modelo: si la clave ya está en el registro, se vuelve a validar su respuesta cruda
+Para cada pregunta y cada modelo: si la clave ya está en el registro, se vuelve a validar su respuesta cruda
 (0 llamadas: un cambio del validador o de la composición del signo no obliga a llamar otra vez); si no, se
 llama, se valida (respuesta.py) y se añade al registro en ese momento. Si un modelo no responde tras los
-reintentos (ErrorTransitorio), el caso queda PENDIENTE y ese modelo deja de llamarse en esta ejecución: casi
-siempre es el límite diario del plan gratuito, y seguir solo gastaría reintentos. La siguiente ejecución
+reintentos (ErrorTransitorio), sus preguntas quedan PENDIENTES y ese modelo deja de llamarse en esta ejecución:
+casi siempre es el límite diario del plan gratuito, y seguir solo gastaría reintentos. La siguiente ejecución
 retoma justo lo pendiente.
 
-v1_proceso_gen y v2_veredicto: las preguntas que le faltan a algún modelo se agrupan por gen y se trocean con el presupuesto
+Las preguntas que le faltan a algún modelo se agrupan por gen y se trocean con el presupuesto
 por llamada más pequeño de los modelos (prompt.trocear_por_gen), para que todos reciban la misma agrupación.
 A cada modelo se le envían solo las preguntas del grupo que le faltan; cada una se registra y se valida sola.
 Una pregunta que el modelo se salta queda pendiente; si la salida se corta por max_completion_tokens, la lista
@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
 from .cliente import ErrorTransitorio
-from .esquema import VERSIONES_LISTA, PromptLista, PromptLLM
+from .esquema import PromptLista, PromptLLM
 from .prompt import construir_prompt_lista, trocear_por_gen
 from .registro import Registro, clave
 from .respuesta import repartir_lista, validar_respuesta
@@ -56,48 +56,13 @@ def _sumar_tokens(resumen: Resumen, modelo: str, meta: Dict) -> None:
 
 def ejecutar(prompts: Sequence[PromptLLM], clientes: Sequence, registro: Optional[Registro] = None,
              cada: int = 25) -> (List[ResultadoCaso], Resumen):
-    """clientes: objetos con `.cfg` (nombre, presupuesto_llamada) y `.completar(prompt)` (ClienteOpenAICompatible
-    o ClienteSimulado). Con prompts de v1_proceso_gen o v2_veredicto (preguntas sueltas) envía por gen."""
+    """prompts: preguntas sueltas de una sola versión (v1_proceso_gen o v2_veredicto); se envían por gen.
+    clientes: objetos con `.cfg` (nombre, presupuesto_llamada) y `.completar(lista)` (ClienteOpenAICompatible
+    o ClienteSimulado)."""
     registro = registro if registro is not None else Registro()
-    versiones = {p.version for p in prompts}
-    if versiones & set(VERSIONES_LISTA):
-        if len(versiones) > 1:
-            raise ValueError("No se pueden mezclar preguntas de una versión por gen con otras versiones")
-        return _ejecutar_por_gen(prompts, clientes, registro, cada)
-
-    resumen, resultados, agotados = Resumen(), [], set()
-    for i, prompt in enumerate(prompts, 1):
-        res = ResultadoCaso(prompt)
-        for cli in clientes:
-            nombre = cli.cfg.nombre
-            k = clave(prompt, nombre)
-            if k in registro:
-                res.salidas[nombre] = validar_respuesta(prompt, registro.get(k)["respuesta_cruda"])
-                resumen.reutilizadas += 1
-                continue
-            if nombre in agotados:
-                res.salidas[nombre] = None
-                resumen.pendientes += 1
-                continue
-            try:
-                r = cli.completar(prompt)
-            except ErrorTransitorio as e:
-                print(f"⏸️ {e}. Los casos que faltan de {nombre} quedan pendientes para la próxima ejecución.")
-                agotados.add(nombre)
-                res.salidas[nombre] = None
-                resumen.pendientes += 1
-                continue
-            resumen.llamadas += 1
-            _sumar_tokens(resumen, nombre, r.meta)
-            salida = validar_respuesta(prompt, r.texto)
-            registro.anadir(prompt, nombre, r.texto, r.meta, salida)
-            res.salidas[nombre] = salida
-        resultados.append(res)
-        if cada and i % cada == 0:
-            print(f"   {i}/{len(prompts)} casos | llamadas {resumen.llamadas} | reutilizadas {resumen.reutilizadas} "
-                  f"| pendientes {resumen.pendientes}")
-    resumen.agotados = sorted(agotados)
-    return resultados, resumen
+    if len({p.version for p in prompts}) > 1:
+        raise ValueError("No se pueden mezclar preguntas de versiones distintas")
+    return _ejecutar_por_gen(prompts, clientes, registro, cada)
 
 
 def _llamar_lista(cli, lista: PromptLista, registro: Registro, resumen: Resumen) -> None:

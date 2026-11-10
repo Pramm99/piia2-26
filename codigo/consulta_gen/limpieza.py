@@ -1,4 +1,4 @@
-"""Normalización de valores sueltos leídos del Excel (NaN, PMIDs como float, HTML, longitud)."""
+"""Normalización de valores sueltos leídos del Excel (NaN, PMIDs como float, HTML)."""
 import re
 import unicodedata
 
@@ -29,17 +29,6 @@ def normalizar_espacios(texto: str) -> str:
 def limpiar_abstract(v) -> str:
     """Quita restos de HTML/entidades y colapsa espacios."""
     return normalizar_espacios(limpiar_texto(valor_texto(v)))
-
-
-def recortar(texto: str, max_caracteres) -> str:
-    """Recorta a max_caracteres intentando cortar en final de frase (o de palabra)."""
-    if not max_caracteres or len(texto) <= max_caracteres:
-        return texto
-    corte = texto[:max_caracteres]
-    fin_frase = corte.rfind(". ")
-    if fin_frase > max_caracteres * 0.6:
-        return corte[:fin_frase + 1]
-    return corte.rsplit(" ", 1)[0] + "…"
 
 
 # --- Forma de comparación (spec de limpieza): solo para comparar, nunca se envía al LLM ---

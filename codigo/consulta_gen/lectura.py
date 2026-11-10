@@ -1,13 +1,12 @@
-"""Lectura del Excel de salida de la Fase 1 y conversión de UNA fila a Evidencia."""
-from typing import Iterator, Mapping, Optional
+"""Lectura y filtrado del Excel de salida de la Fase 1 (las filas se agrupan en casos en casos.py).
+Cuentan las rutas de los dos Excels de CIMUS: activadas (genes upregulados) y suprimidas (downregulados),
+distinguidas por la columna Estado_Original."""
+from typing import Optional
 
 import pandas as pd
 
 from ._extraer_info import DESTINOS_SIN_LLM
-from .esquema import COLUMNAS_OBLIGATORIAS, HOJA_EVIDENCIAS, Evidencia
-
-ESTADO_ACTIVADA = "Activada"  # valor de Estado_Original en el Excel de la Fase 1
-from .limpieza import limpiar_abstract, normalizar_pmid, recortar, valor_texto
+from .esquema import COLUMNAS_OBLIGATORIAS, HOJA_EVIDENCIAS
 
 
 def cargar_hoja(ruta_excel: str, hoja: str = HOJA_EVIDENCIAS) -> pd.DataFrame:
@@ -24,11 +23,6 @@ def pendientes_de_llm(df: pd.DataFrame) -> pd.DataFrame:
     return df[~df["Destino"].isin(DESTINOS_SIN_LLM)]
 
 
-def solo_activadas(df: pd.DataFrame) -> pd.DataFrame:
-    """Solo cuentan las rutas activadas de CIMUS; las suprimidas fueron una prueba (decisión del 2026-11-04)."""
-    return df[df["Estado_Original"].astype(str).str.strip() == ESTADO_ACTIVADA]
-
-
 def validar_columnas(columnas) -> None:
     faltan = [c for c in COLUMNAS_OBLIGATORIAS if c not in set(columnas)]
     if faltan:
@@ -42,28 +36,3 @@ def filtrar(df: pd.DataFrame, gen: Optional[str] = None, go_id: Optional[str] = 
     if go_id:
         df = df[df["GO_ID"].astype(str).str.strip().str.upper() == go_id.strip().upper()]
     return df
-
-
-def fila_a_evidencia(fila: Mapping, max_chars_abstract: Optional[int] = None) -> Optional[Evidencia]:
-    """Convierte una fila (Series o dict) en Evidencia. Devuelve None si no hay abstract utilizable."""
-    abstract = recortar(limpiar_abstract(fila.get("Abstract")), max_chars_abstract)
-    if not abstract:
-        return None
-    directo = fila.get("Directo")
-    return Evidencia(
-        gen=valor_texto(fila.get("Gen")).upper(),
-        go_id=valor_texto(fila.get("GO_ID")),
-        ruta_nombre=valor_texto(fila.get("Ruta_Nombre")),
-        estado_scrnaseq=valor_texto(fila.get("Estado_Original")),
-        pmid=normalizar_pmid(fila.get("PMID")),
-        titulo=limpiar_abstract(fila.get("Titulo")),
-        abstract=abstract,
-        polaridad_go=valor_texto(fila.get("Polaridad_GO")),
-        evidencia_go=valor_texto(fila.get("Evidencia")),
-        directo=None if directo is None or pd.isna(directo) else bool(directo),
-    )
-
-
-def iterar_filas(df: pd.DataFrame) -> Iterator[Mapping]:
-    for _, fila in df.iterrows():
-        yield fila

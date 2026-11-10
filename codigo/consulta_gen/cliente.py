@@ -204,10 +204,3 @@ class ClienteSimulado:
         return Respuesta(texto=self.responder(prompt), meta={"proveedor": "simulado", "modelo": self.cfg.modelo,
                                                              "system_fingerprint": None, "tokens": {}, "fin": "stop",
                                                              "segundos": 0.0})
-
-
-def crear_cliente(nombre: str, **kw):
-    """Cliente real de uno de los MODELOS por su nombre corto."""
-    if nombre not in MODELOS:
-        raise KeyError(f"Modelo desconocido: {nombre}. Disponibles: {sorted(MODELOS)}")
-    return ClienteOpenAICompatible(MODELOS[nombre], **kw)

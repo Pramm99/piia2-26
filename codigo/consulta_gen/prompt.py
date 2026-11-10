@@ -1,85 +1,62 @@
 """Construcción del prompt para un LLM ligero. Solo texto: no sabe nada de proveedores ni de red.
 
-Hay dos versiones, que se comparan en el benchmark sobre el mismo gold set:
-  - v0_original: el prompt de partida, CONGELADO tal cual (pregunta por la ruta, en español, con la
-    dirección de scRNA-seq y el abstract recortado). Es la línea base: solo para el benchmark, no para
-    producción (la spec prohíbe enviar la dirección de scRNA-seq).
-  - v1_proceso: informe «Prompt y modelos gratuitos Fase 2» (anexo 1). Pregunta por el efecto del gen
-    sobre el proceso núcleo, con el abstract completo en frases numeradas y salida JSON estricta; el
-    signo sobre la ruta lo calcula el código (casos.py).
-  - v1_proceso_gen: las mismas preguntas de v1, enviadas por gen en una sola llamada con salida en lista
-    (informe «Coste de una llamada por gen en la Fase 2»). Cada pregunta se registra y se valida sola.
+Hay dos versiones, que se comparan en el benchmark sobre el mismo gold set. Las dos preguntan por el efecto
+del gen sobre el proceso núcleo, con el abstract completo en frases numeradas, y se envían por gen en una sola
+llamada con salida en lista (informe «Coste de una llamada por gen en la Fase 2»); el signo sobre la ruta lo
+calcula el código (casos.py). Cada pregunta se registra y se valida sola.
+  - v1_proceso_gen: informe «Prompt y modelos gratuitos Fase 2» (anexo 1). El modelo puede abstenerse
+    (NO_CLEAR_EFFECT con un motivo). Se conserva para el benchmark.
+  - v2_veredicto (producción): el modelo siempre da un veredicto y su confianza; el UNKNOWN lo decide el código.
 """
 import json
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Sequence
 
-from .esquema import (ESQUEMA_LISTA, ESQUEMA_LISTA_V2, ESQUEMA_V1, V0_ORIGINAL, V1_GEN, V1_PROCESO, V2_VEREDICTO,
-                      CasoProceso, Evidencia,
-                      PromptLista, PromptLLM)
+from .esquema import (ESQUEMA_LISTA_V1_GEN, ESQUEMA_LISTA_V2, V1_GEN, V2_VEREDICTO, CasoProceso, PromptLista,
+                      PromptLLM)
 
 
 @dataclass(frozen=True)
 class ConfigPrompt:
-    version: str = V0_ORIGINAL
-    max_chars_abstract: Optional[int] = 1800  # v0: los modelos ligeros rinden mejor con contexto corto
-    incluir_estado_scrnaseq: bool = True      # v0: Activada/Suprimida (contexto, pero puede sesgar)
-    incluir_pista_go: bool = False            # v0: polaridad derivada del grafo GO, desactivada para no sesgar
-    localizador_frase_fuente: bool = False    # v1, variante V2: añade la frase donde Fase 1 vio gen y proceso
+    version: str = V2_VEREDICTO
 
 
-CONFIG_V0 = ConfigPrompt()
-CONFIG_V1 = ConfigPrompt(version=V1_PROCESO, max_chars_abstract=None, incluir_estado_scrnaseq=False)
-CONFIG_V1_GEN = ConfigPrompt(version=V1_GEN, max_chars_abstract=None, incluir_estado_scrnaseq=False)
-CONFIG_V2 = ConfigPrompt(version=V2_VEREDICTO, max_chars_abstract=None, incluir_estado_scrnaseq=False)
+CONFIG_V1_GEN = ConfigPrompt(version=V1_GEN)
+CONFIG_V2 = ConfigPrompt(version=V2_VEREDICTO)
 
 
-# --------------------------------------------------------------------------------------------------
-# v0_original (congelado: no modificar, es la línea base del benchmark)
-# --------------------------------------------------------------------------------------------------
-SYSTEM = (
-    "Eres un asistente de bioinformática. Lees UN resumen científico y decides si el gen indicado "
-    "ACTIVA o INHIBE una ruta biológica. Usas solo la información del resumen, nunca tu memoria. "
-    "Respondes únicamente con un objeto JSON válido."
-)
+def _campos(esquema: Dict) -> str:
+    """Los campos de la respuesta, en orden y con sus valores, sacados del esquema (los modelos sin salida
+    estructurada estricta, como qwen en Groq, se inventaban los nombres)."""
+    lineas = []
+    for k, p in esquema["properties"].items():
+        lineas.append(f'- "{k}": ' + (" | ".join(p["enum"]) if "enum" in p else p["description"]))
+    return "\n".join(lineas)
 
 
-def construir_user(ev: Evidencia, cfg: ConfigPrompt = CONFIG_V0) -> str:
-    contexto = [
-        "Contexto: carcinoma escamocelular de cabeza y cuello (laringe/faringe), microambiente inmunitario.",
-        f"Gen: {ev.gen}",
-        f"Ruta: {ev.ruta_nombre} ({ev.go_id})",
-    ]
-    if cfg.incluir_estado_scrnaseq and ev.estado_scrnaseq:
-        contexto.append(f"Ruta en scRNA-seq: {ev.estado_scrnaseq}")
-    if cfg.incluir_pista_go and ev.polaridad_go in ("+1", "-1"):
-        contexto.append(f"Pista de Gene Ontology (orientativa): {ev.polaridad_go}")
+def _lineas_abstract(caso: CasoProceso) -> List[str]:
+    return [f"ABSTRACT (PMID {caso.pmid})", f"[T] {caso.titulo}"] + [f"[S{i}] {f}" for i, f in enumerate(caso.frases, 1)]
 
-    return (
-        "\n".join(contexto)
-        + f"\n\nResumen (PMID {ev.pmid})\nTítulo: {ev.titulo}\nTexto: {ev.abstract}\n\n"
-        f"Pregunta: según el resumen, ¿cómo afecta {ev.gen} a la ruta '{ev.ruta_nombre}'?\n"
-        '- "+1": {g} activa, estimula o es mediador positivo de la ruta.\n'
-        '- "-1": {g} inhibe, reprime o atenúa la ruta.\n'
-        '- "UNKNOWN": el resumen no es concluyente, es contradictorio, no trata de {g} o lo trata en un '
-        "contexto ajeno a la ruta.\n"
-        "El signo describe el efecto del gen sobre la ruta, no si el gen sube o baja en el tumor.\n\n"
-        "Responde SOLO con este JSON:\n"
-        "{{\n"
-        f'  "pmid": "{ev.pmid}",\n'
-        f'  "gen": "{ev.gen}",\n'
-        '  "signo_funcional": "+1" | "-1" | "UNKNOWN",\n'
-        '  "justificacion_literal": "frase copiada EXACTAMENTE del resumen (vacía si UNKNOWN)",\n'
-        '  "razonamiento_corto": "una sola frase"\n'
-        "}}"
-    ).replace("{g}", ev.gen).replace("{{", "{").replace("}}", "}")
+
+def _linea_gen(caso: CasoProceso) -> str:
+    otros = f" Other names used in the literature: {', '.join(caso.alias)}." if caso.alias else ""
+    return f"GENE: {caso.gen}.{otros}"
+
+
+def _user_pregunta(caso: CasoProceso) -> str:
+    """La parte de UNA pregunta (abstract, gen y proceso, sin número de pregunta): la huella no depende de con
+    qué otras preguntas se envíe, así que una pregunta respondida no se repite aunque cambien las demás del gen."""
+    return "\n".join(_lineas_abstract(caso) + ["", _linea_gen(caso), f"PROCESS: {caso.nucleo_nombre}"])
 
 
 # --------------------------------------------------------------------------------------------------
-# v1_proceso
+# v1_proceso_gen: el modelo puede abstenerse (NO_CLEAR_EFFECT con motivo)
 # --------------------------------------------------------------------------------------------------
-_REGLAS_V1 = """You read ONE PubMed abstract and report what it states about the causal effect of ONE human
+# El sistema es fijo y va primero: es el prefijo común de todas las llamadas, el que pueden servir de caché los
+# proveedores (Groq, Cerebras, Gemini). Lo que cambia va detrás. El texto está congelado: cambiarlo cambia la
+# huella y obliga a repetir las llamadas del registro.
+SYSTEM_V1_GEN = f"""You read ONE PubMed abstract and report what it states about the causal effect of ONE human
 gene (or its protein product) on ONE biological process. Use only the abstract text, never
 your own knowledge. Reply with the JSON object only.
 
@@ -126,61 +103,7 @@ Rules:
     50-69:  indirect support: a comparison between cell subsets, an effect that requires
             the gene without manipulating it, or only a concluding sentence;
     below 50: not enough for a sign; answer NO_CLEAR_EFFECT instead.
-    For NO_CLEAR_EFFECT, give how sure you are that the abstract shows no clear effect."""
-
-
-def _campos(esquema: Dict) -> str:
-    """Los campos de la respuesta, en orden y con sus valores, sacados del esquema (los modelos sin salida
-    estructurada estricta, como qwen en Groq, se inventaban los nombres)."""
-    lineas = []
-    for k, p in esquema["properties"].items():
-        lineas.append(f'- "{k}": ' + (" | ".join(p["enum"]) if "enum" in p else p["description"]))
-    return "\n".join(lineas)
-
-
-SYSTEM_V1 = _REGLAS_V1 + f"""
-
-OUTPUT. One JSON object with exactly these fields, in this order:
-{_campos(ESQUEMA_V1)}
-"motivo_unknown" is "none" when "efecto" is INCREASES or DECREASES."""
-
-
-def _lineas_abstract(caso: CasoProceso) -> List[str]:
-    return [f"ABSTRACT (PMID {caso.pmid})", f"[T] {caso.titulo}"] + [f"[S{i}] {f}" for i, f in enumerate(caso.frases, 1)]
-
-
-def _linea_gen(caso: CasoProceso) -> str:
-    otros = f" Other names used in the literature: {', '.join(caso.alias)}." if caso.alias else ""
-    return f"GENE: {caso.gen}.{otros}"
-
-
-def construir_user_v1(caso: CasoProceso, cfg: ConfigPrompt = CONFIG_V1) -> str:
-    g, proceso = caso.gen, caso.nucleo_nombre
-    lineas = _lineas_abstract(caso)
-    lineas.append("")
-    if cfg.localizador_frase_fuente and caso.frase_fuente:
-        lineas += [f"SENTENCE OF INTEREST (found automatically, may be incomplete; decide from the abstract): "
-                   f"{caso.frase_fuente}", ""]
-    lineas += [
-        _linea_gen(caso),
-        f"The protein encoded by {g} counts as {g}.",
-        f"PROCESS: {proceso}",
-        "",
-        f"QUESTION: According to this abstract only, does {g} INCREASE or DECREASE {proceso}?",
-        f"- INCREASES: the abstract shows that {g} causes, promotes or is required for {proceso}.",
-        f"- DECREASES: the abstract shows that {g} suppresses, limits or impairs {proceso}.",
-        f"- NO_CLEAR_EFFECT: neither is shown for {g}; choose the reason.",
-        "Return the JSON object.",
-    ]
-    return "\n".join(lineas)
-
-
-# --------------------------------------------------------------------------------------------------
-# v1_proceso_gen: las preguntas de v1 de un mismo gen, en una sola llamada
-# --------------------------------------------------------------------------------------------------
-# El sistema es fijo (las reglas de v1 + la regla 14) y va primero: es el prefijo común de todas las llamadas,
-# el que pueden servir de caché los proveedores (Groq, Cerebras, Gemini). Lo que cambia va detrás.
-SYSTEM_LISTA = _REGLAS_V1 + f"""
+    For NO_CLEAR_EFFECT, give how sure you are that the abstract shows no clear effect.
 14. SEVERAL QUESTIONS. The message may contain several abstracts and several questions about
     the gene. Answer every question Q1..Qn, one object per question, in order. Each answer is
     about the abstract (PMID) and the process named in THAT question only: never use another
@@ -188,19 +111,18 @@ SYSTEM_LISTA = _REGLAS_V1 + f"""
 
 OUTPUT. One JSON object {{"respuestas": [...]}} with one object per question. Each object has
 exactly these fields, in this order:
-{_campos(ESQUEMA_LISTA["properties"]["respuestas"]["items"])}
+{_campos(ESQUEMA_LISTA_V1_GEN["properties"]["respuestas"]["items"])}
 "motivo_unknown" is "none" when "efecto" is INCREASES or DECREASES."""
 
-SALIDA_BASE_LISTA = 2000    # max_completion_tokens con una pregunta (razonamiento incluido, como en v1)
+SALIDA_BASE_LISTA = 2000    # max_completion_tokens con una pregunta (razonamiento incluido)
 SALIDA_POR_PREGUNTA = 600   # cada pregunta más: unos 160 de respuesta (medido con Gemini) + razonamiento
 
 
 def construir_pregunta_gen(caso: CasoProceso) -> PromptLLM:
-    """La pregunta de v1_proceso_gen como unidad del registro y del validador. Su `user` es solo SU parte
-    (abstract, gen y proceso, sin número de pregunta): la huella no depende de con qué otras preguntas
-    se envíe, así que una pregunta respondida no se repite aunque cambien las demás del gen."""
-    user = "\n".join(_lineas_abstract(caso) + ["", _linea_gen(caso), f"PROCESS: {caso.nucleo_nombre}"])
-    return PromptLLM(evidencia=caso, system=SYSTEM_LISTA, user=user, version=V1_GEN, esquema_json=ESQUEMA_LISTA)
+    """La pregunta de v1_proceso_gen como unidad del registro y del validador; lo que se envía lo arma
+    construir_prompt_lista."""
+    return PromptLLM(evidencia=caso, system=SYSTEM_V1_GEN, user=_user_pregunta(caso), version=V1_GEN,
+                     esquema_json=ESQUEMA_LISTA_V1_GEN)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -208,8 +130,9 @@ def construir_pregunta_gen(caso: CasoProceso) -> PromptLLM:
 # --------------------------------------------------------------------------------------------------
 # Mismo envío que v1_proceso_gen (por gen, en lista). El modelo SIEMPRE elige INCREASES, DECREASES o NO_EFFECT,
 # da su confianza y las frases que lo motivan; las trampas de la v1 (diana, marcador, otra molécula...) ya no
-# son una abstención sino una «limitación» con confianza por debajo de 40. El código decide: por debajo de
-# UMBRAL_VEREDICTO es UNKNOWN, salvo que coincida con la Polaridad_GO de la anotación (resultados.py).
+# son una abstención sino una «limitación». El prompt NO menciona ningún umbral (decisión del 2026-11-10: sería
+# una fuga de información que predispone la confianza); el código decide con UMBRAL_VEREDICTO, que se ajusta
+# con el benchmark, y con la Polaridad_GO de la anotación (resultados.py).
 SYSTEM_V2 = f"""You read PubMed abstracts and report what each one states about the causal effect of ONE
 human gene (or its protein product) on ONE biological process. Use only the abstract text,
 never your own knowledge. Always give a verdict; when the abstract gives little or no support
@@ -220,12 +143,11 @@ Rules:
    INCREASES: the gene causes, promotes or is required for the process.
    DECREASES: the gene suppresses, limits or impairs the process.
    NO_EFFECT: the abstract reports that the gene does not change the process.
-   Never leave the verdict out. If the abstract does not support any of them, choose the most
-   likely one and give a confidence below 40 (rule 12).
+   Never leave the verdict out. If the abstract does not support any of them, still choose the
+   most likely one; your confidence (rule 12) must show how weak that choice is.
 2. CAUSE, NOT TARGET. The gene must be the cause. If something else changes the gene's
    expression or activity ("TNF induced GENE", "GENE was upregulated during infection"), the
-   abstract says nothing about the gene's own effect: limitation gene_is_the_target and a
-   confidence below 40.
+   abstract says nothing about the gene's own effect: limitation gene_is_the_target.
 3. LOSS OF FUNCTION INVERTS. If knockout, knockdown, siRNA, deficiency, a blocking antibody
    or an inhibitor of the gene DECREASES the process, the gene INCREASES it; if it
    INCREASES the process, the gene DECREASES it. Say so in the reasoning.
@@ -233,34 +155,33 @@ Rules:
    protein: the gene has the same direction as the observed effect.
 5. MARKER OR CORRELATION IS NOT CAUSAL. Expression on cells that perform the process,
    co-expression, correlation with the process, prognosis or survival: limitation
-   marker_or_correlation_only and a confidence below 40.
+   marker_or_correlation_only.
 6. OTHER MOLECULE. If the effect is attributed to a different molecule (a ligand, receptor,
    partner, complex or drug), it counts for the gene only if the gene's own product was
    manipulated, or the abstract shows the effect requires the gene. Otherwise: limitation
-   effect_of_other_molecule and a confidence below 40.
+   effect_of_other_molecule.
 7. NEGATION. "Did not affect", "was dispensable", "no change" in a reported experiment:
    NO_EFFECT. Never answer DECREASES for a negated effect.
 8. SPECULATION. A hypothesis without a reported result ("may", "could", "we propose"):
-   limitation speculation_only and a confidence below 40. A cautious conclusion of a
-   reported experiment does count.
+   limitation speculation_only. A cautious conclusion of a reported experiment does count.
 9. CONFLICT. If the abstract reports both directions for this process and gives no way to
-   choose: limitation conflicting_results and a confidence below 40.
+   choose: limitation conflicting_results.
 10. SCOPE. A more specific form of the process counts (e.g. NK cytotoxicity against tumour
     cells counts for "natural killer cell mediated cytotoxicity"). A broader or different
-    process does not: limitation process_not_addressed and a confidence below 40.
-11. CONTEXT IS DATA. Report the organism and cell type; do not go below 40 only because the
-    study is in mouse, another cell type or another disease. PREFER RESULTS over background
+    process does not: limitation process_not_addressed.
+11. CONTEXT IS DATA. Report the organism and cell type; do not lower your confidence only
+    because the study is in mouse, another cell type or another disease. PREFER RESULTS over background
     statements from the introduction.
-12. CONFIDENCE. An integer from 0 to 100: how strongly the abstract supports your verdict.
-    90-100: an experiment on the gene in this abstract with an explicit result on this
-            same process;
-    70-89:  a clear experiment, but on a more specific form of the process, in another
-            species or cell type, or with one step of inference;
-    40-69:  indirect support: a comparison between cell subsets, an effect that requires
-            the gene without manipulating it, or only a concluding or background sentence;
-    0-39:   the abstract does not support the verdict (rules 2, 5, 6, 8, 9, 10), or the gene
-            is not discussed (limitation gene_not_discussed).
-    The limitation is "none" when the confidence is 40 or more.
+12. CONFIDENCE. An integer from 0 to 100: your probability that the verdict is right, judged
+    only from this abstract. Use the whole scale. From strongest to weakest support:
+    - an experiment on the gene in this abstract with an explicit result on this same process;
+    - a clear experiment, but on a more specific form of the process, in another species or
+      cell type, or with one step of inference;
+    - indirect support: a comparison between cell subsets, an effect that requires the gene
+      without manipulating it, or only a concluding or background sentence;
+    - no support: the abstract does not address the gene's effect on the process (rules 2, 5,
+      6, 8, 9, 10) or does not discuss the gene (limitation gene_not_discussed).
+    Use limitation "none" when none of those rules applies.
 13. SENTENCES. Give 1 to 3 sentences that motivate the verdict, each with its ID ([T] = title,
     [S1], [S2]...) and a contiguous span of at least 6 words copied character by character
     from that sentence, with no ellipsis and no rewording. If no sentence supports the verdict,
@@ -277,8 +198,8 @@ exactly these fields, in this order:
 
 def construir_pregunta_v2(caso: CasoProceso) -> PromptLLM:
     """La pregunta de v2_veredicto: misma unidad y misma parte del prompt que v1_proceso_gen, otro sistema."""
-    user = "\n".join(_lineas_abstract(caso) + ["", _linea_gen(caso), f"PROCESS: {caso.nucleo_nombre}"])
-    return PromptLLM(evidencia=caso, system=SYSTEM_V2, user=user, version=V2_VEREDICTO, esquema_json=ESQUEMA_LISTA_V2)
+    return PromptLLM(evidencia=caso, system=SYSTEM_V2, user=_user_pregunta(caso), version=V2_VEREDICTO,
+                     esquema_json=ESQUEMA_LISTA_V2)
 
 
 def construir_prompt_lista(preguntas: Sequence[PromptLLM]) -> PromptLista:
@@ -311,8 +232,8 @@ def construir_prompt_lista(preguntas: Sequence[PromptLLM]) -> PromptLista:
         ]
     lineas += [f"Q{i}. PMID {c.pmid} | PROCESS: {c.nucleo_nombre}" for i, c in enumerate(casos, 1)]
     lineas.append("Return the JSON object with one answer per question.")
-    return PromptLista(system=SYSTEM_V2 if v2 else SYSTEM_LISTA, user="\n".join(lineas), preguntas=preguntas,
-                       esquema_json=ESQUEMA_LISTA_V2 if v2 else ESQUEMA_LISTA, version=preguntas[0].version,
+    return PromptLista(system=SYSTEM_V2 if v2 else SYSTEM_V1_GEN, user="\n".join(lineas), preguntas=preguntas,
+                       esquema_json=ESQUEMA_LISTA_V2 if v2 else ESQUEMA_LISTA_V1_GEN, version=preguntas[0].version,
                        max_salida=SALIDA_BASE_LISTA + SALIDA_POR_PREGUNTA * (len(preguntas) - 1))
 
 
@@ -326,8 +247,8 @@ def tokens_estimados(lista: PromptLista) -> int:
 
 
 def trocear_por_gen(preguntas: Sequence[PromptLLM], presupuesto: int) -> List[PromptLista]:
-    """Preguntas de v1_proceso_gen -> llamadas: una por gen, troceada en orden (PMID, proceso) para que ninguna
-    pase el presupuesto. Una pregunta que sola ya lo pasa va sola (el proveedor dirá si cabe)."""
+    """Preguntas sueltas -> llamadas: una por gen, troceada en orden (PMID, proceso) para que ninguna pase el
+    presupuesto. Una pregunta que sola ya lo pasa va sola (el proveedor dirá si cabe)."""
     por_gen: Dict[str, List[PromptLLM]] = {}
     for p in preguntas:
         por_gen.setdefault(p.gen, []).append(p)
@@ -343,14 +264,10 @@ def trocear_por_gen(preguntas: Sequence[PromptLLM], presupuesto: int) -> List[Pr
     return listas
 
 
-def construir_prompt(ev, cfg: ConfigPrompt = CONFIG_V0) -> PromptLLM:
-    """Evidencia (v0) o CasoProceso (v1, v1_gen y v2) -> PromptLLM con el texto final de esa versión.
-    En v1_proceso_gen y v2_veredicto es la pregunta suelta; lo que se envía lo arma construir_prompt_lista."""
-    if cfg.version == V1_PROCESO:
-        return PromptLLM(evidencia=ev, system=SYSTEM_V1, user=construir_user_v1(ev, cfg),
-                         version=V1_PROCESO, esquema_json=ESQUEMA_V1)
+def construir_prompt(caso: CasoProceso, cfg: ConfigPrompt = CONFIG_V2) -> PromptLLM:
+    """CasoProceso -> la pregunta suelta de la versión de cfg; lo que se envía lo arma construir_prompt_lista."""
     if cfg.version == V1_GEN:
-        return construir_pregunta_gen(ev)
+        return construir_pregunta_gen(caso)
     if cfg.version == V2_VEREDICTO:
-        return construir_pregunta_v2(ev)
-    return PromptLLM(evidencia=ev, system=SYSTEM, user=construir_user(ev, cfg), version=V0_ORIGINAL)
+        return construir_pregunta_v2(caso)
+    raise ValueError(f"Versión de prompt desconocida: {cfg.version}")

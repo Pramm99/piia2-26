@@ -1,19 +1,20 @@
 """Interpretación y validación de la respuesta (texto) de un LLM. No llama a ningún LLM.
 
-Todas las versiones del prompt comparten la verificación de la cita (ADR-003, spec de limpieza): la cita,
+Las dos versiones del prompt comparten la verificación de la cita (ADR-003, spec de limpieza): la cita,
 en forma de comparación, debe tener al menos 6 palabras y aparecer como palabras enteras en el texto
 enviado. Si un signo no tiene cita verificada se fuerza UNKNOWN con cita_no_verificada y se guarda el
-signo que dio el modelo (signo_llm). En v2_veredicto el modelo no puede abstenerse: el UNKNOWN lo decide
-el código con la cita y la confianza (_validar_v2).
+signo que dio el modelo (signo_llm). En v1_proceso_gen el modelo puede abstenerse (_validar_v1_gen); en
+v2_veredicto no: el UNKNOWN lo decide el código con la cita y la confianza (_validar_v2).
 """
 import json
 import re
 from typing import Any, Dict, List, Optional
 
-from .esquema import (CAMPOS_NUEVOS_V1, EFECTO_A_SIGNO, ESQUEMA_V1, ESTADO_NO_CONCLUYENTE, ESTADO_RESUELTO, ESTADO_REVISAR,
-                      MIN_CONFIANZA_SIGNO, MIN_PALABRAS_CITA, MOTIVO_MODELO_A_ADR, MOTIVOS_REVISAR, SIGNO_DESCONOCIDO,
-                      SIGNO_NEGATIVO, SIGNO_NEUTRO, SIGNO_POSITIVO, UMBRAL_CONFIANZA, UMBRAL_VEREDICTO,
-                      VEREDICTO_A_SIGNO, VERSIONES_PROCESO, V2_VEREDICTO, ESQUEMA_V2, PromptLista, PromptLLM)
+from .esquema import (CAMPOS_NUEVOS_V1_GEN, EFECTO_A_SIGNO, ESQUEMA_V1_GEN, ESQUEMA_V2, ESTADO_NO_CONCLUYENTE,
+                      ESTADO_RESUELTO, ESTADO_REVISAR, MIN_CONFIANZA_SIGNO_V1_GEN, MIN_PALABRAS_CITA,
+                      MOTIVO_MODELO_A_ADR, MOTIVOS_REVISAR, SIGNO_DESCONOCIDO, SIGNO_NEGATIVO, SIGNO_NEUTRO,
+                      SIGNO_POSITIVO, UMBRAL_CONFIANZA_V1_GEN, UMBRAL_VEREDICTO, V1_GEN, V2_VEREDICTO,
+                      VEREDICTO_A_SIGNO, PromptLista, PromptLLM)
 from .limpieza import forma_comparacion
 
 _VALLAS = re.compile(r"```(?:json)?", re.IGNORECASE)
@@ -30,20 +31,6 @@ def extraer_json(texto: str) -> Dict[str, Any]:
     return json.loads(limpio[ini:fin + 1])
 
 
-def normalizar_signo(valor: Any) -> str:
-    """Acepta '+1', 1, '1', '+1.0', '-1', -1...; cualquier otra cosa -> UNKNOWN."""
-    s = str(valor).strip().replace(" ", "")
-    try:
-        n = float(s)
-        if n == 1:
-            return SIGNO_POSITIVO
-        if n == -1:
-            return SIGNO_NEGATIVO
-    except ValueError:
-        pass
-    return SIGNO_DESCONOCIDO
-
-
 def verificar_cita(cita: str, texto: str) -> bool:
     """La cita (≥6 palabras) aparece como palabras enteras en el texto, tolerando mayúsculas, guiones,
     griegas escritas y puntuación (forma_comparacion)."""
@@ -52,29 +39,20 @@ def verificar_cita(cita: str, texto: str) -> bool:
 
 
 def _cerrar(signo: str, motivos: List[str], cita_ok: bool, confianza: Optional[int] = None,
-            umbral: int = UMBRAL_CONFIANZA) -> Dict[str, Any]:
-    """Aplica el UNKNOWN forzado por cita, la baja confianza (solo a un signo que sobrevive a la cita) y decide
-    el estado. confianza None = respuesta sin el campo (v0 o registros anteriores a la regla 13)."""
+            umbral: int = UMBRAL_CONFIANZA_V1_GEN) -> Dict[str, Any]:
+    """Aplica el UNKNOWN forzado por cita, la baja confianza de v1_proceso_gen (solo a un signo que sobrevive a
+    la cita) y decide el estado. confianza None = respuesta sin el campo (registros anteriores a la regla 13)
+    o respuesta no interpretable (json_invalido, en cualquier versión)."""
     signo_llm = signo
     if signo != SIGNO_DESCONOCIDO and not cita_ok:
         signo, motivos = SIGNO_DESCONOCIDO, motivos + ["cita_no_verificada"]
-    if signo != SIGNO_DESCONOCIDO and confianza is not None and MIN_CONFIANZA_SIGNO <= confianza < umbral:
+    if signo != SIGNO_DESCONOCIDO and confianza is not None and MIN_CONFIANZA_SIGNO_V1_GEN <= confianza < umbral:
         motivos = motivos + ["baja_confianza"]
     if any(m in MOTIVOS_REVISAR for m in motivos):
         estado = ESTADO_REVISAR
     else:
         estado = ESTADO_RESUELTO if signo != SIGNO_DESCONOCIDO else ESTADO_NO_CONCLUYENTE
     return {"signo": signo, "signo_llm": signo_llm, "estado": estado, "motivos": motivos, "cita_verificada": cita_ok}
-
-
-def _validar_v0(prompt: PromptLLM, crudo: Dict[str, Any]) -> Dict[str, Any]:
-    ev = prompt.evidencia
-    signo = normalizar_signo(crudo.get("signo_funcional"))
-    cita = str(crudo.get("justificacion_literal") or "").strip()
-    motivos = [] if str(crudo.get("signo_funcional")).strip() in ("+1", "-1", "1", "UNKNOWN") else ["json_invalido"]
-    salida = _cerrar(signo, motivos, verificar_cita(cita, f"{ev.titulo} {ev.abstract}"))
-    return {**salida, "justificacion_literal": cita, "razonamiento_corto": str(crudo.get("razonamiento_corto") or "").strip(),
-            "signo_funcional": salida["signo"]}  # signo_funcional: nombre de la v0, se mantiene
 
 
 def _texto_frase(caso, id_frase: str) -> str:
@@ -94,10 +72,10 @@ def _leer_confianza(valor: Any) -> Optional[int]:
     return int(valor)
 
 
-def _validar_v1(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_CONFIANZA) -> Dict[str, Any]:
+def _validar_v1_gen(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_CONFIANZA_V1_GEN) -> Dict[str, Any]:
     caso = prompt.evidencia
-    props = ESQUEMA_V1["properties"]
-    faltan = [k for k in ESQUEMA_V1["required"] if k not in crudo and k not in CAMPOS_NUEVOS_V1]
+    props = ESQUEMA_V1_GEN["properties"]
+    faltan = [k for k in ESQUEMA_V1_GEN["required"] if k not in crudo and k not in CAMPOS_NUEVOS_V1_GEN]
     fuera = [k for k, p in props.items() if "enum" in p and k in crudo and crudo[k] not in p["enum"]]
     try:
         confianza = _leer_confianza(crudo.get("confianza"))
@@ -112,10 +90,10 @@ def _validar_v1(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_C
     signo = _A_SIGNO[EFECTO_A_SIGNO[efecto]]
     motivos = [MOTIVO_MODELO_A_ADR[motivo_modelo]] if motivo_modelo != "none" else []
     # Combinaciones incoherentes -> revisar (se conservan para el análisis de errores). Un signo con confianza
-    # por debajo de MIN_CONFIANZA_SIGNO contradice la regla 13 (debía ser NO_CLEAR_EFFECT).
+    # por debajo de MIN_CONFIANZA_SIGNO_V1_GEN contradice la regla 13 (debía ser NO_CLEAR_EFFECT).
     if (efecto != "NO_CLEAR_EFFECT" and motivo_modelo != "none") or (efecto == "NO_CLEAR_EFFECT" and motivo_modelo == "none") \
             or (efecto != "NO_CLEAR_EFFECT" and crudo["tipo_evidencia"] == "correlation_or_marker") \
-            or (efecto != "NO_CLEAR_EFFECT" and confianza is not None and confianza < MIN_CONFIANZA_SIGNO):
+            or (efecto != "NO_CLEAR_EFFECT" and confianza is not None and confianza < MIN_CONFIANZA_SIGNO_V1_GEN):
         motivos.append("incoherencia_respuesta")
     salida = _cerrar(signo, motivos, verificar_cita(cita, _texto_frase(caso, id_frase)), confianza, umbral)
 
@@ -164,7 +142,8 @@ def _validar_v2(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_V
     """v2_veredicto: el modelo siempre da un veredicto; el código decide el UNKNOWN.
       - sin ninguna cita verificada: UNKNOWN con cita_no_verificada;
       - con confianza por debajo del umbral: UNKNOWN con baja_confianza (y la limitación que dio el modelo);
-      - una limitación con confianza >= umbral contradice la regla 12: incoherencia_respuesta (revisar).
+      - un veredicto que supera el umbral pero trae una limitación (el modelo dice que el abstract no lo
+        sostiene): incoherencia_respuesta (revisar). El prompt no conoce el umbral.
     signo_llm y signo_llm_ruta guardan siempre el veredicto, porque resultados.py lo acepta aunque tenga poca
     confianza si coincide con la Polaridad_GO de la anotación."""
     caso = prompt.evidencia
@@ -211,7 +190,10 @@ def _validar_v2(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_V
 def validar_respuesta(prompt: PromptLLM, texto_llm: str, umbral_confianza: Optional[int] = None) -> Dict[str, Any]:
     """Dict con el esquema fijo de la versión del prompt. pmid y gen se toman de la evidencia, nunca del LLM.
     Una respuesta recibida pero no interpretable da UNKNOWN con json_invalido. umbral_confianza solo cambia
-    para barrer umbrales en el benchmark (por defecto, UMBRAL_CONFIANZA en v1 y UMBRAL_VEREDICTO en v2)."""
+    para barrer umbrales en el benchmark (por defecto, UMBRAL_CONFIANZA_V1_GEN en v1_proceso_gen y
+    UMBRAL_VEREDICTO en v2_veredicto)."""
+    if prompt.version not in (V1_GEN, V2_VEREDICTO):
+        raise ValueError(f"Versión de prompt desconocida: {prompt.version}")
     ev = prompt.evidencia
     base = {"version": prompt.version, "pmid": ev.pmid, "gen": ev.gen, "go_id": ev.go_id}
     try:
@@ -221,14 +203,12 @@ def validar_respuesta(prompt: PromptLLM, texto_llm: str, umbral_confianza: Optio
     if prompt.version == V2_VEREDICTO:
         return {**base, **_validar_v2(prompt, crudo, umbral_confianza if umbral_confianza is not None else UMBRAL_VEREDICTO),
                 "error": ""}
-    if prompt.version in VERSIONES_PROCESO:
-        umbral = umbral_confianza if umbral_confianza is not None else UMBRAL_CONFIANZA
-        return {**base, **_validar_v1(prompt, crudo, umbral), "error": ""}
-    return {**base, **_validar_v0(prompt, crudo), "error": ""}
+    umbral = umbral_confianza if umbral_confianza is not None else UMBRAL_CONFIANZA_V1_GEN
+    return {**base, **_validar_v1_gen(prompt, crudo, umbral), "error": ""}
 
 
 def repartir_lista(lista: PromptLista, texto_llm: str) -> List[Optional[str]]:
-    """Respuesta de v1_proceso_gen -> el JSON de cada pregunta (Q1..Qn, en orden), listo para validar_respuesta.
+    """Respuesta de una llamada por gen -> el JSON de cada pregunta (Q1..Qn, en orden), listo para validar_respuesta.
     None = el modelo no respondió esa pregunta (queda pendiente). Si la respuesta entera no se puede leer,
     todas reciben "" (json_invalido al validarlas: es una respuesta recibida, no un fallo de red)."""
     try:

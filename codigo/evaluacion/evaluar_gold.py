@@ -47,14 +47,14 @@ from consulta_gen.prompt import CONFIG_V1_GEN, CONFIG_V2, construir_prompt  # no
 from consulta_gen.registro import Registro, clave  # noqa: E402
 from consulta_gen.respuesta import validar_respuesta  # noqa: E402
 
-A_SIGNO = {"INCREASES": "+1", "DECREASES": "-1", "NO_CLEAR_EFFECT": "UNKNOWN"}
+A_SIGNO = {"INCREASES": "+1", "DECREASES": "-1", "NO_EFFECT": "neutro", "NO_CLEAR_EFFECT": "UNKNOWN"}
 CLASES = ("+1", "-1", "neutro", "UNKNOWN")
 CONFIG = {V1_GEN: CONFIG_V1_GEN, V2_VEREDICTO: CONFIG_V2}[_PROMPT[0] if _PROMPT else V1_GEN]
 
 
 def etiqueta(e):
-    """Etiqueta del anotador -> clase: un NO_CLEAR_EFFECT con no_effect_found es neutro (el gen no cambia el
-    proceso); el resto de NO_CLEAR_EFFECT, UNKNOWN."""
+    """Etiqueta del anotador -> clase. NO_EFFECT (guía v3, 4 clases) es neutro, y también un NO_CLEAR_EFFECT con
+    no_effect_found (etiquetas v1/v2); el resto de NO_CLEAR_EFFECT, UNKNOWN."""
     return "neutro" if e["efecto"] == "NO_CLEAR_EFFECT" and e.get("motivo") == "no_effect_found" else A_SIGNO[e["efecto"]]
 # Calibración: el otro modelo con el que se compara cada uno para confianza_final (la pareja propuesta para
 # producción es gpt-oss + Gemini; las alternativas se emparejan con Gemini)

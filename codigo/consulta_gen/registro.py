@@ -6,7 +6,7 @@ corta, como mucho se pierde la llamada en curso. La clave de un caso es
 La huella (SHA-256 del texto enviado y del esquema) invalida el caso en cuanto cambia el prompt, sin
 mezclar respuestas a prompts distintos. Este fichero NO es una caché: no se borra.
 
-En v1_proceso_gen una llamada lleva varias preguntas de un gen: la llamada (respuesta cruda completa, tokens,
+Una llamada lleva varias preguntas de un gen: la llamada (respuesta cruda completa, tokens,
 tiempo) va a `llamadas_llm.jsonl`, y cada pregunta respondida a `respuestas_llm.jsonl` con su propia clave y
 el `id_llamada`. La huella de cada pregunta es la de SU parte del prompt (prompt.construir_pregunta_gen), así
 que si la Fase 1 añade un abstract a un gen solo se pregunta lo nuevo. Los dos ficheros son permanentes.
@@ -66,17 +66,9 @@ class Registro:
     def get(self, k):
         return self._lineas.get(tuple(k))
 
-    def anadir(self, prompt: PromptLLM, modelo: str, texto_crudo: str, meta: Dict, salida: Dict) -> Dict:
-        linea = {"clave": list(clave(prompt, modelo)), "version": prompt.version, "modelo": modelo,
-                 "fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"), **meta,
-                 "huella_prompt": huella(prompt), "respuesta_cruda": texto_crudo, "salida": salida}
-        _escribir(self.ruta, linea)
-        self._lineas[tuple(linea["clave"])] = linea
-        return linea
-
     def anadir_lista(self, lista: PromptLista, modelo: str, texto_crudo: str, meta: Dict,
                      crudos: Sequence[Optional[str]], salidas: Sequence[Optional[Dict]]) -> List[Dict]:
-        """Una llamada de v1_proceso_gen: una línea en llamadas_llm.jsonl y una por pregunta respondida
+        """Una llamada por gen: una línea en llamadas_llm.jsonl y una por pregunta respondida
         (crudo None = el modelo se la saltó: no se escribe y queda pendiente)."""
         fecha = datetime.now(timezone.utc).isoformat(timespec="seconds")
         id_llamada = uuid.uuid4().hex[:16]
