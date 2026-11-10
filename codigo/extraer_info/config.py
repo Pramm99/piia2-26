@@ -6,8 +6,10 @@ DIR_FASE1 = os.path.dirname(os.path.abspath(__file__))           # codigo/extrae
 DIR_DATA = os.path.join(os.path.dirname(DIR_FASE1), "data")      # codigo/data
 
 # --- Entradas / salidas ---
-EXCEL_ACTIVADAS = os.path.join(DIR_FASE1, "rutas_activadas.xlsx")
-EXCEL_SUPRIMIDAS = os.path.join(DIR_FASE1, "rutas_suprimidas.xlsx")
+# Los Excels originales de CIMUS (versionados): rutas enriquecidas con genes up («activadas») y down («suprimidas»)
+DIR_CIMUS = os.path.join(os.path.dirname(DIR_FASE1), "tools_cimus")
+EXCEL_ACTIVADAS = os.path.join(DIR_CIMUS, "NK_rutas_activadas_GO.xlsx")
+EXCEL_SUPRIMIDAS = os.path.join(DIR_CIMUS, "NK_rutas_suprimidas_GO.xlsx")
 SALIDA = os.path.join(DIR_FASE1, "fase1_dataset_abstracts.xlsx")
 
 # --- Ficheros descargables (anotaciones GO) ---
@@ -17,11 +19,34 @@ OBO_FILE = os.path.join(DIR_DATA, "go-basic.obo")
 OBO_URL = "https://purl.obolibrary.org/obo/go/go-basic.obo"
 CACHE_FILE = os.path.join(DIR_DATA, "cache_abstracts.json")
 
+# --- Claves y datos personales: codigo/.env (no se sube al repo; ver .env.example) ---
+FICHERO_ENV = os.path.join(os.path.dirname(DIR_FASE1), ".env")
+
+
+def _leer_env(ruta=FICHERO_ENV):
+    """KEY=valor por línea; se ignoran comentarios y líneas vacías (mismo formato que consulta_gen/cliente.py)."""
+    if not os.path.exists(ruta):
+        return {}
+    pares = {}
+    with open(ruta, encoding="utf-8") as f:
+        for linea in f:
+            linea = linea.strip()
+            if linea and not linea.startswith("#") and "=" in linea:
+                k, v = linea.split("=", 1)
+                pares[k.strip()] = v.strip().strip('"').strip("'")
+    return pares
+
+
+def _env(var):
+    """Las variables de entorno del sistema mandan sobre .env; vacío -> None (no se envía)."""
+    return os.environ.get(var) or _leer_env().get(var) or None
+
+
 # --- APIs de abstracts ---
 EPMC_API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 NCBI_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-NCBI_EMAIL = "tu_email@ejemplo.com"          # <- pon el tuyo (buena práctica NCBI)
-NCBI_API_KEY = os.environ.get("NCBI_API_KEY")  # opcional: sube el límite a 10 req/s
+NCBI_EMAIL = _env("NCBI_EMAIL")      # buena práctica NCBI: un correo de contacto
+NCBI_API_KEY = _env("NCBI_API_KEY")  # opcional: sube el límite a 10 req/s
 
 # --- Filtro de inmunoglobulinas (lista HGNC, se descarga una vez) ---
 HGNC_IG_FILE = os.path.join(DIR_DATA, "hgnc_inmunoglobulinas.json")
@@ -68,7 +93,7 @@ ARISTAS_SIN_SIGNO = {
 # no equivale a activar y sigue sin signo.
 SIGNO_POR_PERTENENCIA_REGULACION = True
 # Una ruta «regulation of X» sin dirección se trata como X: el signo de cada término de su subárbol se
-# calcula respecto a X (+1 = el gen promueve X). Lo usan la Fase 1 (Polaridad_GO) y la Fase 2 (v1_proceso).
+# calcula respecto a X (+1 = el gen promueve X). Lo usan la Fase 1 (Polaridad_GO) y la Fase 2 (preguntas por el proceso núcleo).
 SIN_DIRECCION_COMO_PROCESO = True
 PROFUNDIDAD_MAX_ACEPTAR = 2  # a profundidad ≤2 con evidencia experimental no hubo errores en la auditoría
 EVIDENCIAS_FILOGENETICAS = {"IBA", "IBD", "IKR", "IRD"}  # se descartan si contradicen a una experimental
