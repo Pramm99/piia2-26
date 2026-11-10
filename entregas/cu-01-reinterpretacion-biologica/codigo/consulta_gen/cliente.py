@@ -42,7 +42,7 @@ class ConfigModelo:
     max_tokens: int = 2000            # en gpt-oss el razonamiento cuenta para este límite
     json_schema: bool = True          # salida estructurada estricta con el esquema del prompt
     extra: Dict = field(default_factory=dict)
-    # v1_proceso_gen: tope de tokens de UNA llamada (entrada estimada + max_completion_tokens). Las preguntas de
+    # Tope de tokens de UNA llamada (entrada estimada + max_completion_tokens). Las preguntas de
     # un gen se trocean para no pasarlo: Groq rechaza una petición mayor que su límite por minuto (8K).
     presupuesto_llamada: int = 60_000
     timeout: int = 120                # segundos por petición (un modelo local en CPU tarda minutos con una lista)
@@ -110,7 +110,7 @@ class ClienteOpenAICompatible:
             raise RuntimeError(f"Falta {cfg.var_clave}: ponla en el entorno o en {FICHERO_ENV} (ver .env.example)")
 
     def _payload(self, prompt) -> Dict:
-        """prompt: PromptLLM (un caso) o PromptLista (v1_proceso_gen, con su propio max_salida)."""
+        """prompt: PromptLLM (un caso) o PromptLista (las preguntas de un gen, con su propio max_salida)."""
         c = self.cfg
         p = {"model": c.modelo, "messages": prompt.como_mensajes(),
              "max_completion_tokens": getattr(prompt, "max_salida", None) or c.max_tokens, **c.extra}

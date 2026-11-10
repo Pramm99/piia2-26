@@ -8,7 +8,7 @@ mezclar respuestas a prompts distintos. Este fichero NO es una caché: no se bor
 
 Una llamada lleva varias preguntas de un gen: la llamada (respuesta cruda completa, tokens,
 tiempo) va a `llamadas_llm.jsonl`, y cada pregunta respondida a `respuestas_llm.jsonl` con su propia clave y
-el `id_llamada`. La huella de cada pregunta es la de SU parte del prompt (prompt.construir_pregunta_gen), así
+el `id_llamada`. La huella de cada pregunta es la de SU parte del prompt (prompt.construir_prompt), así
 que si la Fase 1 añade un abstract a un gen solo se pregunta lo nuevo. Los dos ficheros son permanentes.
 La `salida` de cada línea es la validación del momento: al reutilizarla se vuelve a validar la respuesta
 cruda (ejecucion.py), así que un cambio del validador no obliga a volver a llamar.

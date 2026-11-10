@@ -1,5 +1,5 @@
 """ADR-003: contraste entre modelos y con Gene Ontology, y porcentaje final (confianza_final)."""
-from conftest import caso, hoja_fase1, respuesta_v2
+from conftest import caso, hoja_fase1, respuesta
 from consulta_gen.confianza import confianza_final
 from consulta_gen.ejecucion import ResultadoCaso
 from consulta_gen.respuesta import validar_respuesta
@@ -15,40 +15,40 @@ def _fila_ruta(prompt, polaridad, principal_txt, secundario_txt=None):
     return por_ruta.iloc[0]
 
 
-# --- Contraste con Gene Ontology (v2_veredicto) ---
-def test_coincide_con_go_se_acepta_aunque_la_confianza_sea_baja(prompt_v2):
-    f = _fila_ruta(prompt_v2, "+1", respuesta_v2("INCREASES", 30))
+# --- Contraste con Gene Ontology ---
+def test_coincide_con_go_se_acepta_aunque_la_confianza_sea_baja(prompt):
+    f = _fila_ruta(prompt, "+1", respuesta("INCREASES", 30))
     assert (f.Signo_ruta, f.Estado, f.Motivos) == ("+1", "resuelto", "coincide_polaridad_GO")
     # Antes salía vacía: ahora se calcula sobre el veredicto aceptado (30 × 1,0 × 0,9 × 0,9)
     assert f.Confianza_final == 24
 
 
-def test_neutro_frente_a_go_queda_en_revision(prompt_v2):
-    f = _fila_ruta(prompt_v2, "+1", respuesta_v2("NO_EFFECT", 0, limitacion="process_not_addressed"))
+def test_neutro_frente_a_go_queda_en_revision(prompt):
+    f = _fila_ruta(prompt, "+1", respuesta("NO_EFFECT", 0, limitacion="process_not_addressed"))
     assert (f.Signo_ruta, f.Estado) == ("UNKNOWN", "revisar")
     assert f.Motivos == "baja_confianza|contexto_ajeno|discrepancia_polaridad_GO"
 
 
-def test_discrepancia_con_go_conserva_el_signo_si_llega_al_umbral(prompt_v2):
-    f = _fila_ruta(prompt_v2, "-1", respuesta_v2("INCREASES", 90))
+def test_discrepancia_con_go_conserva_el_signo_si_llega_al_umbral(prompt):
+    f = _fila_ruta(prompt, "-1", respuesta("INCREASES", 90))
     assert (f.Signo_ruta, f.Estado, f.Motivos) == ("+1", "revisar", "discrepancia_polaridad_GO")
 
 
-def test_sin_go_vale_el_umbral(prompt_v2):
-    assert _fila_ruta(prompt_v2, "", respuesta_v2("INCREASES", 90)).Estado == "resuelto"
-    assert _fila_ruta(prompt_v2, "", respuesta_v2("INCREASES", 50)).Signo_ruta == "UNKNOWN"
+def test_sin_go_vale_el_umbral(prompt):
+    assert _fila_ruta(prompt, "", respuesta("INCREASES", 90)).Estado == "resuelto"
+    assert _fila_ruta(prompt, "", respuesta("INCREASES", 50)).Signo_ruta == "UNKNOWN"
 
 
 # --- Contraste entre modelos ---
-def test_discrepancia_entre_modelos(prompt_v2):
-    f = _fila_ruta(prompt_v2, "", respuesta_v2("INCREASES", 90), respuesta_v2("DECREASES", 90))
+def test_discrepancia_entre_modelos(prompt):
+    f = _fila_ruta(prompt, "", respuesta("INCREASES", 90), respuesta("DECREASES", 90))
     assert (f.Signo_ruta, f.Estado) == ("+1", "revisar")
     assert "discrepancia_entre_modelos" in f.Motivos
     assert (f.Signo_principal, f.Signo_secundario) == ("+1", "-1")
 
 
-def test_json_invalido_del_secundario_no_es_discrepancia(prompt_v2):
-    f = _fila_ruta(prompt_v2, "", respuesta_v2("INCREASES", 90), "no es JSON")
+def test_json_invalido_del_secundario_no_es_discrepancia(prompt):
+    f = _fila_ruta(prompt, "", respuesta("INCREASES", 90), "no es JSON")
     assert (f.Estado, f.Motivos) == ("resuelto", "")
 
 
@@ -57,7 +57,7 @@ def test_principal_sin_responder_queda_pendiente():
     assert (c["signo"], c["estado"]) == ("UNKNOWN", "pendiente")
 
 
-def test_preguntas_cerradas_por_el_filtro_previo(prompt_v2):
+def test_preguntas_cerradas_por_el_filtro_previo(prompt):
     preguntas, por_ruta = tablas([], "principal", None, [caso()], hoja_fase1())
     assert preguntas.iloc[0].Motivos == "no_menciona_gen" and por_ruta.iloc[0].Signo_ruta == "UNKNOWN"
 

@@ -5,7 +5,7 @@ Ejecución completa (llama a los modelos; reanudable, el registro va a codigo/da
   Escribe codigo/data/fase2_resultados.xlsx (hojas Por_ruta, Preguntas y Resumen). Los modelos son los
   nombres de cliente.MODELOS; por defecto, los del ADR-005 (principal Gemini, secundario gpt-oss en Groq).
 Demo: imprime la primera llamada que se enviaría para un gen (sin llamar a ningún modelo):
-  python -m consulta_gen CD7 [GO:XXXXXXX|-] [ruta_excel|-] [v2_veredicto|v1_proceso_gen]
+  python -m consulta_gen CD7 [GO:XXXXXXX|-] [ruta_excel|-]
 Se puede lanzar también como script (python consulta_gen/__main__.py …, p. ej. el botón Run del IDE).
 Un «-» deja ese argumento por defecto.
 """
@@ -19,7 +19,7 @@ if not __package__:
     sys.path = [p for p in sys.path if Path(p or ".").resolve() != _aqui]
     sys.path.insert(0, str(_aqui.parent))
 
-from consulta_gen import CONFIG_V1_GEN, CONFIG_V2, V1_GEN, preparar_prompts
+from consulta_gen import preparar_prompts
 from consulta_gen._extraer_info import DIR_EXTRAER_INFO, SALIDA
 from consulta_gen.prompt import trocear_por_gen
 
@@ -57,9 +57,8 @@ if __name__ == "__main__":
         ejecutar_cli(arg)
         sys.exit(0)
     gen, go_id, ruta = arg(1) or "CD7", arg(2), arg(3)
-    cfg = CONFIG_V1_GEN if arg(4) == V1_GEN else CONFIG_V2
-    prompts, cuenta = preparar_prompts(str(localizar_excel(ruta)), cfg, gen, go_id)
-    print(f"{len(prompts)} preguntas {cfg.version} para {gen} | {cuenta}")
+    prompts, cuenta = preparar_prompts(str(localizar_excel(ruta)), gen, go_id)
+    print(f"{len(prompts)} preguntas para {gen} | {cuenta}")
     if prompts:
         from consulta_gen.cliente import MODELOS
         # El mismo troceo que la ejecución: el presupuesto más pequeño de la pareja por defecto

@@ -114,7 +114,7 @@ PREFIJOS_VIGILANCIA = ("KIR", "KLRC", "KLRD", "NCR")
 GENES_VIGILANCIA = {"HAVCR2", "LGALS9", "TIGIT", "PVR", "BST2", "XCL1", "CCR7"}
 
 # --- Opciones del cruce ---
-# False = comportamiento de la v2 (solo is_a y part_of); útil para comparar resultados
+# True = propaga también por regulates / positively_regulates / negatively_regulates; False = solo is_a y part_of
 PROPAGAR_REGULACION = True
 
 # True = solo evidencia experimental; False = cualquier anotación con PMID (más abstracts)

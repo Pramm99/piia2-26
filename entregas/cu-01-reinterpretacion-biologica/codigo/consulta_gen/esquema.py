@@ -7,26 +7,20 @@ SIGNO_NEGATIVO = "-1"
 SIGNO_DESCONOCIDO = "UNKNOWN"
 SIGNO_NEUTRO = "neutro"  # el gen no aumenta ni disminuye el proceso (el mismo valor que las Ig de la Fase 1)
 
-# Versiones del prompt (se comparan en el benchmark sobre el mismo gold set). Las dos preguntan por el proceso
-# núcleo (el código compone el signo hasta la ruta) y se envían por gen, varias preguntas por llamada.
-V1_GEN = "v1_proceso_gen"    # el modelo puede abstenerse (NO_CLEAR_EFFECT con motivo)
-V2_VEREDICTO = "v2_veredicto"  # producción: veredicto obligado (+1/-1/neutro) con confianza; el UNKNOWN lo decide el código
+# Nombre del prompt en el registro (primer elemento de la clave): veredicto obligado (+1/-1/neutro) con confianza;
+# el UNKNOWN lo decide el código. Pregunta por el proceso núcleo (el código compone el signo hasta la ruta) y se
+# envía por gen, varias preguntas por llamada.
+VERSION_PROMPT = "veredicto"
 
 # Estado y motivos de la salida (ADR-003)
 ESTADO_RESUELTO, ESTADO_REVISAR, ESTADO_NO_CONCLUYENTE = "resuelto", "revisar", "no_concluyente"
 MIN_PALABRAS_CITA = 6  # una cita más corta no demuestra nada (CD7 aparece dentro de CD70)
-# Confianza declarada por el modelo en v1_proceso_gen (regla 13). Un signo por debajo del umbral se conserva, pero
-# pasa a revisar con baja_confianza; por debajo de MIN_CONFIANZA_SIGNO_V1_GEN el prompt pide NO_CLEAR_EFFECT, así
-# que un signo ahí es incoherencia_respuesta. El umbral es provisional: se ajustará con el gold set.
-UMBRAL_CONFIANZA_V1_GEN = 70
-MIN_CONFIANZA_SIGNO_V1_GEN = 50
 # Mantienen el signo y piden revisión (los dos últimos los añade el contraste de resultados.py)
 MOTIVOS_REVISAR = ("incoherencia_respuesta", "baja_confianza", "discrepancia_entre_modelos", "discrepancia_polaridad_GO")
 ESTADO_PENDIENTE = "pendiente"  # el modelo principal aún no ha respondido (límite del plan gratuito): no es UNKNOWN
-# v2_veredicto: el modelo siempre da un veredicto y una confianza; por debajo de este umbral el código lo convierte
-# en UNKNOWN (baja_confianza), salvo que coincida con la Polaridad_GO de esa anotación (resultados.py).
-# 80: decisión del 2026-11-10 tras la prueba de umbrales de Gemini sobre el gold v3 (con 40, precisión 54-57 %;
-# con 80, 66-71 %, perdiendo 2-3 de 40 signos reales). El prompt no lo conoce.
+# El modelo siempre da un veredicto y una confianza; por debajo de este umbral el código lo convierte en UNKNOWN
+# (baja_confianza), salvo que coincida con la Polaridad_GO de esa anotación (resultados.py). 80: decisión del
+# 2026-11-10, con la curva riesgo-cobertura del benchmark. El prompt no lo conoce.
 UMBRAL_VEREDICTO = 80
 
 HOJA_EVIDENCIAS = "Con_abstract"
@@ -93,7 +87,7 @@ class PromptLista:
     preguntas: Tuple[PromptLLM, ...]
     esquema_json: Optional[Dict] = field(default=None, compare=False)
     max_salida: Optional[int] = None  # max_completion_tokens de la llamada (crece con el nº de preguntas)
-    version: str = V1_GEN             # o V2_VEREDICTO
+    version: str = VERSION_PROMPT
 
     @property
     def gen(self) -> str:
@@ -104,8 +98,7 @@ class PromptLista:
                 {"role": "user", "content": self.user}]
 
 
-# Campos de contexto de la respuesta, iguales en las dos versiones (salida estructurada estricta; en Ollama, el
-# mismo objeto en `format`)
+# Campos de contexto de la respuesta (salida estructurada estricta; en Ollama, el mismo objeto en `format`)
 CAMPOS_CONTEXTO = {
     "tipo_evidencia": {"type": "string", "enum": ["loss_of_function", "gain_of_function", "direct_measurement",
                                                   "correlation_or_marker", "background_statement", "none"]},
@@ -114,43 +107,12 @@ CAMPOS_CONTEXTO = {
     "razonamiento_corto": {"type": "string", "description": "1-2 sentences; mention any sign inversion"},
 }
 
-# Esquema de la respuesta de v1_proceso_gen (una pregunta)
-MOTIVOS_MODELO_V1_GEN = ["none", "gene_not_discussed", "gene_is_the_target", "marker_or_correlation_only",
-                         "effect_of_other_molecule", "no_effect_found", "speculation_only",
-                         "conflicting_results", "process_not_addressed"]
-ESQUEMA_V1_GEN = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["id_frase", "justificacion_literal", *CAMPOS_CONTEXTO, "confianza", "efecto", "motivo_unknown"],
-    "properties": {
-        "id_frase": {"type": "string", "description": "T, S1, S2... or none"},
-        "justificacion_literal": {"type": "string", "description": ">=6 words copied exactly from that sentence"},
-        **CAMPOS_CONTEXTO,
-        # Después del razonamiento y antes del efecto: el modelo lo decide tras razonar (anclas en la regla 13)
-        "confianza": {"type": "integer", "description": "integer 0-100, see rule 13"},
-        "efecto": {"type": "string", "enum": ["INCREASES", "DECREASES", "NO_CLEAR_EFFECT"]},
-        "motivo_unknown": {"type": "string", "enum": MOTIVOS_MODELO_V1_GEN},
-    },
-}
-# Lo que se pide en la llamada: un objeto con la lista de respuestas; cada una dice a qué pregunta (Q1..Qn) responde
-ESQUEMA_LISTA_V1_GEN = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["respuestas"],
-    "properties": {"respuestas": {"type": "array", "items": {
-        "type": "object",
-        "additionalProperties": False,
-        "required": ["q"] + ESQUEMA_V1_GEN["required"],
-        "properties": {"q": {"type": "string", "description": "Q1, Q2..."}, **ESQUEMA_V1_GEN["properties"]},
-    }}},
-}
-EFECTO_A_SIGNO = {"INCREASES": 1, "DECREASES": -1, "NO_CLEAR_EFFECT": None}
-
-# Esquema de la respuesta de v2_veredicto: siempre un veredicto (sin abstención), su confianza y las frases que lo
-# motivan, cada una con su cita literal. Las trampas de la v1 pasan a ser una «limitación» que explica una confianza baja.
-LIMITACIONES_V2 = ["none", "gene_not_discussed", "gene_is_the_target", "marker_or_correlation_only",
-                   "effect_of_other_molecule", "speculation_only", "conflicting_results", "process_not_addressed"]
-ESQUEMA_V2 = {
+# Esquema de la respuesta: siempre un veredicto (sin abstención), su confianza y las frases que lo motivan, cada
+# una con su cita literal. Las trampas (diana, marcador, otra molécula...) son una «limitación» que explica una
+# confianza baja.
+LIMITACIONES = ["none", "gene_not_discussed", "gene_is_the_target", "marker_or_correlation_only",
+                "effect_of_other_molecule", "speculation_only", "conflicting_results", "process_not_addressed"]
+ESQUEMA = {
     "type": "object",
     "additionalProperties": False,
     "required": ["frases", "tipo_evidencia", "organismo", "tipo_celular", "razonamiento_corto", "limitacion",
@@ -160,29 +122,27 @@ ESQUEMA_V2 = {
                    "items": {"type": "object", "additionalProperties": False, "required": ["id_frase", "cita"],
                              "properties": {"id_frase": {"type": "string"}, "cita": {"type": "string"}}}},
         **CAMPOS_CONTEXTO,
-        "limitacion": {"type": "string", "enum": LIMITACIONES_V2},
+        "limitacion": {"type": "string", "enum": LIMITACIONES},
         "confianza": {"type": "integer", "description": "integer 0-100, see rule 12"},
         "veredicto": {"type": "string", "enum": ["INCREASES", "DECREASES", "NO_EFFECT"]},
     },
 }
-ESQUEMA_LISTA_V2 = {
+ESQUEMA_LISTA = {
     "type": "object",
     "additionalProperties": False,
     "required": ["respuestas"],
     "properties": {"respuestas": {"type": "array", "items": {
         "type": "object",
         "additionalProperties": False,
-        "required": ["q"] + ESQUEMA_V2["required"],
-        "properties": {"q": {"type": "string", "description": "Q1, Q2..."}, **ESQUEMA_V2["properties"]},
+        "required": ["q"] + ESQUEMA["required"],
+        "properties": {"q": {"type": "string", "description": "Q1, Q2..."}, **ESQUEMA["properties"]},
     }}},
 }
 VEREDICTO_A_SIGNO = {"INCREASES": SIGNO_POSITIVO, "DECREASES": SIGNO_NEGATIVO, "NO_EFFECT": SIGNO_NEUTRO}
-# Campos que pueden faltar en respuestas guardadas antes de existir (el benchmark vuelve a validar registros antiguos)
-CAMPOS_NUEVOS_V1_GEN = ("confianza",)
-# Motivos del modelo -> motivos del ADR-003 (los cuatro últimos son nuevos y hay que añadirlos al ADR)
+# Limitaciones del modelo -> motivos del ADR-003
 MOTIVO_MODELO_A_ADR = {
     "gene_not_discussed": "no_menciona_gen", "effect_of_other_molecule": "efecto_indirecto",
     "conflicting_results": "contradictorio", "process_not_addressed": "contexto_ajeno",
     "gene_is_the_target": "direccion_inversa", "marker_or_correlation_only": "marcador_correlacion",
-    "no_effect_found": "sin_efecto", "speculation_only": "especulativo",
+    "speculation_only": "especulativo",
 }

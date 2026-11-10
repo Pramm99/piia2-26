@@ -37,14 +37,14 @@ codigo/
 ├── consulta_gen/                  # FASE 2 · Inferencia (specs limpieza e inferencia-llm, ADR-003/004/005)
 │   │                              #   Se ejecuta desde codigo/ con: python -m consulta_gen ejecutar
 │   ├── esquema.py                 #   (hecho) Tipos inmutables (CasoProceso, PromptLLM, PromptLista), esquemas
-│   │                              #   JSON de las dos versiones, motivos y umbrales (UMBRAL_VEREDICTO = 80).
+│   │                              #   JSON de la respuesta, motivos y umbral (UMBRAL_VEREDICTO = 80).
 │   ├── lectura.py                 #   (hecho) [9] Hoja Con_abstract de las dos listas -> filas que van al LLM.
 │   ├── limpieza.py                #   (hecho) [9] Limpieza conservadora, forma de comparación y frases numeradas.
 │   ├── casos.py                   #   (hecho) [10] Filas -> preguntas (gen, PMID, proceso núcleo) y filtro de
 │   │                              #   mención del gen (no_menciona_gen).
 │   ├── proceso.py                 #   (hecho) [10] Proceso núcleo de un término GO y signo del camino hasta la ruta.
-│   ├── prompt.py                  #   (hecho) [11] Prompts v2_veredicto (producción) y v1_proceso_gen (benchmark),
-│   │                              #   enviados por gen y troceados según el presupuesto por llamada.
+│   ├── prompt.py                  #   (hecho) [11] Prompt único (veredicto obligado), enviado por gen y troceado
+│   │                              #   según el presupuesto por llamada.
 │   ├── cliente.py                 #   (hecho) [12] Conector único compatible con OpenAI (Gemini, Groq, Cerebras,
 │   │                              #   Ollama), reintentos ante 408/429/5xx y cliente simulado para pruebas.
 │   ├── ejecucion.py               #   (hecho) [12] Ejecución reanudable, revalidación y partición de salidas cortadas.
@@ -60,26 +60,27 @@ codigo/
 │                                  #   (previsto) Sin especificar: falta la regla de agregación.
 │
 ├── evaluacion/                    # BENCHMARK [16] (spec benchmark-gold-set, ADR-005)
-│   ├── seleccionar_gold.py        #   (hecho) Muestra estratificada inicial de 60 casos con semilla fija.
-│   ├── buscar_neutros.py          #   (hecho) Candidatos a caso neutro para ampliar el gold set.
+│   ├── seleccionar_gold.py        #   (hecho) Rehace el gold set sobre una Fase 1 nueva sin volver a sortear.
+│   ├── buscar_neutros.py          #   (hecho) Candidatos a caso neutro (dos listas) para ampliar el gold set.
 │   ├── evaluar_gold.py            #   (hecho) Ejecución del benchmark e informe con IC, matriz y calibración.
-│   ├── gold_casos.jsonl           #   (hecho) Selección del gold v3 (124 casos; no se enseña a los anotadores).
+│   ├── gold_casos.jsonl           #   (hecho) Selección del gold set (100 casos, 65 up y 35 down; no se enseña
+│   │                              #   a los anotadores).
 │   ├── plantilla_etiquetado.*     #   (hecho) Plantilla a ciegas (.jsonl versionado; .xlsx, con las columnas de la
 │   │                              #   guía, incluidas confianza y nota, no se versiona).
 │   ├── guia_etiquetado.md         #   (hecho) Guía de etiquetado a 4 clases.
-│   ├── etiquetas_provisionales/   #   (en parte) Etiquetas de anotadores Claude, con su SHA-256 y CAMBIOS_vN.md.
+│   ├── etiquetas_provisionales/   #   (en parte) Etiquetas de anotadores Claude, con su SHA-256 y LEEME.md.
 │   │                              #   Faltan las etiquetas de CIMUS.
-│   ├── informe_gold_provisional*.txt  # Informes de los benchmarks v1 a v5.
-│   └── v1/                        #   Archivo del gold v1.
+│   └── informe_gold_provisional.txt  # Informe del benchmark (Gemini y gpt-oss).
 │
 ├── pytest.ini                     # Configuración de pytest (python -m pytest desde codigo/).
 ├── tests/                         # PRUEBAS (pytest, sin red ni claves)
 │   ├── conftest.py                #   (hecho) Casos y respuestas de ejemplo comunes.
 │   ├── test_limpieza.py           #   (hecho) Limpieza, forma de comparación, citas, frases y mención del gen.
-│   ├── test_respuesta.py          #   (hecho) Validación v2_veredicto y v1_proceso_gen, signo por ruta y listas.
+│   ├── test_respuesta.py          #   (hecho) Validación de la respuesta, signo por ruta y listas.
 │   ├── test_resultados.py         #   (hecho) Contraste con GO y entre modelos, y confianza_final.
 │   ├── test_ejecucion.py          #   (hecho) Registro y ejecución reanudable con el cliente simulado.
-│   └── test_fase1.py              #   (hecho) Entrada, grafo GO, inmunoglobulinas, descarga simulada y .env.
+│   ├── test_fase1.py              #   (hecho) Entrada, grafo GO, inmunoglobulinas, descarga simulada y .env.
+│   └── test_red.py                #   (hecho) Reintentos con espera exponencial de la sesión HTTP.
 │
 ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas (los únicos .xlsx versionados)
 │                                  #   y su script de análisis.

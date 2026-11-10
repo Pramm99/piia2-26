@@ -1,20 +1,17 @@
 """Interpretación y validación de la respuesta (texto) de un LLM. No llama a ningún LLM.
 
-Las dos versiones del prompt comparten la verificación de la cita (ADR-003, spec de limpieza): la cita,
-en forma de comparación, debe tener al menos 6 palabras y aparecer como palabras enteras en el texto
-enviado. Si un signo no tiene cita verificada se fuerza UNKNOWN con cita_no_verificada y se guarda el
-signo que dio el modelo (signo_llm). En v1_proceso_gen el modelo puede abstenerse (_validar_v1_gen); en
-v2_veredicto no: el UNKNOWN lo decide el código con la cita y la confianza (_validar_v2).
+Verificación de la cita (ADR-003, spec de limpieza): la cita, en forma de comparación, debe tener al menos 6
+palabras y aparecer como palabras enteras en la frase indicada del texto enviado. El modelo siempre da un
+veredicto; el UNKNOWN lo decide el código con la cita y la confianza (_validar), y se guarda el veredicto que dio
+el modelo (signo_llm).
 """
 import json
 import re
 from typing import Any, Dict, List, Optional
 
-from .esquema import (CAMPOS_NUEVOS_V1_GEN, EFECTO_A_SIGNO, ESQUEMA_V1_GEN, ESQUEMA_V2, ESTADO_NO_CONCLUYENTE,
-                      ESTADO_RESUELTO, ESTADO_REVISAR, MIN_CONFIANZA_SIGNO_V1_GEN, MIN_PALABRAS_CITA,
+from .esquema import (ESQUEMA, ESTADO_NO_CONCLUYENTE, ESTADO_RESUELTO, ESTADO_REVISAR, MIN_PALABRAS_CITA,
                       MOTIVO_MODELO_A_ADR, MOTIVOS_REVISAR, SIGNO_DESCONOCIDO, SIGNO_NEGATIVO, SIGNO_NEUTRO,
-                      SIGNO_POSITIVO, UMBRAL_CONFIANZA_V1_GEN, UMBRAL_VEREDICTO, V1_GEN, V2_VEREDICTO,
-                      VEREDICTO_A_SIGNO, PromptLista, PromptLLM)
+                      SIGNO_POSITIVO, UMBRAL_VEREDICTO, VERSION_PROMPT, VEREDICTO_A_SIGNO, PromptLista, PromptLLM)
 from .limpieza import forma_comparacion
 
 _VALLAS = re.compile(r"```(?:json)?", re.IGNORECASE)
@@ -38,21 +35,10 @@ def verificar_cita(cita: str, texto: str) -> bool:
     return len(c.split()) >= MIN_PALABRAS_CITA and f" {c} " in f" {forma_comparacion(texto)} "
 
 
-def _cerrar(signo: str, motivos: List[str], cita_ok: bool, confianza: Optional[int] = None,
-            umbral: int = UMBRAL_CONFIANZA_V1_GEN) -> Dict[str, Any]:
-    """Aplica el UNKNOWN forzado por cita, la baja confianza de v1_proceso_gen (solo a un signo que sobrevive a
-    la cita) y decide el estado. confianza None = respuesta sin el campo (registros anteriores a la regla 13)
-    o respuesta no interpretable (json_invalido, en cualquier versión)."""
-    signo_llm = signo
-    if signo != SIGNO_DESCONOCIDO and not cita_ok:
-        signo, motivos = SIGNO_DESCONOCIDO, motivos + ["cita_no_verificada"]
-    if signo != SIGNO_DESCONOCIDO and confianza is not None and MIN_CONFIANZA_SIGNO_V1_GEN <= confianza < umbral:
-        motivos = motivos + ["baja_confianza"]
-    if any(m in MOTIVOS_REVISAR for m in motivos):
-        estado = ESTADO_REVISAR
-    else:
-        estado = ESTADO_RESUELTO if signo != SIGNO_DESCONOCIDO else ESTADO_NO_CONCLUYENTE
-    return {"signo": signo, "signo_llm": signo_llm, "estado": estado, "motivos": motivos, "cita_verificada": cita_ok}
+def _json_invalido() -> Dict[str, Any]:
+    """Respuesta recibida pero no interpretable: UNKNOWN con json_invalido."""
+    return {"signo": SIGNO_DESCONOCIDO, "signo_llm": SIGNO_DESCONOCIDO, "estado": ESTADO_NO_CONCLUYENTE,
+            "motivos": ["json_invalido"], "cita_verificada": False}
 
 
 def _texto_frase(caso, id_frase: str) -> str:
@@ -72,47 +58,9 @@ def _leer_confianza(valor: Any) -> Optional[int]:
     return int(valor)
 
 
-def _validar_v1_gen(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_CONFIANZA_V1_GEN) -> Dict[str, Any]:
-    caso = prompt.evidencia
-    props = ESQUEMA_V1_GEN["properties"]
-    faltan = [k for k in ESQUEMA_V1_GEN["required"] if k not in crudo and k not in CAMPOS_NUEVOS_V1_GEN]
-    fuera = [k for k, p in props.items() if "enum" in p and k in crudo and crudo[k] not in p["enum"]]
-    try:
-        confianza = _leer_confianza(crudo.get("confianza"))
-    except ValueError:
-        fuera.append("confianza")
-    if faltan or fuera:
-        return {**_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "efecto": "", "confianza_modelo": None, "rutas": []}
-
-    efecto, motivo_modelo = crudo["efecto"], crudo["motivo_unknown"]
-    id_frase = str(crudo["id_frase"]).strip().strip("[]")
-    cita = str(crudo["justificacion_literal"]).strip()
-    signo = _A_SIGNO[EFECTO_A_SIGNO[efecto]]
-    motivos = [MOTIVO_MODELO_A_ADR[motivo_modelo]] if motivo_modelo != "none" else []
-    # Combinaciones incoherentes -> revisar (se conservan para el análisis de errores). Un signo con confianza
-    # por debajo de MIN_CONFIANZA_SIGNO_V1_GEN contradice la regla 13 (debía ser NO_CLEAR_EFFECT).
-    if (efecto != "NO_CLEAR_EFFECT" and motivo_modelo != "none") or (efecto == "NO_CLEAR_EFFECT" and motivo_modelo == "none") \
-            or (efecto != "NO_CLEAR_EFFECT" and crudo["tipo_evidencia"] == "correlation_or_marker") \
-            or (efecto != "NO_CLEAR_EFFECT" and confianza is not None and confianza < MIN_CONFIANZA_SIGNO_V1_GEN):
-        motivos.append("incoherencia_respuesta")
-    salida = _cerrar(signo, motivos, verificar_cita(cita, _texto_frase(caso, id_frase)), confianza, umbral)
-
-    # Signo sobre cada ruta del caso: efecto × factor (None = ruta «regulation of X» sin dirección)
-    e = EFECTO_A_SIGNO[efecto] if salida["signo"] != SIGNO_DESCONOCIDO else None
-    rutas = [{"go_id": r, "ruta_nombre": n,
-              "signo_ruta": _A_SIGNO[e * f] if e is not None and f is not None else SIGNO_DESCONOCIDO,
-              "motivo_ruta": "ruta_sin_direccion" if f is None and e is not None else ""}
-             for r, n, f in caso.rutas]
-    return {**salida, "efecto": efecto, "id_frase": id_frase, "justificacion_literal": cita,
-            "tipo_evidencia": crudo["tipo_evidencia"], "organismo": crudo["organismo"],
-            "tipo_celular": crudo["tipo_celular"], "razonamiento_corto": str(crudo["razonamiento_corto"]).strip(),
-            "confianza_modelo": confianza,
-            "nucleo_id": caso.nucleo_id, "nucleo_nombre": caso.nucleo_nombre, "rutas": rutas}
-
-
 def pide_revision(signo: str, motivos) -> bool:
-    """Algún motivo de MOTIVOS_REVISAR. baja_confianza solo cuenta si el signo se conservó (v1): en v2_veredicto
-    el código ya lo convirtió en UNKNOWN y el caso es no_concluyente."""
+    """Algún motivo de MOTIVOS_REVISAR. baja_confianza no cuenta cuando el código ya convirtió el veredicto en
+    UNKNOWN: ese caso es no_concluyente."""
     return any(m in MOTIVOS_REVISAR and not (m == "baja_confianza" and signo == SIGNO_DESCONOCIDO) for m in motivos)
 
 
@@ -126,7 +74,7 @@ def signo_en_ruta(signo: str, factor: Optional[int]) -> str:
     return _A_SIGNO[(1 if signo == SIGNO_POSITIVO else -1) * factor]
 
 
-def _frases_v2(valor: Any) -> Optional[List[Dict[str, str]]]:
+def _frases(valor: Any) -> Optional[List[Dict[str, str]]]:
     """Lista de 1-3 {id_frase, cita}; cualquier otra forma -> None (json_invalido)."""
     if not isinstance(valor, list) or not valor:
         return None
@@ -138,8 +86,8 @@ def _frases_v2(valor: Any) -> Optional[List[Dict[str, str]]]:
     return frases
 
 
-def _validar_v2(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_VEREDICTO) -> Dict[str, Any]:
-    """v2_veredicto: el modelo siempre da un veredicto; el código decide el UNKNOWN.
+def _validar(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_VEREDICTO) -> Dict[str, Any]:
+    """El modelo siempre da un veredicto; el código decide el UNKNOWN.
       - sin ninguna cita verificada: UNKNOWN con cita_no_verificada;
       - con confianza por debajo del umbral: UNKNOWN con baja_confianza (y la limitación que dio el modelo);
       - un veredicto que supera el umbral pero trae una limitación (el modelo dice que el abstract no lo
@@ -147,17 +95,16 @@ def _validar_v2(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_V
     signo_llm y signo_llm_ruta guardan siempre el veredicto, porque resultados.py lo acepta aunque tenga poca
     confianza si coincide con la Polaridad_GO de la anotación."""
     caso = prompt.evidencia
-    props = ESQUEMA_V2["properties"]
-    faltan = [k for k in ESQUEMA_V2["required"] if k not in crudo]
+    props = ESQUEMA["properties"]
+    faltan = [k for k in ESQUEMA["required"] if k not in crudo]
     fuera = [k for k, p in props.items() if "enum" in p and k in crudo and crudo[k] not in p["enum"]]
-    frases = _frases_v2(crudo.get("frases"))
+    frases = _frases(crudo.get("frases"))
     try:
         confianza = _leer_confianza(crudo.get("confianza"))
     except ValueError:
         confianza = None
     if faltan or fuera or frases is None or confianza is None:
-        return {**_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "veredicto": "", "confianza_modelo": None,
-                "frases": [], "rutas": []}
+        return {**_json_invalido(), "veredicto": "", "confianza_modelo": None, "frases": [], "rutas": []}
 
     for f in frases:
         f["verificada"] = verificar_cita(f["cita"], _texto_frase(caso, f["id_frase"]))
@@ -188,23 +135,19 @@ def _validar_v2(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_V
 
 
 def validar_respuesta(prompt: PromptLLM, texto_llm: str, umbral_confianza: Optional[int] = None) -> Dict[str, Any]:
-    """Dict con el esquema fijo de la versión del prompt. pmid y gen se toman de la evidencia, nunca del LLM.
-    Una respuesta recibida pero no interpretable da UNKNOWN con json_invalido. umbral_confianza solo cambia
-    para barrer umbrales en el benchmark (por defecto, UMBRAL_CONFIANZA_V1_GEN en v1_proceso_gen y
-    UMBRAL_VEREDICTO en v2_veredicto)."""
-    if prompt.version not in (V1_GEN, V2_VEREDICTO):
+    """Dict con el esquema fijo de la respuesta. pmid y gen se toman de la evidencia, nunca del LLM. Una
+    respuesta recibida pero no interpretable da UNKNOWN con json_invalido. umbral_confianza solo cambia para
+    barrer umbrales en el benchmark (por defecto, UMBRAL_VEREDICTO)."""
+    if prompt.version != VERSION_PROMPT:
         raise ValueError(f"Versión de prompt desconocida: {prompt.version}")
     ev = prompt.evidencia
     base = {"version": prompt.version, "pmid": ev.pmid, "gen": ev.gen, "go_id": ev.go_id}
     try:
         crudo = extraer_json(texto_llm)
     except Exception as err:
-        return {**base, **_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "error": f"Respuesta no interpretable: {err}"}
-    if prompt.version == V2_VEREDICTO:
-        return {**base, **_validar_v2(prompt, crudo, umbral_confianza if umbral_confianza is not None else UMBRAL_VEREDICTO),
-                "error": ""}
-    umbral = umbral_confianza if umbral_confianza is not None else UMBRAL_CONFIANZA_V1_GEN
-    return {**base, **_validar_v1_gen(prompt, crudo, umbral), "error": ""}
+        return {**base, **_json_invalido(), "error": f"Respuesta no interpretable: {err}"}
+    umbral = umbral_confianza if umbral_confianza is not None else UMBRAL_VEREDICTO
+    return {**base, **_validar(prompt, crudo, umbral), "error": ""}
 
 
 def repartir_lista(lista: PromptLista, texto_llm: str) -> List[Optional[str]]:

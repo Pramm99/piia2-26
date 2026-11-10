@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from consulta_gen.esquema import CasoProceso
-from consulta_gen.prompt import CONFIG_V1_GEN, CONFIG_V2, construir_prompt
+from consulta_gen.prompt import construir_prompt
 
 FRASE = "CD7 strongly increased T cell cytokine production in vitro."
 CITA = "CD7 strongly increased T cell cytokine production"
@@ -18,28 +18,17 @@ def caso(gen="CD7", pmid="1", frases=(FRASE,), factor=1, rutas=None):
                        rutas=rutas or (("GO:0002443", "leukocyte mediated immunity", factor),))
 
 
-def respuesta_v2(veredicto="INCREASES", confianza=90, cita=CITA, id_frase="S1", limitacion="none",
+def respuesta(veredicto="INCREASES", confianza=90, cita=CITA, id_frase="S1", limitacion="none",
                  evidencia="gain_of_function", **extra):
-    """JSON de una respuesta v2_veredicto, como lo devolvería el modelo."""
+    """JSON de una respuesta, como lo devolvería el modelo."""
     return json.dumps({"frases": [{"id_frase": id_frase, "cita": cita}], "tipo_evidencia": evidencia,
                        "organismo": "human", "tipo_celular": "T", "razonamiento_corto": "test",
                        "limitacion": limitacion, "confianza": confianza, "veredicto": veredicto, **extra})
 
 
-def respuesta_v1(efecto="INCREASES", motivo="none", confianza=90, cita=CITA, id_frase="S1"):
-    return json.dumps({"id_frase": id_frase, "justificacion_literal": cita, "tipo_evidencia": "gain_of_function",
-                       "organismo": "human", "tipo_celular": "T", "razonamiento_corto": "test",
-                       "confianza": confianza, "efecto": efecto, "motivo_unknown": motivo})
-
-
 @pytest.fixture
-def prompt_v2():
-    return construir_prompt(caso(), CONFIG_V2)
-
-
-@pytest.fixture
-def prompt_v1():
-    return construir_prompt(caso(), CONFIG_V1_GEN)
+def prompt():
+    return construir_prompt(caso())
 
 
 def hoja_fase1(polaridad="+1", gen="CD7", ruta="GO:0002443", pmid="1"):

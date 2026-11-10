@@ -56,7 +56,7 @@ def _sumar_tokens(resumen: Resumen, modelo: str, meta: Dict) -> None:
 
 def ejecutar(prompts: Sequence[PromptLLM], clientes: Sequence, registro: Optional[Registro] = None,
              cada: int = 25) -> (List[ResultadoCaso], Resumen):
-    """prompts: preguntas sueltas de una sola versión (v1_proceso_gen o v2_veredicto); se envían por gen.
+    """prompts: preguntas sueltas de una sola versión del prompt; se envían por gen.
     clientes: objetos con `.cfg` (nombre, presupuesto_llamada) y `.completar(lista)` (ClienteOpenAICompatible
     o ClienteSimulado)."""
     registro = registro if registro is not None else Registro()
@@ -66,7 +66,7 @@ def ejecutar(prompts: Sequence[PromptLLM], clientes: Sequence, registro: Optiona
 
 
 def _llamar_lista(cli, lista: PromptLista, registro: Registro, resumen: Resumen) -> None:
-    """Una llamada por gen (v1_proceso_gen o v2_veredicto). Si la salida se corta y hay más de una pregunta, la
+    """Una llamada por gen. Si la salida se corta y hay más de una pregunta, la
     llamada queda en el registro de llamadas (para auditoría, sin respuestas) y la lista se parte en dos."""
     nombre, n = cli.cfg.nombre, len(lista.preguntas)
     r = cli.completar(lista)  # ErrorTransitorio sube hasta _ejecutar_por_gen

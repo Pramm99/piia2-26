@@ -3,11 +3,10 @@
   python evaluacion/evaluar_gold.py ejecutar <modelo> <excel Fase 1> [carpeta de datos] [presupuesto]   llama
   python evaluacion/evaluar_gold.py informe <etiquetas.jsonl> [<etiquetas_doble.jsonl>]    métricas, 0 llamadas
   (con --dir=<nombre> los registros van a data/<nombre>/ en vez de data/benchmark/;
-   con --prompt=v2_veredicto se ejecuta la versión de producción en vez de v1_proceso_gen;
    con --comunes=N el informe usa solo los N primeros casos que han respondido todos los modelos)
 
-ejecutar: cada modelo responde las preguntas del gold set con su forma de llamar más eficiente, por gen y
-troceado con su presupuesto (v1_proceso_gen o v2_veredicto). Las respuestas van a data/benchmark/<modelo>/
+ejecutar: cada modelo responde las preguntas del gold set con el prompt de producción, por gen y troceado con
+su presupuesto. Las respuestas van a data/benchmark/<modelo>/
 (registro reanudable; si se corta por el límite diario, volver a lanzarlo solo hace lo pendiente).
 informe: vuelve a validar las respuestas crudas del registro (sin llamar) y las compara con las etiquetas:
 precisión de las respuestas dadas, cobertura, recall de UNKNOWN, matriz de confusión, JSON válido, citas
@@ -26,8 +25,6 @@ CODIGO = AQUI.parent
 # --dir=<nombre>: carpeta de registros dentro de data/ (por defecto benchmark); se quita de sys.argv
 _DIR = [a for a in sys.argv if a.startswith("--dir=")]
 sys.argv = [a for a in sys.argv if not a.startswith("--dir=")]
-_PROMPT = [a.split("=", 1)[1] for a in sys.argv if a.startswith("--prompt=")]
-sys.argv = [a for a in sys.argv if not a.startswith("--prompt=")]
 # --comunes=N (informe): solo los N primeros casos del gold set que han respondido TODOS los modelos de la carpeta,
 # para comparar sobre los mismos casos cuando alguna ejecución se cortó por el límite diario
 _COMUNES = [int(a.split("=", 1)[1]) for a in sys.argv if a.startswith("--comunes=")]
@@ -42,26 +39,23 @@ if len(sys.argv) > 4 and sys.argv[1] == "ejecutar":
 sys.path.insert(0, str(CODIGO))
 
 from consulta_gen.confianza import confianza_final  # noqa: E402
-from consulta_gen.esquema import V1_GEN, V2_VEREDICTO  # noqa: E402
-from consulta_gen.prompt import CONFIG_V1_GEN, CONFIG_V2, construir_prompt  # noqa: E402
+from consulta_gen.esquema import VERSION_PROMPT  # noqa: E402
+from consulta_gen.prompt import construir_prompt  # noqa: E402
 from consulta_gen.registro import Registro, clave  # noqa: E402
 from consulta_gen.respuesta import validar_respuesta  # noqa: E402
 
 A_SIGNO = {"INCREASES": "+1", "DECREASES": "-1", "NO_EFFECT": "neutro", "NO_CLEAR_EFFECT": "UNKNOWN"}
 CLASES = ("+1", "-1", "neutro", "UNKNOWN")
-CONFIG = {V1_GEN: CONFIG_V1_GEN, V2_VEREDICTO: CONFIG_V2}[_PROMPT[0] if _PROMPT else V1_GEN]
 
 
 def etiqueta(e):
-    """Etiqueta del anotador -> clase. NO_EFFECT (guía v3, 4 clases) es neutro, y también un NO_CLEAR_EFFECT con
-    no_effect_found (etiquetas v1/v2); el resto de NO_CLEAR_EFFECT, UNKNOWN."""
-    return "neutro" if e["efecto"] == "NO_CLEAR_EFFECT" and e.get("motivo") == "no_effect_found" else A_SIGNO[e["efecto"]]
-# Calibración: el otro modelo con el que se compara cada uno para confianza_final (la pareja propuesta para
-# producción es gpt-oss + Gemini; las alternativas se emparejan con Gemini)
-SEGUNDO_MODELO = {"groq-gpt-oss-120b": "gemini-3.5-flash-lite", "gemini-3.5-flash-lite": "groq-gpt-oss-120b",
-                  "groq-qwen3.8-27b": "gemini-3.5-flash-lite", "ollama-qwen3-8b": "gemini-3.5-flash-lite",
-                  "cerebras-gpt-oss-120b": "gemini-3.5-flash-lite"}
-TRAMOS = ((0, 50), (50, 70), (70, 90), (90, 101))  # los de las anclas de la regla 13
+    """Etiqueta del anotador -> clase: NO_EFFECT es neutro y NO_CLEAR_EFFECT, UNKNOWN."""
+    return A_SIGNO[e["efecto"]]
+
+
+# Calibración: el otro modelo con el que se compara cada uno para confianza_final (la pareja de producción)
+SEGUNDO_MODELO = {"groq-gpt-oss-120b": "gemini-3.5-flash-lite", "gemini-3.5-flash-lite": "groq-gpt-oss-120b"}
+TRAMOS = ((0, 50), (50, 70), (70, 90), (90, 101))
 UMBRALES = (0, 50, 60, 70, 80, 90)
 
 
@@ -70,12 +64,12 @@ def gold_casos():
 
 
 def construir_preguntas(ruta_excel):
-    """(id, pregunta v1_proceso_gen) de cada caso del gold set, en su orden."""
+    """(id, pregunta) de cada caso del gold set, en su orden."""
     sys.path.insert(0, str(AQUI))
     from seleccionar_gold import _universo, caso_id
-    # por clave: vale también tras --actualizar; las dos listas de CIMUS, porque el gold v4 tiene genes up y down
-    elegidos = {caso_id(c): c for lista in ("Activada", "Suprimida") for c in _universo(ruta_excel, lista)[0]}
-    return [(g["id"], construir_prompt(elegidos[g["caso"]], CONFIG)) for g in gold_casos()]
+    # por clave, así vale también después de seleccionar_gold.py; las dos listas, porque el gold tiene genes up y down
+    elegidos = {caso_id(c): c for c in _universo(ruta_excel)[0]}
+    return [(g["id"], construir_prompt(elegidos[g["caso"]])) for g in gold_casos()]
 
 
 def ejecutar_modelo(modelo, ruta_excel, presupuesto=None):
@@ -108,10 +102,10 @@ def ejecutar_modelo(modelo, ruta_excel, presupuesto=None):
 
 
 # ------------------------------------------------------------------------------------------------ informe
-def _regla_go_v2(s, caso):
-    """v2_veredicto: como en producción (resultados.ruta_v2), un veredicto con cita verificada que coincide con la
+def _regla_go(s, caso):
+    """Como en producción (resultados.regla_ruta), un veredicto con cita verificada que coincide con la
     Polaridad_GO del caso se acepta aunque su confianza no llegue al umbral."""
-    if (s.get("version") != V2_VEREDICTO or s["signo"] != "UNKNOWN" or not caso["polaridad_go"]
+    if (s.get("version") != VERSION_PROMPT or s["signo"] != "UNKNOWN" or not caso["polaridad_go"]
             or caso["factor_ruta_go"] is None or not s.get("cita_verificada") or s.get("signo_llm") not in ("+1", "-1")):
         return s
     if {"+1": 1, "-1": -1}[s["signo_llm"]] * caso["factor_ruta_go"] != int(caso["polaridad_go"]):
@@ -225,7 +219,7 @@ def informe(ruta_etiquetas, ruta_doble=None):
             if linea is None:
                 continue
             respondidas += 1
-            s = _regla_go_v2(validar_respuesta(_Prompt(gid, prompts[gid], claves[gid]), linea["respuesta_cruda"]), gold[gid])
+            s = _regla_go(validar_respuesta(_Prompt(gid, prompts[gid], claves[gid]), linea["respuesta_cruda"]), gold[gid])
             salidas.setdefault(modelo, {})[gid] = s
             n_json += "json_invalido" not in s["motivos"]
             if s.get("signo_llm") in ("+1", "-1", "neutro"):
@@ -277,7 +271,7 @@ def _ece(puntos):
 
 def calibracion(salidas, verdad):
     """Para cada modelo, sobre los signos que da (+1/−1): ¿acierta un X % de las respuestas con confianza X?
-    Con pocos signos (13 en el gold set provisional) es orientativa."""
+    Con pocos signos es orientativa."""
     print("\nCalibración de los signos dados (acierto = mismo signo que la etiqueta)")
     for modelo, sal in salidas.items():
         otro = salidas.get(SEGUNDO_MODELO.get(modelo), {})
@@ -290,7 +284,7 @@ def calibracion(salidas, verdad):
             puntos = [(f(gid, s), s["signo"] == verdad[gid]) for gid, s in firmadas]
             puntos = [(c, ok) for c, ok in puntos if c is not None]
             if not puntos:
-                print(f"    {nombre}: sin datos (respuestas anteriores a la regla 13)")
+                print(f"    {nombre}: sin datos")
                 continue
             auc = _auroc(puntos)
             print(f"    {nombre}: n={len(puntos)}, media {sum(c for c, _ in puntos) / len(puntos):.0f}, acierto "
@@ -310,7 +304,7 @@ def calibracion(salidas, verdad):
 
 
 class _Prompt:
-    """Lo mínimo que necesita validar_respuesta para v1_proceso_gen, sin volver a leer la Fase 1."""
+    """Lo mínimo que necesita validar_respuesta, sin volver a leer la Fase 1."""
 
     def __init__(self, gid, p, clave_registro):
         version, gen, pmid, nucleo, _, _ = clave_registro

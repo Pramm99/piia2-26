@@ -1,20 +1,20 @@
 """ADR-004: registro de respuestas y ejecución reanudable, con el cliente simulado (sin red)."""
 import json
 
-from conftest import caso, respuesta_v2
+from conftest import caso, respuesta
 from consulta_gen.cliente import ClienteSimulado
 from consulta_gen.ejecucion import ejecutar
-from consulta_gen.prompt import CONFIG_V2, construir_prompt
+from consulta_gen.prompt import construir_prompt
 from consulta_gen.registro import Registro, clave
 
 
 def _preguntas():
-    return [construir_prompt(caso(pmid=str(i)), CONFIG_V2) for i in (1, 2, 3)]
+    return [construir_prompt(caso(pmid=str(i))) for i in (1, 2, 3)]
 
 
 def _responder(lista):
     """Responde a todas las preguntas de la lista con un +1 verificable."""
-    items = [{"q": f"Q{i}", **json.loads(respuesta_v2())} for i in range(1, len(lista.preguntas) + 1)]
+    items = [{"q": f"Q{i}", **json.loads(respuesta())} for i in range(1, len(lista.preguntas) + 1)]
     return json.dumps({"respuestas": items})
 
 
@@ -46,14 +46,14 @@ def test_limite_diario_deja_pendiente_no_unknown(tmp_path):
 
 def test_pregunta_saltada_queda_pendiente(tmp_path):
     def solo_la_primera(lista):
-        return json.dumps({"respuestas": [{"q": "Q1", **json.loads(respuesta_v2())}]})
+        return json.dumps({"respuestas": [{"q": "Q1", **json.loads(respuesta())}]})
     _, resumen = ejecutar(_preguntas(), [ClienteSimulado("sim", solo_la_primera)], Registro(tmp_path / "r.jsonl"),
                           cada=0)
     assert resumen.pendientes == 2
 
 
 def test_la_huella_cambia_con_el_prompt():
-    a, b = construir_prompt(caso(), CONFIG_V2), construir_prompt(caso(frases=("Other text here.",)), CONFIG_V2)
+    a, b = construir_prompt(caso()), construir_prompt(caso(frases=("Other text here.",)))
     assert clave(a, "m")[:5] == clave(b, "m")[:5] and clave(a, "m")[5] != clave(b, "m")[5]
 
 

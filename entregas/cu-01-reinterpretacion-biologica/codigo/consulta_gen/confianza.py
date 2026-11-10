@@ -1,6 +1,6 @@
 """Porcentaje final de seguridad de un signo (confianza_final). No llama a ningún LLM.
 
-La confianza que declara el modelo (confianza_modelo, regla 13 del prompt) suele estar inflada, así que se
+La confianza que declara el modelo (confianza_modelo, regla 12 del prompt) suele estar inflada, así que se
 corrige con tres señales que no dependen de lo que el modelo diga de sí mismo:
   - el tipo de evidencia que declara (ganancia o pérdida de función > medida directa > contexto o correlación);
   - la frase citada: título o primeras frases (introducción) frente a resultados;
@@ -8,10 +8,10 @@ corrige con tres señales que no dependen de lo que el modelo diga de sí mismo:
 
 confianza_final = confianza_modelo × factor_evidencia × factor_frase × factor_acuerdo, entre 0 y 100.
 
-Los factores son PROVISIONALES: salen del benchmark v2 (43 signos de los tres modelos de API, 2026-11-09) como
-el cociente entre el acierto de cada grupo y el del mejor, y se acercan a 1 la mitad del camino porque las
-muestras son pequeñas. Cuando haya etiquetas de CIMUS se sustituirán por una regresión logística ajustada en el
-gold set. Acierto observado en v2:
+Los factores son PROVISIONALES: salen de una prueba del 2026-11-09 con un prompt anterior (43 signos de tres
+modelos de API sobre 60 casos) como el cociente entre el acierto de cada grupo y el del mejor, y se acercan a 1
+la mitad del camino porque las muestras son pequeñas. Cuando haya etiquetas de CIMUS se sustituirán por una
+regresión logística ajustada en el gold set. Acierto observado en esa prueba:
   - evidencia: ganancia 17/21 (81 %), pérdida 8/12 (67 %), medida directa 4/7 (57 %), contexto o correlación 1/3;
   - frase: [T], [S1] o [S2] 4/7 (57 %), [S3] o después 26/36 (72 %);
   - otro modelo: mismo signo 44/54 (81 %), UNKNOWN 15/30 (50 %), signo opuesto 1/2.
@@ -21,8 +21,6 @@ Solo los signos tienen confianza_final: un UNKNOWN no entra en la agregación y 
 from typing import Any, Dict, Optional
 
 from .esquema import SIGNO_DESCONOCIDO
-
-CONFIANZA_SIN_DATO = 70  # respuestas sin confianza_modelo (anteriores a la regla 13): el acierto medio de v2 (30/43)
 
 FACTOR_EVIDENCIA = {
     "gain_of_function": 1.0,
@@ -52,12 +50,11 @@ def acuerdo(salida: Dict[str, Any], otra: Optional[Dict[str, Any]]) -> str:
 
 
 def confianza_final(salida: Dict[str, Any], otra: Optional[Dict[str, Any]] = None) -> Optional[int]:
-    """salida: lo que devuelve validar_respuesta (v1); otra: la del otro modelo para la misma pregunta, o None.
+    """salida: lo que devuelve validar_respuesta; otra: la del otro modelo para la misma pregunta, o None.
     Devuelve un entero 0-100, o None si la respuesta no tiene signo."""
     if salida.get("signo", SIGNO_DESCONOCIDO) == SIGNO_DESCONOCIDO:
         return None
-    base = salida.get("confianza_modelo")
-    base = CONFIANZA_SIN_DATO if base is None else base
+    base = salida["confianza_modelo"]  # una respuesta válida siempre la trae (si no, es json_invalido)
     f_evidencia = FACTOR_EVIDENCIA.get(salida.get("tipo_evidencia"), FACTOR_EVIDENCIA["none"])
     f_frase = FACTOR_FRASE_INICIAL if salida.get("id_frase") in FRASES_INICIALES else 1.0
     valor = base * f_evidencia * f_frase * FACTOR_ACUERDO[acuerdo(salida, otra)]

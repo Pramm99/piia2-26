@@ -11,7 +11,7 @@ def configurar_sesion():
     retries = Retry(
         total=5, backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=frozenset(["GET", "POST"]),  # la v1 no reintentaba POST
+        allowed_methods=frozenset(["GET", "POST"]),  # también POST: las peticiones a NCBI lo son
     )
     s.mount("https://", HTTPAdapter(max_retries=retries))
     return s
