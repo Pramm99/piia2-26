@@ -5,6 +5,8 @@ import pandas as pd
 
 from ._extraer_info import DESTINOS_SIN_LLM
 from .esquema import COLUMNAS_OBLIGATORIAS, HOJA_EVIDENCIAS, Evidencia
+
+ESTADO_ACTIVADA = "Activada"  # valor de Estado_Original en el Excel de la Fase 1
 from .limpieza import limpiar_abstract, normalizar_pmid, recortar, valor_texto
 
 
@@ -20,6 +22,11 @@ def pendientes_de_llm(df: pd.DataFrame) -> pd.DataFrame:
     if "Destino" not in df.columns:
         return df
     return df[~df["Destino"].isin(DESTINOS_SIN_LLM)]
+
+
+def solo_activadas(df: pd.DataFrame) -> pd.DataFrame:
+    """Solo cuentan las rutas activadas de CIMUS; las suprimidas fueron una prueba (decisión del 2026-11-04)."""
+    return df[df["Estado_Original"].astype(str).str.strip() == ESTADO_ACTIVADA]
 
 
 def validar_columnas(columnas) -> None:

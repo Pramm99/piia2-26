@@ -1,6 +1,6 @@
 ---
 description: Control de alucinaciones mediante un esquema de salida con signo, estado y motivos, reglas automáticas de verificación y contraste con Gene Ontology y entre dos modelos.
-state: Aceptado (validación implementada el 2026-11-08; falta el contraste entre modelos y con GO)
+state: Aceptado (validación implementada el 2026-11-08; contraste entre modelos y con GO, el 2026-11-10)
 ---
 
 # ADR 003 - Control de Alucinaciones: Signo, Estado y Motivos en Lugar de Predicciones Forzadas
@@ -47,8 +47,8 @@ El control se organiza en tres capas:
    * **Coherencia:** una respuesta internamente incoherente (un efecto con motivo de `UNKNOWN`, `NO_CLEAR_EFFECT` sin motivo, un efecto basado en `correlation_or_marker` o un efecto con confianza por debajo de 50) conserva el signo, añade `incoherencia_respuesta` y queda en `revisar`.
    * **Confianza baja:** un signo que sobrevive a la verificación de la cita y tiene una `confianza_modelo` por debajo del umbral (`UMBRAL_CONFIANZA = 70` en `esquema.py`, provisional) **conserva el signo**, añade `baja_confianza` y queda en `revisar`. La confianza declarada nunca convierte un signo en `UNKNOWN`: solo pide la revisión del experto. Una confianza que no sea un entero de 0 a 100 da `json_invalido`.
 3. **Contraste con fuentes independientes:**
-   * **Gene Ontology:** si el signo del modelo difiere de `Polaridad_GO` (cuando esta existe), se añade `discrepancia_polaridad_GO`.
-   * **Dos modelos:** cada caso se evalúa con un **modelo principal** y un **modelo secundario**, ambos gratuitos. El `signo` final es el del principal y se registran las respuestas de los dos. Cualquier diferencia entre ellos (signos opuestos, o uno `UNKNOWN` y el otro no) añade el motivo `discrepancia_entre_modelos` y deja el caso en `revisar`. Qué modelo es el principal y cuál el secundario se fija en el [ADR-005](adr-005-eleccion-modelo-coste-cero.md), a partir del benchmark.
+   * **Gene Ontology:** si el signo sobre una ruta difiere de la `Polaridad_GO` de la anotación de ese mismo gen, ruta y PMID (cuando es `+1` o `-1` y no hay signos distintos entre las filas del PMID), se añade `discrepancia_polaridad_GO` a esa fila y queda en `revisar`.
+   * **Dos modelos:** cada caso se evalúa con un **modelo principal** y un **modelo secundario**, ambos gratuitos. El `signo` final es el del principal y se registran las respuestas de los dos. Cualquier diferencia entre ellos (signos opuestos, o uno `UNKNOWN` y el otro no) añade el motivo `discrepancia_entre_modelos` y deja el caso en `revisar`. Una respuesta del secundario con `json_invalido` no cuenta como discrepancia: no dice nada del abstract, solo que ese modelo falló el formato. Si el principal todavía no ha respondido (límite diario), el caso queda `pendiente`, nunca `UNKNOWN`. Qué modelo es el principal y cuál el secundario se fija en el [ADR-005](adr-005-eleccion-modelo-coste-cero.md), a partir del benchmark.
 
 **Porcentaje final (`confianza_final`).** La confianza declarada suele estar inflada, así que el porcentaje que se muestra junto al signo y al motivo se corrige con señales que no dependen de lo que el modelo diga de sí mismo (`codigo/consulta_gen/confianza.py`):
 
@@ -114,7 +114,7 @@ Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga 
   * `codigo/consulta_gen/confianza.py`: `confianza_final` y sus factores provisionales.
   * `codigo/evaluacion/evaluar_gold.py`: calibración de `confianza_modelo` y `confianza_final` sobre el *gold set*.
   * `codigo/extraer_info/polaridad.py`: cierre `sin_evidencia` de los pares sin abstract.
-  * Pendiente: el contraste entre modelos y con `Polaridad_GO` (necesita el cliente LLM).
+  * `codigo/consulta_gen/resultados.py`: contraste entre modelos y con `Polaridad_GO`, y salida `fase2_resultados.xlsx` (commit de la Fase 2 del 2026-11-10).
 * **Salidas estructuradas:**
   * Groq: [https://console.groq.com/docs/structured-outputs](https://console.groq.com/docs/structured-outputs)
   * Gemini API: [https://ai.google.dev/gemini-api/docs/structured-output](https://ai.google.dev/gemini-api/docs/structured-output)

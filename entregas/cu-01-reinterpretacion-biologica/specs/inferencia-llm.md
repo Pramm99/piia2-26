@@ -3,12 +3,13 @@
 ## Qué hay que construir
 Un módulo de inferencia (Fase 2, `codigo/consulta_gen/`) que, a partir de la hoja `Con_abstract` del Excel de la Fase 1, determine para cada caso si el gen **activa** (`+1`) o **inhibe** (`-1`) la ruta según el abstract, o si la evidencia no lo permite (`UNKNOWN`), y produzca una salida validada y trazable.
 
-Hay **dos versiones del prompt**, que se comparan en el benchmark ([ADR-005](../decisions/adr-005-eleccion-modelo-coste-cero.md)) sobre el mismo *gold set*:
+Hay **tres versiones del prompt**, que se comparan en el benchmark ([ADR-005](../decisions/adr-005-eleccion-modelo-coste-cero.md)) sobre el mismo *gold set*:
 
 | Versión | Unidad de pregunta (caso) | Qué se pregunta | Uso |
 |---|---|---|---|
 | `v0_original` | (gen, ruta, PMID): una fila de `Con_abstract` | El efecto del gen sobre la ruta del Excel, en español, con la dirección de scRNA-seq y el abstract recortado a 1.800 caracteres | **Solo benchmark**: es el prompt de partida, congelado, como línea base |
-| `v1_proceso` | (gen, PMID, proceso núcleo) | El efecto del gen sobre el proceso núcleo del término estrecho (sin «positive/negative regulation of»), en inglés, con el abstract completo en frases numeradas | Candidata a producción |
+| `v1_proceso` | (gen, PMID, proceso núcleo) | El efecto del gen sobre el proceso núcleo del término estrecho (sin «positive/negative regulation of»), en inglés, con el abstract completo en frases numeradas | Benchmark (una llamada por pregunta) |
+| `v1_proceso_gen` | La misma pregunta que `v1_proceso` | Las mismas preguntas, enviadas juntas por gen y troceadas según el límite por llamada de cada modelo, con salida en lista (regla 14) | **Producción** (`ejecutar_fase2`) y benchmark |
 
 El flujo es:
 
@@ -26,7 +27,7 @@ El flujo es:
    * Mensaje de usuario: el abstract primero, en frases `[T]`, `[S1]…[Sn]`, completo y sin recortes; después el gen y sus alias, el proceso y la pregunta.
    * Salida JSON con esquema estricto (`ESQUEMA_V1`), en este orden: `id_frase`, `justificacion_literal` (≥6 palabras copiadas de esa frase), `tipo_evidencia`, `organismo`, `tipo_celular`, `razonamiento_corto`, `confianza` (entero de 0 a 100), `efecto` (`INCREASES` / `DECREASES` / `NO_CLEAR_EFFECT`) y `motivo_unknown`.
    * Variante V2, desactivada por defecto: añade la frase en la que la Fase 1 vio el gen y el proceso (`Frase_fuente`). Solo se activa si mejora a V1 en el conjunto de desarrollo.
-4. **Llamada a dos modelos** (principal y secundario, ADR-005) mediante un cliente independiente del proveedor (Cerebras, Groq, Gemini u Ollama), con temperatura 0 y `seed` cuando el proveedor lo permita y salida JSON estructurada.
+4. **Llamada a dos modelos** (principal y secundario, ADR-005; en `v1_proceso_gen`, una llamada por gen o por trozo) mediante un cliente independiente del proveedor (Cerebras, Groq, Gemini u Ollama), con temperatura 0 y `seed` cuando el proveedor lo permita y salida JSON estructurada.
 5. **Validación de cada respuesta** según el [ADR-003](../decisions/adr-003-control-alucinaciones-unknown.md):
    * se extrae el JSON (tolerando vallas ` ```json ` y texto alrededor);
    * se comprueban los campos y valores del esquema (`json_invalido`);
@@ -34,12 +35,20 @@ El flujo es:
    * se traducen los motivos del modelo a los del ADR-003, y las respuestas incoherentes pasan a `revisar` con `incoherencia_respuesta` (también un signo con confianza por debajo de 50, que contradice la regla 13);
    * se guarda la confianza como `confianza_modelo`. Debe ser un entero de 0 a 100 (si no, `json_invalido`); si falta, como en las respuestas registradas antes de la regla 13, queda vacía y no tiene efecto. Un signo con cita verificada y `confianza_modelo` por debajo del umbral (`UMBRAL_CONFIANZA = 70` en `esquema.py`, provisional hasta medir la calibración en el benchmark) **conserva el signo** y pasa a `revisar` con `baja_confianza`.
 6. **Composición del signo sobre cada ruta** (solo `v1_proceso`). Se calcula `signo_ruta = efecto × factor`, donde el factor es `signo_camino(núcleo del término → núcleo de la ruta) × polaridad de la ruta` (ver *Composición del signo*).
-7. **Contraste y salida final por caso:**
+7. **Contraste y salida final** (`resultados.py`), por pregunta y por ruta:
    * `signo`: el del modelo principal;
    * `estado`: `resuelto` / `revisar` / `no_concluyente`;
    * `motivos`: se añade `discrepancia_entre_modelos` si los dos modelos difieren, y `discrepancia_polaridad_GO` si el signo sobre la ruta difiere de `Polaridad_GO` cuando esta existe;
+   * una respuesta del secundario con `json_invalido` no cuenta como discrepancia, y una pregunta que el principal aún no ha respondido queda `pendiente`;
+   * los casos cerrados por el filtro previo salen como `UNKNOWN` con `no_menciona_gen`;
    * `confianza_final` (`confianza.py`, solo para los signos): la `confianza_modelo` del principal corregida por el tipo de evidencia, la posición de la frase citada y el acuerdo con el modelo secundario (factores provisionales en el ADR-003). Es el porcentaje que se muestra junto al signo y al motivo.
-8. **Registro:** cada respuesta se añade al registro `respuestas_llm.jsonl` en cuanto llega ([ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md)), con la versión del prompt. Los casos ya registrados con el mismo prompt no se vuelven a enviar.
+8. **Registro:** cada respuesta se añade al registro `respuestas_llm.jsonl` (y cada llamada a `llamadas_llm.jsonl`) en cuanto llega ([ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md)), con la versión del prompt. Los casos ya registrados con el mismo prompt no se vuelven a enviar.
+9. **Salida:** `codigo/data/fase2_resultados.xlsx`, regenerable desde el registro, con tres hojas:
+   * `Por_ruta`, una fila por (gen, ruta, PMID, proceso): `Signo_ruta`, `Estado`, `Motivos`, `Confianza_final`, `Polaridad_GO`, el `Destino` del triaje, los signos de los dos modelos y la cita. Es la entrada del scoring;
+   * `Preguntas`, una fila por pregunta, con la respuesta completa del principal (efecto, cita, tipo de evidencia, organismo, tipo celular, razonamiento y confianzas);
+   * `Resumen`, con el recuento por estado y signo.
+
+Se ejecuta desde `codigo/` con `python -m consulta_gen ejecutar [principal] [secundario|ninguno] [gen] [GO_ID] [excel]`. Solo se procesan las rutas activadas y los pares que no resolvió el triaje de la Fase 1 (`aceptar_GO` y `sin_evidencia` no llegan al LLM). Si se agota el límite diario de un modelo, sus preguntas quedan pendientes y basta con volver a lanzar el mismo comando.
 
 La **agregación** de varios casos del mismo par gen–ruta (varios PMIDs, posiblemente con signos distintos) y el cálculo del *Net Pathway Score* quedan fuera de esta spec: se definirán en la spec de scoring. Propuesta de partida: una mayoría ponderada en código en la que cada respuesta pesa su `confianza_final` (en lugar de los pesos fijos de 1 para experimento directo en humano y 0,5 para ratón, otra célula o afirmación de contexto del informe «Prompt y modelos gratuitos Fase 2»), sin voto de los `UNKNOWN`; una minoría que pese ⅓ o más manda el par a `revisar`.
 
@@ -82,7 +91,7 @@ Tres decisiones del prompt buscan que la respuesta dependa solo del abstract:
 * **Sin repetición de llamadas:** antes de llamar se consulta el registro; un caso con la misma clave y la misma huella de prompt no se vuelve a enviar.
 
 ## Criterios de aceptación
-Marcados ✅ los que ya cumple el código (commit `1738e0b`, comprobados con datos de la ejecución completa y respuestas simuladas; la suite de `pytest` sigue pendiente).
+Marcados ✅ los que ya cumple el código (del commit `1738e0b` al de la Fase 2 del 2026-11-10, comprobados con datos de la ejecución completa y respuestas simuladas; la suite de `pytest` sigue pendiente).
 
 * [x] ✅ **Línea base congelada:** los prompts de `v0_original` son idénticos byte a byte a los del código anterior (4.927 filas comprobadas).
 * [x] ✅ **Contenido del prompt `v1_proceso`:** no contiene `Activada`, `Suprimida`, `UP`, `DOWN`, el valor de `Polaridad_GO` ni el contexto HNSC, e incluye el abstract limpio completo en frases numeradas.
@@ -95,8 +104,8 @@ Marcados ✅ los que ya cumple el código (commit `1738e0b`, comprobados con dat
 * [x] ✅ **Incoherencia:** un efecto con `motivo_unknown` distinto de `none` conserva el signo y da `estado = revisar` con `incoherencia_respuesta`.
 * [x] ✅ **Confianza baja:** un `INCREASES` con cita verificada y `confianza = 65` conserva `signo = +1` y da `estado = revisar` con `baja_confianza`; con `confianza = 40` da `incoherencia_respuesta`; con `confianza = 101`, `"80"` o `72.5` da `json_invalido`; sin el campo, `confianza_modelo` queda vacía y el estado no cambia (`research_notes/Coste por gen Fase 2/probar_confianza.py`, 30/30).
 * [x] ✅ **Composición:** un `DECREASES` sobre «NK cell mediated cytotoxicity» da −1 en «leukocyte mediated immunity» y también en «regulation of immune effector process» (tratada como el proceso).
-* [ ] **Discrepancia entre modelos:** con el principal respondiendo `+1` y el secundario `UNKNOWN` (ambos válidos), la salida es `signo = +1`, `estado = revisar`, `motivos` con `discrepancia_entre_modelos`, y se guardan `signo_modelo_principal` y `signo_modelo_secundario`.
-* [ ] **Discrepancia con GO:** un `+1` válido frente a `Polaridad_GO = -1` da `estado = revisar` con `discrepancia_polaridad_GO`, manteniendo `signo = +1`.
-* [ ] **Reanudación:** una segunda ejecución con el registro completo y el mismo prompt realiza **0 llamadas** a los modelos.
-* [ ] **Fallo de red:** si el cliente simulado devuelve `429` de forma persistente, el caso queda pendiente (no se escribe como `UNKNOWN`) y el resto de casos continúa.
-* [ ] **Pruebas desacopladas:** la suite de `pytest` cubre todos los criterios anteriores con un cliente de LLM simulado, sin conexión a internet.
+* [x] ✅ **Discrepancia entre modelos:** con el principal respondiendo `+1` y el secundario `UNKNOWN` (ambos válidos), la salida es `signo = +1`, `estado = revisar`, `motivos` con `discrepancia_entre_modelos`, y se guardan `signo_modelo_principal` y `signo_modelo_secundario`.
+* [x] ✅ **Discrepancia con GO:** un `+1` válido frente a `Polaridad_GO = -1` da `estado = revisar` con `discrepancia_polaridad_GO`, manteniendo `signo = +1`.
+* [x] ✅ **Reanudación:** una segunda ejecución con el registro completo y el mismo prompt realiza **0 llamadas** a los modelos.
+* [x] ✅ **Fallo de red:** si el cliente simulado devuelve `429` de forma persistente, el caso queda pendiente (no se escribe como `UNKNOWN`) y el resto de casos continúa.
+* [ ] **Pruebas desacopladas:** la suite de `pytest` cubre todos los criterios anteriores con un cliente de LLM simulado, sin conexión a internet. Hoy los cubren, sin red y con el cliente simulado, los scripts `probar_fase2.py` (20/20), `probar_opciones.py` (17/17) y `probar_confianza.py` (30/30) de `research_notes/Coste por gen Fase 2/`, fuera del repositorio; falta pasarlos a `pytest`.

@@ -22,7 +22,9 @@ MIN_PALABRAS_CITA = 6  # una cita más corta no demuestra nada (CD7 aparece dent
 # ahí es incoherencia_respuesta. El umbral es provisional: se ajustará con el gold set.
 UMBRAL_CONFIANZA = 70
 MIN_CONFIANZA_SIGNO = 50
-MOTIVOS_REVISAR = ("incoherencia_respuesta", "baja_confianza")  # mantienen el signo y piden revisión
+# Mantienen el signo y piden revisión (los dos últimos los añade el contraste de resultados.py)
+MOTIVOS_REVISAR = ("incoherencia_respuesta", "baja_confianza", "discrepancia_entre_modelos", "discrepancia_polaridad_GO")
+ESTADO_PENDIENTE = "pendiente"  # el modelo principal aún no ha respondido (límite del plan gratuito): no es UNKNOWN
 
 HOJA_EVIDENCIAS = "Con_abstract"
 

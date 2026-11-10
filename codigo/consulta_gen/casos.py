@@ -34,8 +34,15 @@ def _terminos(fila) -> List[str]:
 
 
 def construir_casos(df: pd.DataFrame) -> Tuple[List[CasoProceso], Dict[str, int]]:
-    """(casos, recuento). Los casos cuyo texto no nombra al gen se devuelven aparte en el recuento
-    (motivo no_menciona_gen, sin llamar al LLM) y no entran en la lista."""
+    """(casos, recuento). Los casos cuyo texto no nombra al gen se cuentan aparte (motivo no_menciona_gen,
+    sin llamar al LLM) y no entran en la lista."""
+    casos, _, cuenta = construir_casos_y_cerrados(df)
+    return casos, cuenta
+
+
+def construir_casos_y_cerrados(df: pd.DataFrame) -> Tuple[List[CasoProceso], List[CasoProceso], Dict[str, int]]:
+    """(casos para el LLM, casos cerrados con no_menciona_gen, recuento). Los cerrados se devuelven para que
+    la salida final de la Fase 2 los incluya como UNKNOWN."""
     genes = sorted({valor_texto(g).upper() for g in df["Gen"]})
     mg = datos_mygene(genes)
     patrones = {g: patron_gen(g, mg[g]["Alias"], mg[g]["Nombre"]) for g in genes}
@@ -67,17 +74,16 @@ def construir_casos(df: pd.DataFrame) -> Tuple[List[CasoProceso], Dict[str, int]
             c["rutas"].setdefault(ruta, (ruta, valor_texto(fila.get("Ruta_Nombre")),
                                          None if pol_r is None else s * pol_r))
 
-    lista, sin_gen = [], 0
+    lista, cerrados = [], []
     for c in casos.values():
-        if not menciona_gen(c["texto"], patrones[c["gen"]]):
-            sin_gen += 1  # no_menciona_gen: se cierra sin llamar al LLM
-            continue
-        lista.append(CasoProceso(
+        caso = CasoProceso(
             gen=c["gen"], alias=_alias(c["gen"], mg[c["gen"]]), pmid=c["pmid"], titulo=c["titulo"],
             frases=c["frases"], nucleo_id=c["nucleo"], nucleo_nombre=nombre(c["nucleo"]),
             rutas=tuple(c["rutas"].values()), termino_origen=c["termino"], respaldo_ruta=c["respaldo"],
-            frase_fuente=c["frase_fuente"]))
-    cuenta.update({"casos": len(lista), "casos_no_menciona_gen": sin_gen,
+            frase_fuente=c["frase_fuente"])
+        # no_menciona_gen: se cierra sin llamar al LLM
+        (lista if menciona_gen(c["texto"], patrones[c["gen"]]) else cerrados).append(caso)
+    cuenta.update({"casos": len(lista), "casos_no_menciona_gen": len(cerrados),
                    "casos_respaldo_ruta": sum(c.respaldo_ruta for c in lista),
                    "casos_solo_rutas_sin_direccion": sum(all(f is None for *_, f in c.rutas) for c in lista)})
-    return lista, cuenta
+    return lista, cerrados, cuenta
