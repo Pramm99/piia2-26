@@ -9,9 +9,9 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 
-from .esquema import (EFECTO_A_SIGNO, ESQUEMA_V1, ESTADO_NO_CONCLUYENTE, ESTADO_RESUELTO, ESTADO_REVISAR,
-                      MIN_PALABRAS_CITA, MOTIVO_MODELO_A_ADR, SIGNO_DESCONOCIDO, SIGNO_NEGATIVO,
-                      SIGNO_POSITIVO, VERSIONES_PROCESO, PromptLista, PromptLLM)
+from .esquema import (CAMPOS_NUEVOS_V1, EFECTO_A_SIGNO, ESQUEMA_V1, ESTADO_NO_CONCLUYENTE, ESTADO_RESUELTO, ESTADO_REVISAR,
+                      MIN_CONFIANZA_SIGNO, MIN_PALABRAS_CITA, MOTIVO_MODELO_A_ADR, MOTIVOS_REVISAR, SIGNO_DESCONOCIDO,
+                      SIGNO_NEGATIVO, SIGNO_POSITIVO, UMBRAL_CONFIANZA, VERSIONES_PROCESO, PromptLista, PromptLLM)
 from .limpieza import forma_comparacion
 
 _VALLAS = re.compile(r"```(?:json)?", re.IGNORECASE)
@@ -49,12 +49,16 @@ def verificar_cita(cita: str, texto: str) -> bool:
     return len(c.split()) >= MIN_PALABRAS_CITA and f" {c} " in f" {forma_comparacion(texto)} "
 
 
-def _cerrar(signo: str, motivos: List[str], cita_ok: bool) -> Dict[str, Any]:
-    """Aplica el UNKNOWN forzado por cita y decide el estado."""
+def _cerrar(signo: str, motivos: List[str], cita_ok: bool, confianza: Optional[int] = None,
+            umbral: int = UMBRAL_CONFIANZA) -> Dict[str, Any]:
+    """Aplica el UNKNOWN forzado por cita, la baja confianza (solo a un signo que sobrevive a la cita) y decide
+    el estado. confianza None = respuesta sin el campo (v0 o registros anteriores a la regla 13)."""
     signo_llm = signo
     if signo != SIGNO_DESCONOCIDO and not cita_ok:
         signo, motivos = SIGNO_DESCONOCIDO, motivos + ["cita_no_verificada"]
-    if "incoherencia_respuesta" in motivos:
+    if signo != SIGNO_DESCONOCIDO and confianza is not None and MIN_CONFIANZA_SIGNO <= confianza < umbral:
+        motivos = motivos + ["baja_confianza"]
+    if any(m in MOTIVOS_REVISAR for m in motivos):
         estado = ESTADO_REVISAR
     else:
         estado = ESTADO_RESUELTO if signo != SIGNO_DESCONOCIDO else ESTADO_NO_CONCLUYENTE
@@ -79,24 +83,39 @@ def _texto_frase(caso, id_frase: str) -> str:
     return ""
 
 
-def _validar_v1(prompt: PromptLLM, crudo: Dict[str, Any]) -> Dict[str, Any]:
+def _leer_confianza(valor: Any) -> Optional[int]:
+    """Entero 0-100 (también 85.0); ausente -> None. Cualquier otra cosa -> ValueError (json_invalido)."""
+    if valor is None:
+        return None
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not 0 <= valor <= 100 or valor != int(valor):
+        raise ValueError(f"confianza fuera de 0-100: {valor!r}")
+    return int(valor)
+
+
+def _validar_v1(prompt: PromptLLM, crudo: Dict[str, Any], umbral: int = UMBRAL_CONFIANZA) -> Dict[str, Any]:
     caso = prompt.evidencia
     props = ESQUEMA_V1["properties"]
-    faltan = [k for k in ESQUEMA_V1["required"] if k not in crudo]
+    faltan = [k for k in ESQUEMA_V1["required"] if k not in crudo and k not in CAMPOS_NUEVOS_V1]
     fuera = [k for k, p in props.items() if "enum" in p and k in crudo and crudo[k] not in p["enum"]]
+    try:
+        confianza = _leer_confianza(crudo.get("confianza"))
+    except ValueError:
+        fuera.append("confianza")
     if faltan or fuera:
-        return {**_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "efecto": "", "rutas": []}
+        return {**_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "efecto": "", "confianza_modelo": None, "rutas": []}
 
     efecto, motivo_modelo = crudo["efecto"], crudo["motivo_unknown"]
     id_frase = str(crudo["id_frase"]).strip().strip("[]")
     cita = str(crudo["justificacion_literal"]).strip()
     signo = _A_SIGNO[EFECTO_A_SIGNO[efecto]]
     motivos = [MOTIVO_MODELO_A_ADR[motivo_modelo]] if motivo_modelo != "none" else []
-    # Combinaciones incoherentes -> revisar (se conservan para el análisis de errores)
+    # Combinaciones incoherentes -> revisar (se conservan para el análisis de errores). Un signo con confianza
+    # por debajo de MIN_CONFIANZA_SIGNO contradice la regla 13 (debía ser NO_CLEAR_EFFECT).
     if (efecto != "NO_CLEAR_EFFECT" and motivo_modelo != "none") or (efecto == "NO_CLEAR_EFFECT" and motivo_modelo == "none") \
-            or (efecto != "NO_CLEAR_EFFECT" and crudo["tipo_evidencia"] == "correlation_or_marker"):
+            or (efecto != "NO_CLEAR_EFFECT" and crudo["tipo_evidencia"] == "correlation_or_marker") \
+            or (efecto != "NO_CLEAR_EFFECT" and confianza is not None and confianza < MIN_CONFIANZA_SIGNO):
         motivos.append("incoherencia_respuesta")
-    salida = _cerrar(signo, motivos, verificar_cita(cita, _texto_frase(caso, id_frase)))
+    salida = _cerrar(signo, motivos, verificar_cita(cita, _texto_frase(caso, id_frase)), confianza, umbral)
 
     # Signo sobre cada ruta del caso: efecto × factor (None = ruta «regulation of X» sin dirección)
     e = EFECTO_A_SIGNO[efecto] if salida["signo"] != SIGNO_DESCONOCIDO else None
@@ -107,20 +126,23 @@ def _validar_v1(prompt: PromptLLM, crudo: Dict[str, Any]) -> Dict[str, Any]:
     return {**salida, "efecto": efecto, "id_frase": id_frase, "justificacion_literal": cita,
             "tipo_evidencia": crudo["tipo_evidencia"], "organismo": crudo["organismo"],
             "tipo_celular": crudo["tipo_celular"], "razonamiento_corto": str(crudo["razonamiento_corto"]).strip(),
+            "confianza_modelo": confianza,
             "nucleo_id": caso.nucleo_id, "nucleo_nombre": caso.nucleo_nombre, "rutas": rutas}
 
 
-def validar_respuesta(prompt: PromptLLM, texto_llm: str) -> Dict[str, Any]:
+def validar_respuesta(prompt: PromptLLM, texto_llm: str, umbral_confianza: int = UMBRAL_CONFIANZA) -> Dict[str, Any]:
     """Dict con el esquema fijo de la versión del prompt. pmid y gen se toman de la evidencia, nunca del LLM.
-    Una respuesta recibida pero no interpretable da UNKNOWN con json_invalido."""
+    Una respuesta recibida pero no interpretable da UNKNOWN con json_invalido. umbral_confianza solo cambia
+    para barrer umbrales en el benchmark."""
     ev = prompt.evidencia
     base = {"version": prompt.version, "pmid": ev.pmid, "gen": ev.gen, "go_id": ev.go_id}
     try:
         crudo = extraer_json(texto_llm)
     except Exception as err:
         return {**base, **_cerrar(SIGNO_DESCONOCIDO, ["json_invalido"], False), "error": f"Respuesta no interpretable: {err}"}
-    validar = _validar_v1 if prompt.version in VERSIONES_PROCESO else _validar_v0
-    return {**base, **validar(prompt, crudo), "error": ""}
+    if prompt.version in VERSIONES_PROCESO:
+        return {**base, **_validar_v1(prompt, crudo, umbral_confianza), "error": ""}
+    return {**base, **_validar_v0(prompt, crudo), "error": ""}
 
 
 def repartir_lista(lista: PromptLista, texto_llm: str) -> List[Optional[str]]:

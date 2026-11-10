@@ -10,7 +10,8 @@ si se corta por el límite diario, volver a lanzarlo solo hace lo pendiente).
 informe: vuelve a validar las respuestas crudas del registro (sin llamar) y las compara con las etiquetas:
 precisión de las respuestas dadas, cobertura, recall de UNKNOWN, matriz de confusión, JSON válido, citas
 verificadas, acuerdo con Polaridad_GO, latencia y llamadas, con IC 95 % por bootstrap; kappa de Cohen entre
-anotadores en los casos dobles.
+anotadores en los casos dobles; y calibración de los signos (confianza_modelo y confianza_final): tabla de
+fiabilidad, ECE, AUROC y curva riesgo-cobertura por umbral.
 """
 import json
 import random
@@ -32,12 +33,20 @@ if len(sys.argv) > 4 and sys.argv[1] == "ejecutar":
     config.MYGENE_CACHE = str(Path(sys.argv[4]) / "cache_mygene.json")
 sys.path.insert(0, str(CODIGO))
 
+from consulta_gen.confianza import confianza_final  # noqa: E402
 from consulta_gen.prompt import CONFIG_V1_GEN, construir_prompt  # noqa: E402
 from consulta_gen.registro import Registro, clave  # noqa: E402
 from consulta_gen.respuesta import validar_respuesta  # noqa: E402
 
 A_SIGNO = {"INCREASES": "+1", "DECREASES": "-1", "NO_CLEAR_EFFECT": "UNKNOWN"}
 CLASES = ("+1", "-1", "UNKNOWN")
+# Calibración: el otro modelo con el que se compara cada uno para confianza_final (la pareja propuesta para
+# producción es gpt-oss + Gemini; las alternativas se emparejan con Gemini)
+SEGUNDO_MODELO = {"groq-gpt-oss-120b": "gemini-3.5-flash-lite", "gemini-3.5-flash-lite": "groq-gpt-oss-120b",
+                  "groq-qwen3.8-27b": "gemini-3.5-flash-lite", "ollama-qwen3-8b": "gemini-3.5-flash-lite",
+                  "cerebras-gpt-oss-120b": "gemini-3.5-flash-lite"}
+TRAMOS = ((0, 50), (50, 70), (70, 90), (90, 101))  # los de las anclas de la regla 13
+UMBRALES = (0, 50, 60, 70, 80, 90)
 
 
 def gold_casos():
@@ -154,7 +163,7 @@ def informe(ruta_etiquetas, ruta_doble=None):
            "Tokens (entrada+salida) |")
     print(cab)
     print("|" + "---|" * (cab.count("|") - 1))
-    matrices = {}
+    matrices, salidas = {}, {}
     for d in sorted(BENCH.iterdir()):
         if not (d / "claves.json").exists():
             continue
@@ -169,6 +178,7 @@ def informe(ruta_etiquetas, ruta_doble=None):
                 continue
             respondidas += 1
             s = validar_respuesta(_Prompt(gid, prompts[gid], claves[gid]), linea["respuesta_cruda"])
+            salidas.setdefault(modelo, {})[gid] = s
             n_json += "json_invalido" not in s["motivos"]
             if s.get("signo_llm") in ("+1", "-1"):
                 n_firmadas += 1
@@ -194,7 +204,61 @@ def informe(ruta_etiquetas, ruta_doble=None):
         print("            " + "".join(f"{c:>9}" for c in CLASES))
         for g in CLASES:
             print(f"   {g:>8} " + "".join(f"{m[(g, c)]:>9}" for c in CLASES))
+    calibracion(salidas, verdad)
 
+
+# ------------------------------------------------------------------------------------------- calibración
+def _auroc(puntos):
+    """P(un signo correcto tiene más confianza que uno erróneo); empates = 0,5. None si falta una de las dos clases."""
+    bien = [c for c, ok in puntos if ok]
+    mal = [c for c, ok in puntos if not ok]
+    if not bien or not mal:
+        return None
+    return sum((b > m) + 0.5 * (b == m) for b in bien for m in mal) / (len(bien) * len(mal))
+
+
+def _ece(puntos):
+    """Error de calibración esperado: media ponderada por tramo de |acierto − confianza media|."""
+    total = 0.0
+    for lo, hi in TRAMOS:
+        t = [(c, ok) for c, ok in puntos if lo <= c < hi]
+        if t:
+            total += len(t) / len(puntos) * abs(sum(ok for _, ok in t) / len(t) - sum(c for c, _ in t) / len(t) / 100)
+    return total
+
+
+def calibracion(salidas, verdad):
+    """Para cada modelo, sobre los signos que da (+1/−1): ¿acierta un X % de las respuestas con confianza X?
+    Con pocos signos (13 en el gold set provisional) es orientativa."""
+    print("\nCalibración de los signos dados (acierto = mismo signo que la etiqueta)")
+    for modelo, sal in salidas.items():
+        otro = salidas.get(SEGUNDO_MODELO.get(modelo), {})
+        firmadas = [(gid, s) for gid, s in sal.items() if s["signo"] != "UNKNOWN"]
+        revisar = sum("baja_confianza" in s["motivos"] for _, s in firmadas)
+        print(f"\n  {modelo}: {len(firmadas)} signos, {revisar} con baja_confianza "
+              f"(final con {SEGUNDO_MODELO.get(modelo, '—')} como segundo modelo)")
+        for nombre, f in (("confianza_modelo", lambda gid, s: s.get("confianza_modelo")),
+                          ("confianza_final", lambda gid, s: confianza_final(s, otro.get(gid)))):
+            puntos = [(f(gid, s), s["signo"] == verdad[gid]) for gid, s in firmadas]
+            puntos = [(c, ok) for c, ok in puntos if c is not None]
+            if not puntos:
+                print(f"    {nombre}: sin datos (respuestas anteriores a la regla 13)")
+                continue
+            auc = _auroc(puntos)
+            print(f"    {nombre}: n={len(puntos)}, media {sum(c for c, _ in puntos) / len(puntos):.0f}, acierto "
+                  f"{_fmt(sum(ok for _, ok in puntos) / len(puntos))}, ECE {100 * _ece(puntos):.0f} puntos, "
+                  f"AUROC {'—' if auc is None else f'{auc:.2f}'}")
+            print("      tramo    n  conf. media  acierto")
+            for lo, hi in TRAMOS:
+                t = [(c, ok) for c, ok in puntos if lo <= c < hi]
+                if t:
+                    print(f"      {lo:>3}-{min(hi, 100):<3} {len(t):>3}  {sum(c for c, _ in t) / len(t):>11.0f}  "
+                          f"{_fmt(sum(ok for _, ok in t) / len(t)):>7}")
+            print("      umbral  signos que se quedan  precisión")
+            for u in UMBRALES:
+                t = [ok for c, ok in puntos if c >= u]
+                print(f"      ≥{u:<5} {len(t):>3}/{len(puntos):<3} ({_fmt(len(t) / len(puntos))})"
+                      f"{'':>8}{_fmt(sum(t) / len(t)) if t else '—'}")
 
 
 class _Prompt:

@@ -23,6 +23,13 @@ Un procedimiento de evaluación reproducible que permita elegir los modelos de p
    * **Porcentaje de JSON válido** y **porcentaje de citas verificadas**.
    * **Acuerdo con `Polaridad_GO`** en los casos que la tienen.
    * **Latencia media por llamada** y número de casos por día que permiten los límites del plan gratuito.
+   * **Calibración del porcentaje de seguridad**, sobre los signos que da cada modelo (acierto = mismo signo que la etiqueta), por separado para `confianza_modelo` (la que declara el modelo) y `confianza_final` (corregida con el tipo de evidencia, la frase citada y el acuerdo con el otro modelo; [spec de inferencia](inferencia-llm.md)):
+     * **tabla de fiabilidad** por tramos (0-49, 50-69, 70-89 y 90-100, los de las anclas del prompt): número de signos, confianza media y acierto. Si está bien calibrada, las respuestas con un 80 % aciertan un 80 %;
+     * **ECE** (error de calibración esperado): la diferencia media, ponderada por tramo, entre la confianza y el acierto;
+     * **AUROC** de la confianza frente al acierto: la probabilidad de que un signo correcto tenga más confianza que uno erróneo (0,5 = no separa);
+     * **curva riesgo-cobertura:** para cada umbral (50, 60, 70, 80 y 90), cuántos signos quedan por encima y qué precisión tienen. De ella sale el umbral de `baja_confianza` del ADR-003 (70 por defecto).
+
+     Para `confianza_final` se usa como otro modelo el de la pareja propuesta para producción (gpt-oss con Gemini y al revés; las alternativas se emparejan con Gemini). Con pocos signos en el *gold set* (13 en el provisional) la calibración es solo orientativa: una calibración fiable necesita el *gold set* ampliado y estratificado por etiqueta (más de 100 casos, unos 30-40 por clase). Los factores de `confianza_final` se ajustaron con el benchmark v2, así que evaluarlos sobre esas mismas respuestas es optimista: hay que medirlos en respuestas nuevas.
 
    Cada métrica se acompaña de su **intervalo de confianza al 95 %** calculado por *bootstrap*, y se reporta el **acuerdo entre anotadores** (kappa de Cohen) sobre el subconjunto doble.
 
@@ -48,5 +55,6 @@ El etiquetado a ciegas es imprescindible: si el experto ve la respuesta de un mo
 * [ ] **Acuerdo entre anotadores:** los 12 casos con doble etiquetado tienen las dos etiquetas registradas y el informe incluye su kappa de Cohen.
 * [ ] **Cobertura de la evaluación:** cada candidato tiene una respuesta registrada para el 100 % de los casos del *gold set* (los casos pendientes por límites de uso se reintentan hasta completarse).
 * [ ] **Informe completo:** para cada modelo y formulación evaluada, el informe incluye todas las métricas de la parte 4 con su intervalo de confianza al 95 % y la matriz de confusión.
+* [x] ✅ **Calibración en el informe:** `evaluar_gold.py informe` añade, por modelo, la tabla de fiabilidad, el ECE, el AUROC y la curva riesgo-cobertura de `confianza_modelo` y `confianza_final`, a partir del registro y sin llamar a los modelos.
 * [ ] **Reproducibilidad del informe:** regenerar el informe a partir del registro de respuestas, sin ninguna llamada nueva a los modelos, produce exactamente las mismas cifras.
 * [ ] **Decisión documentada:** el ADR-005 se actualiza con los modelos principal y secundario elegidos, la formulación elegida (A o B) y las cifras del informe que justifican la elección.

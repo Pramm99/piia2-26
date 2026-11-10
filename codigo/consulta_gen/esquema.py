@@ -17,6 +17,12 @@ VERSIONES_PROCESO = (V1_PROCESO, V1_GEN)  # respuestas con el esquema de ESQUEMA
 # Estado y motivos de la salida (ADR-003)
 ESTADO_RESUELTO, ESTADO_REVISAR, ESTADO_NO_CONCLUYENTE = "resuelto", "revisar", "no_concluyente"
 MIN_PALABRAS_CITA = 6  # una cita más corta no demuestra nada (CD7 aparece dentro de CD70)
+# Confianza declarada por el modelo (v1, regla 13). Un signo por debajo del umbral se conserva, pero pasa a
+# revisar con baja_confianza; por debajo de MIN_CONFIANZA_SIGNO el prompt pide NO_CLEAR_EFFECT, así que un signo
+# ahí es incoherencia_respuesta. El umbral es provisional: se ajustará con el gold set.
+UMBRAL_CONFIANZA = 70
+MIN_CONFIANZA_SIGNO = 50
+MOTIVOS_REVISAR = ("incoherencia_respuesta", "baja_confianza")  # mantienen el signo y piden revisión
 
 HOJA_EVIDENCIAS = "Con_abstract"
 
@@ -117,7 +123,7 @@ ESQUEMA_V1 = {
     "type": "object",
     "additionalProperties": False,
     "required": ["id_frase", "justificacion_literal", "tipo_evidencia", "organismo", "tipo_celular",
-                 "razonamiento_corto", "efecto", "motivo_unknown"],
+                 "razonamiento_corto", "confianza", "efecto", "motivo_unknown"],
     "properties": {
         "id_frase": {"type": "string", "description": "T, S1, S2... or none"},
         "justificacion_literal": {"type": "string", "description": ">=6 words copied exactly from that sentence"},
@@ -126,6 +132,8 @@ ESQUEMA_V1 = {
         "organismo": {"type": "string", "enum": ["human", "mouse", "other", "not_stated"]},
         "tipo_celular": {"type": "string", "enum": ["NK", "T", "other_immune", "tumor", "other", "not_stated"]},
         "razonamiento_corto": {"type": "string", "description": "1-2 sentences; mention any sign inversion"},
+        # Después del razonamiento y antes del efecto: el modelo lo decide tras razonar (anclas en la regla 13)
+        "confianza": {"type": "integer", "description": "integer 0-100, see rule 13"},
         "efecto": {"type": "string", "enum": ["INCREASES", "DECREASES", "NO_CLEAR_EFFECT"]},
         "motivo_unknown": {"type": "string", "enum": MOTIVOS_MODELO_V1},
     },
@@ -143,6 +151,8 @@ ESQUEMA_LISTA = {
     }}},
 }
 EFECTO_A_SIGNO = {"INCREASES": 1, "DECREASES": -1, "NO_CLEAR_EFFECT": None}
+# Campos que pueden faltar en respuestas guardadas antes de existir (el benchmark vuelve a validar registros antiguos)
+CAMPOS_NUEVOS_V1 = ("confianza",)
 # Motivos del modelo -> motivos del ADR-003 (los cuatro últimos son nuevos y hay que añadirlos al ADR)
 MOTIVO_MODELO_A_ADR = {
     "gene_not_discussed": "no_menciona_gen", "effect_of_other_molecule": "efecto_indirecto",

@@ -77,7 +77,7 @@ def construir_user(ev: Evidencia, cfg: ConfigPrompt = CONFIG_V0) -> str:
 # --------------------------------------------------------------------------------------------------
 # v1_proceso
 # --------------------------------------------------------------------------------------------------
-SYSTEM_V1 = """You read ONE PubMed abstract and report what it states about the causal effect of ONE human
+_REGLAS_V1 = """You read ONE PubMed abstract and report what it states about the causal effect of ONE human
 gene (or its protein product) on ONE biological process. Use only the abstract text, never
 your own knowledge. Reply with the JSON object only.
 
@@ -114,7 +114,33 @@ Rules:
 12. QUOTE. Give the ID of ONE sentence ([T] = title, [S1], [S2]...). Copy from that sentence,
     character by character, a contiguous span of at least 6 words that supports your answer,
     with no ellipsis and no rewording. For NO_CLEAR_EFFECT, quote the sentence most relevant
-    to the gene, or use "none" and "" if no sentence mentions it."""
+    to the gene, or use "none" and "" if no sentence mentions it.
+13. CONFIDENCE. After the reasoning, give an integer from 0 to 100: how sure you are that
+    your answer is right. For INCREASES or DECREASES use this scale:
+    90-100: an experiment on the gene in this abstract with an explicit result on this
+            same process;
+    70-89:  a clear experiment, but on a more specific form of the process, in another
+            species or cell type, or with one step of inference;
+    50-69:  indirect support: a comparison between cell subsets, an effect that requires
+            the gene without manipulating it, or only a concluding sentence;
+    below 50: not enough for a sign; answer NO_CLEAR_EFFECT instead.
+    For NO_CLEAR_EFFECT, give how sure you are that the abstract shows no clear effect."""
+
+
+def _campos(esquema: Dict) -> str:
+    """Los campos de la respuesta, en orden y con sus valores, sacados del esquema (los modelos sin salida
+    estructurada estricta, como qwen en Groq, se inventaban los nombres)."""
+    lineas = []
+    for k, p in esquema["properties"].items():
+        lineas.append(f'- "{k}": ' + (" | ".join(p["enum"]) if "enum" in p else p["description"]))
+    return "\n".join(lineas)
+
+
+SYSTEM_V1 = _REGLAS_V1 + f"""
+
+OUTPUT. One JSON object with exactly these fields, in this order:
+{_campos(ESQUEMA_V1)}
+"motivo_unknown" is "none" when "efecto" is INCREASES or DECREASES."""
 
 
 def _lineas_abstract(caso: CasoProceso) -> List[str]:
@@ -150,13 +176,18 @@ def construir_user_v1(caso: CasoProceso, cfg: ConfigPrompt = CONFIG_V1) -> str:
 # --------------------------------------------------------------------------------------------------
 # v1_proceso_gen: las preguntas de v1 de un mismo gen, en una sola llamada
 # --------------------------------------------------------------------------------------------------
-# El sistema es fijo (el de v1 + la regla 13) y va primero: es el prefijo común de todas las llamadas, el
-# que pueden servir de caché los proveedores (Groq, Cerebras, Gemini). Lo que cambia va detrás.
-SYSTEM_LISTA = SYSTEM_V1 + """
-13. SEVERAL QUESTIONS. The message may contain several abstracts and several questions about
+# El sistema es fijo (las reglas de v1 + la regla 14) y va primero: es el prefijo común de todas las llamadas,
+# el que pueden servir de caché los proveedores (Groq, Cerebras, Gemini). Lo que cambia va detrás.
+SYSTEM_LISTA = _REGLAS_V1 + f"""
+14. SEVERAL QUESTIONS. The message may contain several abstracts and several questions about
     the gene. Answer every question Q1..Qn, one object per question, in order. Each answer is
     about the abstract (PMID) and the process named in THAT question only: never use another
-    abstract to answer it. The sentence IDs ([T], [S1]...) refer to that question's abstract."""
+    abstract to answer it. The sentence IDs ([T], [S1]...) refer to that question's abstract.
+
+OUTPUT. One JSON object {{"respuestas": [...]}} with one object per question. Each object has
+exactly these fields, in this order:
+{_campos(ESQUEMA_LISTA["properties"]["respuestas"]["items"])}
+"motivo_unknown" is "none" when "efecto" is INCREASES or DECREASES."""
 
 SALIDA_BASE_LISTA = 2000    # max_completion_tokens con una pregunta (razonamiento incluido, como en v1)
 SALIDA_POR_PREGUNTA = 600   # cada pregunta más: unos 160 de respuesta (medido con Gemini) + razonamiento

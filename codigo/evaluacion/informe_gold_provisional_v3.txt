@@ -1,0 +1,103 @@
+Gold set: 60 casos; etiquetas {'UNKNOWN': 47, '+1': 9, '-1': 4}
+
+Acuerdo entre anotadores (12 casos dobles): 12/12, kappa de Cohen 1.00
+
+| Modelo | Respondidas | JSON válido | Citas verificadas | Exactitud | Precisión (+1/−1 dados) | Cobertura | Recall UNKNOWN | Acuerdo GO | Llamadas | Latencia media | Tiempo total | Tokens (entrada+salida) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| gemini-3.5-flash-lite | 60/60 | 60/60 | 19/21 | 90 % (82–97) | 68 % (46–90) | 32 % (20–43) | 87 % (77–96) | 11/11 | 33 | 1.7 s | 3.5 min | 70896+10219 |
+| groq-gpt-oss-120b | 25/60 | 24/25 | 4/4 | 88 % (76–100) | 75 % (20–100) | 16 % (4–32) | 95 % (84–100) | 3/3 | 14 | 2.6 s | 0.6 min | 32364+6367 |
+| groq-qwen3.8-27b | 19/60 | 13/19 | 6/6 | 84 % (68–100) | 50 % (0–100) | 32 % (11–53) | 81 % (61–100) | 3/3 | 12 | 1.4 s | 0.3 min | 17895+2322 |
+
+Matrices de confusión (filas = etiqueta, columnas = modelo):
+  gemini-3.5-flash-lite
+                   +1       -1  UNKNOWN
+         +1         9        0        0
+         -1         0        4        0
+    UNKNOWN         2        4       41
+  groq-gpt-oss-120b
+                   +1       -1  UNKNOWN
+         +1         3        0        2
+         -1         0        0        0
+    UNKNOWN         1        0       19
+  groq-qwen3.8-27b
+                   +1       -1  UNKNOWN
+         +1         3        0        0
+         -1         0        0        0
+    UNKNOWN         3        0       13
+
+Calibración de los signos dados (acierto = mismo signo que la etiqueta)
+
+  gemini-3.5-flash-lite: 19 signos, 1 con baja_confianza (final con groq-gpt-oss-120b como segundo modelo)
+    confianza_modelo: n=19, media 87, acierto 68 %, ECE 19 puntos, AUROC 0.60
+      tramo    n  conf. media  acierto
+       50-70    1           50      0 %
+       70-90    4           82     75 %
+       90-100  14           91     71 %
+      umbral  signos que se quedan  precisión
+      ≥0      19/19  (100 %)        68 %
+      ≥50     19/19  (100 %)        68 %
+      ≥60     18/19  (95 %)        72 %
+      ≥70     18/19  (95 %)        72 %
+      ≥80     18/19  (95 %)        72 %
+      ≥90     14/19  (74 %)        71 %
+    confianza_final: n=19, media 67, acierto 68 %, ECE 9 puntos, AUROC 0.77
+      tramo    n  conf. media  acierto
+        0-50    1           28      0 %
+       50-70    9           60     56 %
+       70-90    8           76     88 %
+       90-100   1           90    100 %
+      umbral  signos que se quedan  precisión
+      ≥0      19/19  (100 %)        68 %
+      ≥50     18/19  (95 %)        72 %
+      ≥60     14/19  (74 %)        79 %
+      ≥70      9/19  (47 %)        89 %
+      ≥80      3/19  (16 %)        100 %
+      ≥90      1/19  (5 %)        100 %
+
+  groq-gpt-oss-120b: 4 signos, 0 con baja_confianza (final con gemini-3.5-flash-lite como segundo modelo)
+    confianza_modelo: n=4, media 94, acierto 75 %, ECE 19 puntos, AUROC 1.00
+      tramo    n  conf. media  acierto
+       90-100   4           94     75 %
+      umbral  signos que se quedan  precisión
+      ≥0       4/4   (100 %)        75 %
+      ≥50      4/4   (100 %)        75 %
+      ≥60      4/4   (100 %)        75 %
+      ≥70      4/4   (100 %)        75 %
+      ≥80      4/4   (100 %)        75 %
+      ≥90      4/4   (100 %)        75 %
+    confianza_final: n=4, media 86, acierto 75 %, ECE 23 puntos, AUROC 1.00
+      tramo    n  conf. media  acierto
+       50-70    1           66      0 %
+       70-90    1           86    100 %
+       90-100   2           95    100 %
+      umbral  signos que se quedan  precisión
+      ≥0       4/4   (100 %)        75 %
+      ≥50      4/4   (100 %)        75 %
+      ≥60      4/4   (100 %)        75 %
+      ≥70      3/4   (75 %)        100 %
+      ≥80      3/4   (75 %)        100 %
+      ≥90      2/4   (50 %)        100 %
+
+  groq-qwen3.8-27b: 6 signos, 0 con baja_confianza (final con gemini-3.5-flash-lite como segundo modelo)
+    confianza_modelo: n=6, media 94, acierto 50 %, ECE 44 puntos, AUROC 0.33
+      tramo    n  conf. media  acierto
+       90-100   6           94     50 %
+      umbral  signos que se quedan  precisión
+      ≥0       6/6   (100 %)        50 %
+      ≥50      6/6   (100 %)        50 %
+      ≥60      6/6   (100 %)        50 %
+      ≥70      6/6   (100 %)        50 %
+      ≥80      6/6   (100 %)        50 %
+      ≥90      6/6   (100 %)        50 %
+    confianza_final: n=6, media 81, acierto 50 %, ECE 36 puntos, AUROC 0.94
+      tramo    n  conf. media  acierto
+       50-70    2           65      0 %
+       70-90    2           86     50 %
+       90-100   2           92    100 %
+      umbral  signos que se quedan  precisión
+      ≥0       6/6   (100 %)        50 %
+      ≥50      6/6   (100 %)        50 %
+      ≥60      6/6   (100 %)        50 %
+      ≥70      4/6   (67 %)        75 %
+      ≥80      4/6   (67 %)        75 %
+      ≥90      2/6   (33 %)        100 %
