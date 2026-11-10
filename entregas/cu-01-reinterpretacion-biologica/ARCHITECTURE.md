@@ -2,7 +2,7 @@
 
 Este documento describe las piezas del pipeline, de qué se responsabiliza cada una y cómo circula la información desde los resultados de enriquecimiento de CIMUS hasta el signo funcional de cada gen. Las decisiones que justifican esta arquitectura están en [`decisions/`](decisions/) y el detalle funcional de cada pieza en [`specs/`](specs/).
 
-El código vive en `codigo/` (en la raíz del repositorio) y se organiza en tres fases:
+El código vive en `codigo/`, dentro de esta misma carpeta del equipo (`entregas/cu-01-reinterpretacion-biologica/codigo/`), y se organiza en tres fases:
 
 * **Fase 1, ingesta** (`codigo/extraer_info/`, `python codigo/extraer_info/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
 * **Fase 2, inferencia** (`codigo/consulta_gen/`, `python -m consulta_gen ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**; el modelo secundario está pendiente de confirmar con el benchmark (ADR-005).

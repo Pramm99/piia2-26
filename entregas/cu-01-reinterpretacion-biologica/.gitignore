@@ -10,3 +10,4 @@ data/
 *.obo.part
 llm_queue.jsonl
 .env
+.pytest_cache/

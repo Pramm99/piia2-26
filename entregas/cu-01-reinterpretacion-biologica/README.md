@@ -126,11 +126,12 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 ## 6. Estructura del repositorio
 
-La documentación de la entrega vive en esta carpeta; el código fuente está en la carpeta `codigo/` de la raíz del repositorio.
+Todo el trabajo del equipo vive en esta carpeta, como pide el repositorio de la asignatura: la documentación, el código fuente (`codigo/`) y el análisis previo de alternativas (`PlanesViables/`). Las rutas de este documento son relativas a ella.
 
 ```Plaintext
 entregas/cu-01-reinterpretacion-biologica/
 ├── README.md                      # Puerta de entrada: visión de conjunto, objetivos y estructura.
+├── .gitignore                     # Excluye el entorno virtual, codigo/data/, los .env, los .xlsx y los .csv.
 ├── ARCHITECTURE.md                # Diagrama de componentes y recorrido del dato.
 ├── AGENTS.md                      # Instrucciones operativas para asistentes de IA y colaboradores (vacío, pendiente).
 │
@@ -148,28 +149,29 @@ entregas/cu-01-reinterpretacion-biologica/
 │   └── benchmark-gold-set.md
 │
 ├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md).
+├── PlanesViables/                 # Análisis de las dos arquitecturas candidatas (OpcionA.md, OpcionB.md; ADR-001).
 ├── src/                           # Esquema del código fuente (definicion-src.txt).
-└── tests/                         # Vacío (test_pipeline.py): las pruebas están en codigo/tests/.
-
-codigo/                            # Código fuente (raíz del repositorio):
-├── extraer_info/                  # Fase 1: ingesta (GO, GAF, inmunoglobulinas, triaje del signo GO,
-│   │                              #   GeneRIF y Europe PMC, abstracts) y Excel de salida.
-│   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, UniProt y su caché.
-├── consulta_gen/                  # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
-├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
-├── tests/                         # Pruebas con pytest, sin red (python -m pytest desde codigo/).
-├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas y su script de análisis.
-├── data/                          # Ficheros locales (ignorados por git): OBO, GAF, cachés, registro de
-│                                  #   respuestas, fase2_resultados.xlsx y registros del benchmark.
-├── .env.example                   # Plantilla de las claves de los modelos y de NCBI.
-└── requirements.txt               # Dependencias de Python (requests, pandas, openpyxl; pytest para las pruebas).
+├── tests/                         # Vacío (test_pipeline.py): las pruebas están en codigo/tests/.
+│
+└── codigo/                        # Código fuente:
+    ├── extraer_info/                  # Fase 1: ingesta (GO, GAF, inmunoglobulinas, triaje del signo GO,
+    │   │                              #   GeneRIF y Europe PMC, abstracts) y Excel de salida.
+    │   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, UniProt y su caché.
+    ├── consulta_gen/                  # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
+    ├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
+    ├── tests/                         # Pruebas con pytest, sin red (python -m pytest desde codigo/).
+    ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas y su script de análisis.
+    ├── data/                          # Ficheros locales (ignorados por git): OBO, GAF, cachés, registro de
+    │                                  #   respuestas, fase2_resultados.xlsx y registros del benchmark.
+    ├── .env.example                   # Plantilla de las claves de los modelos y de NCBI.
+    └── requirements.txt               # Dependencias de Python (requests, pandas, openpyxl; pytest para las pruebas).
 ```
 
-El fichero `.gitignore` está en la raíz del repositorio y excluye el entorno virtual, `codigo/data/`, los `.env` y todos los `.xlsx` y `.csv`. Por eso los Excels de entrada y salida de la Fase 1, que están en `codigo/extraer_info/`, no se versionan. Los únicos Excels versionados son los de `codigo/tools_cimus/`.
+El fichero `.gitignore` está en esta carpeta y excluye el entorno virtual, `codigo/data/`, los `.env` y todos los `.xlsx` y `.csv`. Por eso los Excels de entrada y salida de la Fase 1, que están en `codigo/extraer_info/`, no se versionan. Los únicos Excels versionados son los de `codigo/tools_cimus/`.
 
 ## 7. Cómo se ejecuta
 
-Desde la raíz del repositorio, con Python 3 y las dependencias de `codigo/requirements.txt`:
+Desde esta carpeta (`entregas/cu-01-reinterpretacion-biologica/`), con Python 3 y las dependencias de `codigo/requirements.txt`:
 
 1. **Claves:** copiar `codigo/.env.example` como `codigo/.env` y rellenar `GEMINI_API_KEY`, `GROQ_API_KEY` y, para la Fase 1, `NCBI_EMAIL` y `NCBI_API_KEY` (opcional). `codigo/.env` no se sube al repositorio: está en el `.gitignore`. Las variables de entorno del sistema tienen prioridad sobre el fichero.
 2. **Fase 1:** `python codigo/extraer_info/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/extraer_info/fase1_dataset_abstracts.xlsx`. La primera ejecución descarga el OBO, el GAF y unos 33.000 _abstracts_ (casi una hora); con las cachés tarda unos minutos.

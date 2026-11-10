@@ -1,10 +1,10 @@
 Definición de la estructura del código fuente
 ==============================================
 
-El código del pipeline no vive en esta carpeta src/, sino en la carpeta codigo/ de la raíz
-del repositorio. Este fichero describe esa estructura: qué módulos existen y cuáles están
-previstos, siguiendo ARCHITECTURE.md (los números entre corchetes son los componentes de su
-diagrama). Estado a 2026-11-10.
+El código del pipeline no vive en esta carpeta src/, sino en codigo/, dentro de la carpeta del
+equipo (entregas/cu-01-reinterpretacion-biologica/codigo/). Este fichero describe esa estructura:
+qué módulos existen y cuáles están previstos, siguiendo ARCHITECTURE.md (los números entre
+corchetes son los componentes de su diagrama). Estado a 2026-11-10.
 
 Leyenda: (hecho) implementado · (en parte) implementado con cambios pendientes ·
          (previsto) pendiente; el nombre del fichero es una propuesta.
