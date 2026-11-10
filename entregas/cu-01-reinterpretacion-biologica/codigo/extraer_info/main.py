@@ -1,8 +1,9 @@
 """Fase 1: ingesta. Ejecuta en orden los módulos del pipeline.
 
+  0. entrada_excel   -> lee y valida los ficheros de entrada (.xlsx o .csv) antes de tocar la red
   1. red             -> descarga del OBO y del GAF
   2. grafo_go        -> grafo GO y propagación a descendientes (con profundidad)
-  3. entrada_excel   -> pares (Gen, Ruta) de los Excels
+  3. entrada_excel   -> pares (Gen, Ruta) de los ficheros
   4. inmunoglobulinas-> las Ig salen aparte como neutras, con la función de la Ig completa
   5. cruce_gaf       -> anotaciones con/sin PMID para esos pares
   6. polaridad       -> triaje del signo GO: aceptar_GO (sin LLM) / LLM / LLM_y_revision;
@@ -17,7 +18,7 @@ import salida
 from abstracts import descargar_abstracts
 from config import GAF_FILE, GAF_URL, OBO_FILE, OBO_URL
 from cruce_gaf import cruzar_con_gaf
-from entrada_excel import cargar_entrada
+from entrada_excel import cargar_entrada, leer_entrada
 from grafo_go import cargar_go, cargar_sinonimos, construir_desc_map
 from inmunoglobulinas import construir_hoja_ig, detectar_inmunoglobulinas
 from pmid_externos import buscar_pmids_externos
@@ -27,11 +28,12 @@ from red import descargar_archivo
 
 def ejecutar_fase_1():
     print("--- INICIANDO FASE 1 ---")
+    tablas = leer_entrada()  # valida las columnas antes de cualquier descarga
     descargar_archivo(OBO_URL, OBO_FILE)
     descargar_archivo(GAF_URL, GAF_FILE)
     hijos, alias = cargar_go(OBO_FILE)
 
-    df_excel, pares = cargar_entrada(alias)
+    df_excel, pares = cargar_entrada(alias, tablas)
     igs = detectar_inmunoglobulinas(df_excel["Gen"])
     hoja_ig = construir_hoja_ig(df_excel, igs)
     df_excel = df_excel[~df_excel["Gen"].isin(igs)]
