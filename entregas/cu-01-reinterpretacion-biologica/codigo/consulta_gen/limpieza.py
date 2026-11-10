@@ -59,8 +59,10 @@ def segmentar_frases(texto: str) -> list:
     trozos, actual = [], ""
     for parte in _CORTE.split(normalizar_espacios(valor_texto(texto))):
         actual = f"{actual} {parte}".strip() if actual else parte
-        final = actual.rstrip(".!?").rsplit(" ", 1)[-1].casefold()
-        if final in _ABREVIATURAS or final.endswith(tuple(f".{a}" for a in ("g", "e"))):
+        palabras = actual.rstrip(".!?").casefold().split()
+        final = palabras[-1] if palabras else ""
+        # dos palabras para las abreviaturas con espacio («et al»): con una sola se veía «al» y se cortaba
+        if final in _ABREVIATURAS or " ".join(palabras[-2:]) in _ABREVIATURAS                 or final.endswith(tuple(f".{a}" for a in ("g", "e"))):
             continue
         trozos.append(actual)
         actual = ""

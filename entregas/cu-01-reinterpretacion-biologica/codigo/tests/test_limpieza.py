@@ -81,8 +81,6 @@ def test_segmentar_frases_respeta_abreviaturas_y_decimales():
     assert frases == ["NK cells rose 2.5 fold.", "Then CD7 fell, e.g. in mice.", "End."]
 
 
-@pytest.mark.xfail(strict=True, reason="Fallo conocido: segmentar_frases solo compara la última palabra («al»), así "
-                                       "que «et al.» corta la frase. Arreglarlo cambia las huellas de los prompts.")
 def test_segmentar_frases_no_corta_tras_et_al():
     assert segmentar_frases("As shown by Smith et al. NK cells rose. End.") == ["As shown by Smith et al. NK cells rose.",
                                                                                  "End."]
