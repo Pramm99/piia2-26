@@ -2,11 +2,13 @@
 
   python evaluacion/evaluar_gold.py ejecutar <modelo> <excel Fase 1> [carpeta de datos] [presupuesto]   llama
   python evaluacion/evaluar_gold.py informe <etiquetas.jsonl> [<etiquetas_doble.jsonl>]    métricas, 0 llamadas
-  (con --dir=<nombre> los registros van a data/<nombre>/ en vez de data/benchmark/)
+  (con --dir=<nombre> los registros van a data/<nombre>/ en vez de data/benchmark/;
+   con --prompt=v2_veredicto se ejecuta la versión de producción en vez de v1_proceso_gen;
+   con --comunes=N el informe usa solo los N primeros casos que han respondido todos los modelos)
 
-ejecutar: cada modelo responde las preguntas del gold set con su forma de llamar más eficiente, v1_proceso_gen
-(por gen, troceado con su presupuesto). Las respuestas van a data/benchmark/<modelo>/ (registro reanudable;
-si se corta por el límite diario, volver a lanzarlo solo hace lo pendiente).
+ejecutar: cada modelo responde las preguntas del gold set con su forma de llamar más eficiente, por gen y
+troceado con su presupuesto (v1_proceso_gen o v2_veredicto). Las respuestas van a data/benchmark/<modelo>/
+(registro reanudable; si se corta por el límite diario, volver a lanzarlo solo hace lo pendiente).
 informe: vuelve a validar las respuestas crudas del registro (sin llamar) y las compara con las etiquetas:
 precisión de las respuestas dadas, cobertura, recall de UNKNOWN, matriz de confusión, JSON válido, citas
 verificadas, acuerdo con Polaridad_GO, latencia y llamadas, con IC 95 % por bootstrap; kappa de Cohen entre
@@ -24,6 +26,12 @@ CODIGO = AQUI.parent
 # --dir=<nombre>: carpeta de registros dentro de data/ (por defecto benchmark); se quita de sys.argv
 _DIR = [a for a in sys.argv if a.startswith("--dir=")]
 sys.argv = [a for a in sys.argv if not a.startswith("--dir=")]
+_PROMPT = [a.split("=", 1)[1] for a in sys.argv if a.startswith("--prompt=")]
+sys.argv = [a for a in sys.argv if not a.startswith("--prompt=")]
+# --comunes=N (informe): solo los N primeros casos del gold set que han respondido TODOS los modelos de la carpeta,
+# para comparar sobre los mismos casos cuando alguna ejecución se cortó por el límite diario
+_COMUNES = [int(a.split("=", 1)[1]) for a in sys.argv if a.startswith("--comunes=")]
+sys.argv = [a for a in sys.argv if not a.startswith("--comunes=")]
 BENCH = CODIGO / "data" / (_DIR[0].split("=", 1)[1] if _DIR else "benchmark")
 sys.path.insert(0, str(CODIGO / "extraer_info"))
 import config  # noqa: E402
@@ -34,12 +42,20 @@ if len(sys.argv) > 4 and sys.argv[1] == "ejecutar":
 sys.path.insert(0, str(CODIGO))
 
 from consulta_gen.confianza import confianza_final  # noqa: E402
-from consulta_gen.prompt import CONFIG_V1_GEN, construir_prompt  # noqa: E402
+from consulta_gen.esquema import V1_GEN, V2_VEREDICTO  # noqa: E402
+from consulta_gen.prompt import CONFIG_V1_GEN, CONFIG_V2, construir_prompt  # noqa: E402
 from consulta_gen.registro import Registro, clave  # noqa: E402
 from consulta_gen.respuesta import validar_respuesta  # noqa: E402
 
 A_SIGNO = {"INCREASES": "+1", "DECREASES": "-1", "NO_CLEAR_EFFECT": "UNKNOWN"}
-CLASES = ("+1", "-1", "UNKNOWN")
+CLASES = ("+1", "-1", "neutro", "UNKNOWN")
+CONFIG = {V1_GEN: CONFIG_V1_GEN, V2_VEREDICTO: CONFIG_V2}[_PROMPT[0] if _PROMPT else V1_GEN]
+
+
+def etiqueta(e):
+    """Etiqueta del anotador -> clase: un NO_CLEAR_EFFECT con no_effect_found es neutro (el gen no cambia el
+    proceso); el resto de NO_CLEAR_EFFECT, UNKNOWN."""
+    return "neutro" if e["efecto"] == "NO_CLEAR_EFFECT" and e.get("motivo") == "no_effect_found" else A_SIGNO[e["efecto"]]
 # Calibración: el otro modelo con el que se compara cada uno para confianza_final (la pareja propuesta para
 # producción es gpt-oss + Gemini; las alternativas se emparejan con Gemini)
 SEGUNDO_MODELO = {"groq-gpt-oss-120b": "gemini-3.5-flash-lite", "gemini-3.5-flash-lite": "groq-gpt-oss-120b",
@@ -58,7 +74,7 @@ def construir_preguntas(ruta_excel):
     sys.path.insert(0, str(AQUI))
     from seleccionar_gold import _universo, caso_id
     elegidos = {caso_id(c): c for c in _universo(ruta_excel)[0]}  # por clave: vale también tras --actualizar
-    return [(g["id"], construir_prompt(elegidos[g["caso"]], CONFIG_V1_GEN)) for g in gold_casos()]
+    return [(g["id"], construir_prompt(elegidos[g["caso"]], CONFIG)) for g in gold_casos()]
 
 
 def ejecutar_modelo(modelo, ruta_excel, presupuesto=None):
@@ -91,6 +107,18 @@ def ejecutar_modelo(modelo, ruta_excel, presupuesto=None):
 
 
 # ------------------------------------------------------------------------------------------------ informe
+def _regla_go_v2(s, caso):
+    """v2_veredicto: como en producción (resultados.ruta_v2), un veredicto con cita verificada que coincide con la
+    Polaridad_GO del caso se acepta aunque su confianza no llegue al umbral."""
+    if (s.get("version") != V2_VEREDICTO or s["signo"] != "UNKNOWN" or not caso["polaridad_go"]
+            or caso["factor_ruta_go"] is None or not s.get("cita_verificada") or s.get("signo_llm") not in ("+1", "-1")):
+        return s
+    if {"+1": 1, "-1": -1}[s["signo_llm"]] * caso["factor_ruta_go"] != int(caso["polaridad_go"]):
+        return s
+    motivos = [m for m in s["motivos"] if m != "baja_confianza"] + ["coincide_polaridad_GO"]
+    return {**s, "signo": s["signo_llm"], "motivos": motivos, "estado": "resuelto"}
+
+
 def _ic(valores, estadistico, n=2000, semilla=7):
     """IC 95 % por bootstrap (percentiles) de estadistico(lista)."""
     if not valores:
@@ -138,17 +166,36 @@ def _fmt(v, ic=None):
     return s + (f" ({100 * ic[0]:.0f}–{100 * ic[1]:.0f})" if ic and ic[0] is not None else "")
 
 
+def _casos_comunes(gold, n):
+    """Los n primeros casos (orden del gold set) que tienen respuesta de todos los modelos de BENCH."""
+    respondidos = []
+    for d in sorted(BENCH.iterdir()):
+        if (d / "claves.json").exists():
+            claves = json.loads((d / "claves.json").read_text(encoding="utf-8"))
+            reg = Registro(d / "respuestas_llm.jsonl")
+            respondidos.append({gid for gid in gold if reg.get(claves[gid]) is not None})
+    comunes = [gid for gid in gold if all(gid in r for r in respondidos)]
+    if len(comunes) < n:
+        raise ValueError(f"Solo hay {len(comunes)} casos respondidos por todos los modelos (se pidieron {n})")
+    elegidos = comunes[:n]
+    print(f"Casos comunes a todos los modelos: {len(comunes)}; se usan los {n} primeros. "
+          f"Fuera: {', '.join(g for g in gold if g not in elegidos)}")
+    return {gid: gold[gid] for gid in elegidos}
+
+
 def informe(ruta_etiquetas, ruta_doble=None):
     gold = {g["id"]: g for g in gold_casos()}
     etq = {e["id"]: e for e in map(json.loads, open(ruta_etiquetas, encoding="utf-8"))}
     falta = [g for g in gold if g not in etq]
     if falta:
         raise ValueError(f"Faltan etiquetas: {falta}")
-    verdad = {g: A_SIGNO[etq[g]["efecto"]] for g in gold}
+    if _COMUNES:
+        gold = _casos_comunes(gold, _COMUNES[0])
+    verdad = {g: etiqueta(etq[g]) for g in gold}
     print(f"Gold set: {len(gold)} casos; etiquetas {dict(Counter(verdad.values()))}\n")
 
     if ruta_doble:
-        dob = {e["id"]: A_SIGNO[e["efecto"]] for e in map(json.loads, open(ruta_doble, encoding="utf-8"))}
+        dob = {e["id"]: etiqueta(e) for e in map(json.loads, open(ruta_doble, encoding="utf-8"))}
         ids = [g for g in dob if g in verdad]
         a, b = [verdad[g] for g in ids], [dob[g] for g in ids]
         print(f"Acuerdo entre anotadores ({len(ids)} casos dobles): {sum(x == y for x, y in zip(a, b))}/{len(ids)}, "
@@ -177,14 +224,14 @@ def informe(ruta_etiquetas, ruta_doble=None):
             if linea is None:
                 continue
             respondidas += 1
-            s = validar_respuesta(_Prompt(gid, prompts[gid], claves[gid]), linea["respuesta_cruda"])
+            s = _regla_go_v2(validar_respuesta(_Prompt(gid, prompts[gid], claves[gid]), linea["respuesta_cruda"]), gold[gid])
             salidas.setdefault(modelo, {})[gid] = s
             n_json += "json_invalido" not in s["motivos"]
-            if s.get("signo_llm") in ("+1", "-1"):
+            if s.get("signo_llm") in ("+1", "-1", "neutro"):
                 n_firmadas += 1
                 n_cita += s["cita_verificada"]
             pares.append((verdad[gid], s["signo"]))
-            if gold[gid]["polaridad_go"] and s["signo"] != "UNKNOWN":  # signo sobre la ruta de la que sale GO
+            if gold[gid]["polaridad_go"] and s["signo"] in ("+1", "-1"):  # signo sobre la ruta de la que sale GO
                 ruta_signo = {"+1": 1, "-1": -1}[s["signo"]] * gold[gid]["factor_ruta_go"]
                 go.append(int(gold[gid]["polaridad_go"]) == ruta_signo)
         lat = _latencias(d)
@@ -265,9 +312,8 @@ class _Prompt:
     """Lo mínimo que necesita validar_respuesta para v1_proceso_gen, sin volver a leer la Fase 1."""
 
     def __init__(self, gid, p, clave_registro):
-        from consulta_gen.esquema import V1_GEN
         version, gen, pmid, nucleo, _, _ = clave_registro
-        self.version = V1_GEN
+        self.version = version
         self.evidencia = _Caso(gen, pmid, nucleo, p["titulo"], tuple(p["frases"]))
 
 

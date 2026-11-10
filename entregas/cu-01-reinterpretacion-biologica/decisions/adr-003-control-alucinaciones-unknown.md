@@ -10,7 +10,7 @@ El sistema **nunca fuerza un signo** cuando la evidencia no lo sostiene. Cada pa
 
 | Campo | Valores |
 |---|---|
-| `signo` | `+1` / `-1` / `UNKNOWN` |
+| `signo` | `+1` / `-1` / `neutro` / `UNKNOWN` |
 | `estado` | `resuelto` / `revisar` / `no_concluyente` |
 | `motivos` | lista de cero o más motivos (tabla siguiente) |
 
@@ -27,13 +27,27 @@ El sistema **nunca fuerza un signo** cuando la evidencia no lo sostiene. Cada pa
 | `cita_no_verificada` | Regla automática | `no_concluyente` | `UNKNOWN` |
 | `json_invalido` | Regla automática | `no_concluyente` | `UNKNOWN` |
 | `incoherencia_respuesta` | Regla automática (p. ej. un efecto con un motivo de UNKNOWN, o con confianza por debajo de 50) | `revisar` | Se mantiene |
-| `baja_confianza` | Regla automática: signo con cita verificada y `confianza_modelo` entre 50 y el umbral (70 por defecto) | `revisar` | Se mantiene |
+| `baja_confianza` | Regla automática. En `v2_veredicto` (producción): confianza por debajo de 40 y sin coincidencia con GO. En `v1`: signo con confianza entre 50 y 70 | `v2`: `no_concluyente`; `v1`: `revisar` | `v2`: `UNKNOWN`; `v1`: se mantiene |
+| `coincide_polaridad_GO` | Contraste con GO en `v2_veredicto`: el veredicto coincide con la `Polaridad_GO` de la anotación | `resuelto` | El de GO y el LLM, aunque la confianza sea baja |
 | `ruta_sin_direccion` | Composición (v1_proceso), solo si `SIN_DIRECCION_COMO_PROCESO = False`: la ruta es «regulation of X» sin dirección. Por defecto esas rutas se tratan como X. | — | `UNKNOWN` en esa ruta |
 | `discrepancia_polaridad_GO` | Contraste con GO | `revisar` | Se mantiene |
 | `discrepancia_entre_modelos` | Contraste entre modelos | `revisar` | El del modelo principal |
 | `sin_evidencia:<causa>` | Fase 1: el par no tiene ningún abstract y no llega al LLM | `no_concluyente` | `UNKNOWN` |
 
 Los motivos `direccion_inversa`, `marcador_correlacion`, `sin_efecto` y `especulativo` se añadieron el 2026-11-08 (informe «Prompt y modelos gratuitos Fase 2»): separan las trampas de dirección más frecuentes, que antes caían todas en `efecto_indirecto` o `contexto_ajeno`, para poder analizar los errores por tipo. El motivo `baja_confianza` se añadió el 2026-11-10 (informe «Benchmark v2 y propuesta de confianza Fase 2»).
+
+### Producción: `v2_veredicto` (decisión del equipo del 2026-11-10)
+En producción el LLM **no puede abstenerse**: para cada pregunta (gen, PMID, proceso) devuelve siempre un veredicto (`INCREASES`, `DECREASES` o `NO_EFFECT`, que se traducen a `+1`, `-1` y `neutro`), una **confianza** de 0 a 100 con anclas fijas, la frase o frases (1-3) que lo motivan con su cita literal, el razonamiento y, si la confianza es baja, la **limitación** que la explica (gen diana, marcador, otra molécula, especulación, conflicto, proceso no tratado o gen no mencionado). **La decisión de `UNKNOWN` la toma el código**, no el modelo:
+
+| Situación de la fila (gen, ruta, PMID) | Resultado |
+|---|---|
+| Ninguna cita verificada en la frase indicada | `UNKNOWN`, `cita_no_verificada` |
+| Hay `Polaridad_GO` (+1/−1) y el veredicto sobre la ruta **coincide** | Se acepta el efecto aunque la confianza no llegue al umbral: `resuelto`, `coincide_polaridad_GO` |
+| Hay `Polaridad_GO` y el veredicto **no coincide** (también un neutro frente a +1/−1) | `revisar`, `discrepancia_polaridad_GO`, con las frases y la confianza del LLM. El signo es el del LLM si su confianza llega al umbral; si no, `UNKNOWN` |
+| No hay `Polaridad_GO` y la confianza llega al umbral (`UMBRAL_VEREDICTO = 40`, configurable) | El veredicto del LLM: `+1`, `-1` o `neutro` (`resuelto`) |
+| No hay `Polaridad_GO` y la confianza no llega al umbral | `UNKNOWN`, `baja_confianza` más la limitación que dio el modelo (`no_concluyente`) |
+
+`neutro` significa que el abstract muestra que el gen **no cambia** el proceso («no afectó», «fue prescindible»); es el mismo valor que la Fase 1 da a las inmunoglobulinas y cuenta como respuesta resuelta (suma 0 en el score). Un abstract que no trata el efecto del gen no es neutro: el modelo debe dar una confianza baja y el código lo deja en `UNKNOWN`. Una limitación con confianza ≥ 40 contradice las anclas y pasa a `revisar` con `incoherencia_respuesta`. El contraste entre modelos no cambia. Las versiones `v1_proceso` y `v1_proceso_gen`, en las que el modelo sí podía responder `NO_CLEAR_EFFECT`, se conservan para el benchmark.
 
 `UNKNOWN` queda reservado para los casos **sin evidencia utilizable**. Cuando hay evidencia pero otra fuente la contradice (Gene Ontology o el modelo secundario), se conserva el signo y el caso se marca para revisión experta.
 

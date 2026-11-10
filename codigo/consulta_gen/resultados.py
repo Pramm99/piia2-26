@@ -13,6 +13,14 @@ Por ruta (gen, ruta, PMID), lo que lee el scoring:
     difieren, se añade discrepancia_polaridad_GO y la fila queda en revisar. Una Polaridad_GO «conflicto» o
     con los dos signos entre las filas del PMID no se contrasta.
 Los casos cerrados sin LLM por el filtro previo salen como UNKNOWN con no_menciona_gen.
+
+v2_veredicto (producción) cambia la regla de GO, porque el modelo siempre da un veredicto (+1, -1 o neutro):
+  - si la anotación tiene Polaridad_GO y el veredicto del LLM sobre esa ruta coincide (con alguna cita
+    verificada), se acepta aunque la confianza no llegue al umbral: coincide_polaridad_GO;
+  - si no coincide (también un neutro frente a +1/-1), discrepancia_polaridad_GO y revisar; el signo es el
+    del LLM si su confianza llega al umbral y UNKNOWN si no;
+  - sin Polaridad_GO, el veredicto vale si la confianza llega al umbral (UMBRAL_VEREDICTO); si no, UNKNOWN.
+Cada fila lleva el veredicto del LLM, su confianza y las frases (con su cita) que lo motivaron.
 """
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -20,16 +28,17 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from .confianza import confianza_final
-from .esquema import (ESTADO_NO_CONCLUYENTE, ESTADO_PENDIENTE, ESTADO_RESUELTO, ESTADO_REVISAR, MOTIVOS_REVISAR,
-                      SIGNO_DESCONOCIDO, SIGNO_NEGATIVO, SIGNO_POSITIVO, CasoProceso)
+from .esquema import (ESTADO_NO_CONCLUYENTE, ESTADO_PENDIENTE, ESTADO_RESUELTO, ESTADO_REVISAR,
+                      SIGNO_DESCONOCIDO, SIGNO_NEGATIVO, SIGNO_POSITIVO, V2_VEREDICTO, CasoProceso)
 from .limpieza import normalizar_pmid, valor_texto
+from .respuesta import pide_revision
 
 FICHERO_RESULTADOS = Path(__file__).resolve().parent.parent / "data" / "fase2_resultados.xlsx"
 SIGNOS = (SIGNO_POSITIVO, SIGNO_NEGATIVO)
 
 
 def _estado(signo: str, motivos: Sequence[str]) -> str:
-    if any(m in MOTIVOS_REVISAR for m in motivos):
+    if pide_revision(signo, motivos):
         return ESTADO_REVISAR
     return ESTADO_RESUELTO if signo != SIGNO_DESCONOCIDO else ESTADO_NO_CONCLUYENTE
 
@@ -72,6 +81,23 @@ def _texto(motivos: Iterable[str]) -> str:
     return "|".join(motivos)
 
 
+def _frases(salida: Dict) -> str:
+    """«S3: cita | S5: cita» con las frases que dio el modelo (las no verificadas, marcadas)."""
+    return " | ".join(f"{f['id_frase']}: {f['cita']}" + ("" if f.get("verificada") else " (no verificada)")
+                      for f in salida.get("frases", []))
+
+
+def ruta_v2(r: Dict, motivos: Sequence[str], pol: str, cita_ok: bool) -> Tuple[str, List[str]]:
+    """Regla de v2_veredicto para una ruta: (signo de la ruta, motivos). r: la ruta de respuesta._validar_v2."""
+    llm, final = r.get("signo_llm_ruta", SIGNO_DESCONOCIDO), r.get("signo_ruta", SIGNO_DESCONOCIDO)
+    motivos = list(motivos) + ([r["motivo_ruta"]] if r.get("motivo_ruta") else [])
+    if pol and cita_ok and llm == pol:
+        return pol, [m for m in motivos if m != "baja_confianza"] + ["coincide_polaridad_GO"]
+    if pol and cita_ok and llm != SIGNO_DESCONOCIDO:
+        return final, motivos + ["discrepancia_polaridad_GO"]
+    return final, motivos
+
+
 def tablas(resultados, principal: str, secundario: Optional[str], cerrados: Sequence[CasoProceso],
            df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """resultados: ejecucion.ejecutar (ResultadoCaso). -> (hoja Preguntas, hoja Por_ruta)."""
@@ -87,7 +113,8 @@ def tablas(resultados, principal: str, secundario: Optional[str], cerrados: Sequ
             "Signo": c["signo"], "Estado": c["estado"], "Motivos": _texto(c["motivos"]),
             "Confianza_modelo": p.get("confianza_modelo"), "Confianza_final": c["confianza_final"],
             "Signo_principal": c["signo_principal"], "Signo_secundario": c["signo_secundario"],
-            "Efecto": p.get("efecto"), "Id_frase": p.get("id_frase"), "Cita": p.get("justificacion_literal"),
+            "Efecto": p.get("efecto") or p.get("veredicto"), "Limitacion": p.get("limitacion"), "Frases": _frases(p),
+            "Id_frase": p.get("id_frase"), "Cita": p.get("justificacion_literal"),
             "Cita_verificada": p.get("cita_verificada"), "Tipo_evidencia": p.get("tipo_evidencia"),
             "Organismo": p.get("organismo"), "Tipo_celular": p.get("tipo_celular"),
             "Razonamiento": p.get("razonamiento_corto"), "Termino_origen": caso.termino_origen,
@@ -95,19 +122,24 @@ def tablas(resultados, principal: str, secundario: Optional[str], cerrados: Sequ
         por_ruta = {r["go_id"]: r for r in p.get("rutas", [])}
         for go_id, nombre_ruta, _ in caso.rutas:
             r = por_ruta.get(go_id, {})
-            signo_ruta = r.get("signo_ruta", SIGNO_DESCONOCIDO)
-            motivos = c["motivos"] + ([r["motivo_ruta"]] if r.get("motivo_ruta") else [])
             pol = pol_go.get((caso.gen, go_id, caso.pmid), "")
-            if signo_ruta in SIGNOS and pol and pol != signo_ruta:
-                motivos.append("discrepancia_polaridad_GO")
+            if p.get("version") == V2_VEREDICTO:
+                signo_ruta, motivos = ruta_v2(r, c["motivos"], pol, p.get("cita_verificada", False))
+            else:
+                signo_ruta = r.get("signo_ruta", SIGNO_DESCONOCIDO)
+                motivos = c["motivos"] + ([r["motivo_ruta"]] if r.get("motivo_ruta") else [])
+                if signo_ruta in SIGNOS and pol and pol != signo_ruta:
+                    motivos.append("discrepancia_polaridad_GO")
             estado = c["estado"] if c["estado"] == ESTADO_PENDIENTE else _estado(signo_ruta, motivos)
             rutas.append({
                 "Gen": caso.gen, "GO_ID": go_id, "Ruta_Nombre": nombre_ruta, "PMID": caso.pmid,
                 "Proceso_ID": caso.nucleo_id, "Proceso": caso.nucleo_nombre, "Signo_ruta": signo_ruta,
                 "Estado": estado, "Motivos": _texto(motivos),
-                "Confianza_final": c["confianza_final"] if signo_ruta in SIGNOS else None,
+                "Veredicto_LLM": r.get("signo_llm_ruta", r.get("signo_ruta")), "Confianza_modelo": p.get("confianza_modelo"),
+                "Confianza_final": c["confianza_final"] if signo_ruta != SIGNO_DESCONOCIDO else None,
                 "Polaridad_GO": pol, "Destino": destinos.get((caso.gen, go_id), ""),
                 "Signo_principal": c["signo_principal"], "Signo_secundario": c["signo_secundario"],
+                "Frases": _frases(p), "Razonamiento": p.get("razonamiento_corto"),
                 "Id_frase": p.get("id_frase"), "Cita": p.get("justificacion_literal")})
     for caso in cerrados:  # filtro previo: UNKNOWN sin llamar al LLM
         base = {"Gen": caso.gen, "PMID": caso.pmid, "Proceso_ID": caso.nucleo_id, "Proceso": caso.nucleo_nombre,

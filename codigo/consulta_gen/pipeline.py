@@ -5,7 +5,7 @@
   - v1_proceso_gen: los mismos casos, como preguntas sueltas; ejecucion.py las envía por gen.
 En las dos, el filtro previo «¿menciona el gen?» se aplica antes del LLM (no_menciona_gen, 0 llamadas),
 para que el benchmark compare solo los prompts.
-ejecutar_fase2 encadena todo en producción: preguntas de v1_proceso_gen, dos modelos, contraste y salida
+ejecutar_fase2 encadena todo en producción: preguntas de v2_veredicto, dos modelos, contraste y salida
 (resultados.py).
 """
 from pathlib import Path
@@ -18,7 +18,7 @@ from .casos import construir_casos, construir_casos_y_cerrados
 from .ejecucion import Resumen, ejecutar
 from .esquema import VERSIONES_PROCESO, PromptLLM
 from .lectura import cargar_hoja, fila_a_evidencia, filtrar, iterar_filas, pendientes_de_llm, solo_activadas
-from .prompt import CONFIG_V0, CONFIG_V1_GEN, ConfigPrompt, construir_prompt
+from .prompt import CONFIG_V0, CONFIG_V2, ConfigPrompt, construir_prompt
 from .registro import Registro
 from .respuesta import validar_respuesta
 from .resultados import FICHERO_RESULTADOS, escribir, tablas
@@ -72,16 +72,17 @@ def resolver_respuesta(prompt: PromptLLM, texto_llm: str) -> Dict[str, Any]:
 
 def ejecutar_fase2(ruta_excel: str, clientes: Sequence, gen: Optional[str] = None, go_id: Optional[str] = None,
                    registro: Optional[Registro] = None, salida: Optional[Path] = FICHERO_RESULTADOS,
-                   activadas: bool = True):
-    """Fase 2 completa con v1_proceso_gen: Excel de la Fase 1 -> preguntas -> modelos (clientes[0] principal,
-    clientes[1] secundario, opcional) -> contraste -> Excel de resultados. Reanudable: lo registrado no se
-    vuelve a pedir y lo que no responde queda «pendiente» para la siguiente ejecución. Por defecto solo las
-    rutas activadas. Devuelve (hoja Preguntas, hoja Por_ruta, resumen de la ejecución, recuento de casos)."""
+                   activadas: bool = True, cfg: ConfigPrompt = CONFIG_V2):
+    """Fase 2 completa: Excel de la Fase 1 -> preguntas (por defecto v2_veredicto; cfg=CONFIG_V1_GEN para la v1)
+    -> modelos (clientes[0] principal, clientes[1] secundario, opcional) -> contraste -> Excel de resultados.
+    Reanudable: lo registrado no se vuelve a pedir y lo que no responde queda «pendiente» para la siguiente
+    ejecución. Por defecto solo las rutas activadas.
+    Devuelve (hoja Preguntas, hoja Por_ruta, resumen de la ejecución, recuento de casos)."""
     df = pendientes_de_llm(filtrar(cargar_hoja(ruta_excel), gen, go_id))
     if activadas:
         df = solo_activadas(df)
     casos, cerrados, cuenta = construir_casos_y_cerrados(df)
-    preguntas = [construir_prompt(c, CONFIG_V1_GEN) for c in casos]
+    preguntas = [construir_prompt(c, cfg) for c in casos]
     resultados, resumen = ejecutar(preguntas, clientes, registro) if preguntas else ([], Resumen())
     nombres = [c.cfg.nombre for c in clientes]
     df_preguntas, df_rutas = tablas(resultados, nombres[0], nombres[1] if len(nombres) > 1 else None, cerrados, df)

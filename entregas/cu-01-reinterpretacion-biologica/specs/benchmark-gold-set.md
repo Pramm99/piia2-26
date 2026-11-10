@@ -19,7 +19,7 @@ Un procedimiento de evaluación reproducible que permita elegir los modelos de p
    * **Precisión de las respuestas dadas:** de los casos en que el sistema da `+1` o `-1`, cuántos coinciden con la etiqueta del experto.
    * **Cobertura:** porcentaje de casos con estado `resuelto`.
    * **Recall de `UNKNOWN`:** de los casos que el experto etiquetó como `UNKNOWN`, cuántos detecta el sistema.
-   * **Matriz de confusión** 3×3 (`+1`, `-1`, `UNKNOWN`).
+   * **Matriz de confusión** 4×4 (`+1`, `-1`, `neutro`, `UNKNOWN`). Una etiqueta `NO_CLEAR_EFFECT` con el motivo `no_effect_found` cuenta como `neutro`; el resto, como `UNKNOWN`. El *gold set* provisional no tiene ningún caso neutro: hay que incluirlos al ampliarlo. En `v2_veredicto` (`--prompt=v2_veredicto`) se aplica la misma regla de GO que en producción: un veredicto que coincide con la `Polaridad_GO` del caso se acepta aunque su confianza no llegue al umbral. Si alguna ejecución se corta por el límite diario, `--comunes=N` calcula el informe sobre los N primeros casos que han respondido todos los modelos, para compararlos sobre los mismos casos.
    * **Porcentaje de JSON válido** y **porcentaje de citas verificadas**.
    * **Acuerdo con `Polaridad_GO`** en los casos que la tienen.
    * **Latencia media por llamada** y número de casos por día que permiten los límites del plan gratuito.

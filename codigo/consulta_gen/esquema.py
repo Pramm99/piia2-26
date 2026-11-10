@@ -5,14 +5,17 @@ from typing import Dict, List, Optional, Tuple
 SIGNO_POSITIVO = "+1"
 SIGNO_NEGATIVO = "-1"
 SIGNO_DESCONOCIDO = "UNKNOWN"
-SIGNOS_VALIDOS = (SIGNO_POSITIVO, SIGNO_NEGATIVO, SIGNO_DESCONOCIDO)
+SIGNO_NEUTRO = "neutro"  # el gen no aumenta ni disminuye el proceso (el mismo valor que las Ig de la Fase 1)
+SIGNOS_VALIDOS = (SIGNO_POSITIVO, SIGNO_NEGATIVO, SIGNO_NEUTRO, SIGNO_DESCONOCIDO)
 
 # Versiones del prompt (se comparan en el benchmark sobre el mismo gold set)
 V0_ORIGINAL = "v0_original"  # línea base congelada: pregunta por la ruta (solo para el benchmark)
 V1_PROCESO = "v1_proceso"    # pregunta por el proceso núcleo; el código compone el signo hasta la ruta
 V1_GEN = "v1_proceso_gen"    # las mismas preguntas que v1, enviadas por gen en una lista (una línea por pregunta)
-VERSIONES = (V0_ORIGINAL, V1_PROCESO, V1_GEN)
+V2_VEREDICTO = "v2_veredicto"  # producción: veredicto obligado (+1/-1/neutro) con confianza; el UNKNOWN lo decide el código
+VERSIONES = (V0_ORIGINAL, V1_PROCESO, V1_GEN, V2_VEREDICTO)
 VERSIONES_PROCESO = (V1_PROCESO, V1_GEN)  # respuestas con el esquema de ESQUEMA_V1
+VERSIONES_LISTA = (V1_GEN, V2_VEREDICTO)   # se envían por gen, varias preguntas por llamada
 
 # Estado y motivos de la salida (ADR-003)
 ESTADO_RESUELTO, ESTADO_REVISAR, ESTADO_NO_CONCLUYENTE = "resuelto", "revisar", "no_concluyente"
@@ -25,6 +28,9 @@ MIN_CONFIANZA_SIGNO = 50
 # Mantienen el signo y piden revisión (los dos últimos los añade el contraste de resultados.py)
 MOTIVOS_REVISAR = ("incoherencia_respuesta", "baja_confianza", "discrepancia_entre_modelos", "discrepancia_polaridad_GO")
 ESTADO_PENDIENTE = "pendiente"  # el modelo principal aún no ha respondido (límite del plan gratuito): no es UNKNOWN
+# v2_veredicto: el modelo siempre da un veredicto y una confianza; por debajo de este umbral el código lo convierte
+# en UNKNOWN (baja_confianza), salvo que coincida con la Polaridad_GO de esa anotación (resultados.py).
+UMBRAL_VEREDICTO = 40
 
 HOJA_EVIDENCIAS = "Con_abstract"
 
@@ -106,7 +112,7 @@ class PromptLista:
     preguntas: Tuple[PromptLLM, ...]
     esquema_json: Optional[Dict] = field(default=None, compare=False)
     max_salida: Optional[int] = None  # max_completion_tokens de la llamada (crece con el nº de preguntas)
-    version: str = V1_GEN
+    version: str = V1_GEN             # o V2_VEREDICTO
 
     @property
     def gen(self) -> str:
@@ -153,6 +159,41 @@ ESQUEMA_LISTA = {
     }}},
 }
 EFECTO_A_SIGNO = {"INCREASES": 1, "DECREASES": -1, "NO_CLEAR_EFFECT": None}
+
+# Esquema de la respuesta de v2_veredicto: siempre un veredicto (sin abstención), su confianza y las frases que lo
+# motivan, cada una con su cita literal. Las trampas de la v1 pasan a ser una «limitación» que explica una confianza baja.
+LIMITACIONES_V2 = ["none", "gene_not_discussed", "gene_is_the_target", "marker_or_correlation_only",
+                   "effect_of_other_molecule", "speculation_only", "conflicting_results", "process_not_addressed"]
+ESQUEMA_V2 = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["frases", "tipo_evidencia", "organismo", "tipo_celular", "razonamiento_corto", "limitacion",
+                 "confianza", "veredicto"],
+    "properties": {
+        "frases": {"type": "array", "description": "1-3 objects {\"id_frase\": T|S1|S2..., \"cita\": >=6 words copied exactly from that sentence}",
+                   "items": {"type": "object", "additionalProperties": False, "required": ["id_frase", "cita"],
+                             "properties": {"id_frase": {"type": "string"}, "cita": {"type": "string"}}}},
+        "tipo_evidencia": ESQUEMA_V1["properties"]["tipo_evidencia"],
+        "organismo": ESQUEMA_V1["properties"]["organismo"],
+        "tipo_celular": ESQUEMA_V1["properties"]["tipo_celular"],
+        "razonamiento_corto": ESQUEMA_V1["properties"]["razonamiento_corto"],
+        "limitacion": {"type": "string", "enum": LIMITACIONES_V2},
+        "confianza": {"type": "integer", "description": "integer 0-100, see rule 12"},
+        "veredicto": {"type": "string", "enum": ["INCREASES", "DECREASES", "NO_EFFECT"]},
+    },
+}
+ESQUEMA_LISTA_V2 = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["respuestas"],
+    "properties": {"respuestas": {"type": "array", "items": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["q"] + ESQUEMA_V2["required"],
+        "properties": {"q": {"type": "string", "description": "Q1, Q2..."}, **ESQUEMA_V2["properties"]},
+    }}},
+}
+VEREDICTO_A_SIGNO = {"INCREASES": SIGNO_POSITIVO, "DECREASES": SIGNO_NEGATIVO, "NO_EFFECT": SIGNO_NEUTRO}
 # Campos que pueden faltar en respuestas guardadas antes de existir (el benchmark vuelve a validar registros antiguos)
 CAMPOS_NUEVOS_V1 = ("confianza",)
 # Motivos del modelo -> motivos del ADR-003 (los cuatro últimos son nuevos y hay que añadirlos al ADR)
