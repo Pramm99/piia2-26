@@ -2,7 +2,7 @@
 import os
 
 # Rutas ancladas a esta carpeta (no al directorio desde el que se lanza el script)
-DIR_FASE1 = os.path.dirname(os.path.abspath(__file__))           # codigo/extraer_info
+DIR_FASE1 = os.path.dirname(os.path.abspath(__file__))           # codigo/fase1_ingesta
 DIR_DATA = os.path.join(os.path.dirname(DIR_FASE1), "data")      # codigo/data
 
 # --- Entradas / salidas ---
@@ -24,7 +24,7 @@ FICHERO_ENV = os.path.join(os.path.dirname(DIR_FASE1), ".env")
 
 
 def _leer_env(ruta=FICHERO_ENV):
-    """KEY=valor por línea; se ignoran comentarios y líneas vacías (mismo formato que consulta_gen/cliente.py)."""
+    """KEY=valor por línea; se ignoran comentarios y líneas vacías (mismo formato que fase2_inferencia/cliente.py)."""
     if not os.path.exists(ruta):
         return {}
     pares = {}

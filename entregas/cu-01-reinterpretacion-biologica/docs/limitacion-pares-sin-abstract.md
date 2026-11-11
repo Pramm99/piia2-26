@@ -1,7 +1,7 @@
 # Limitación: pares (gen, ruta) sin ningún abstract
 
 > Estado: **vigente** (2026-11-08; cifras actualizadas con la ejecución completa del 2026-11-09). Afecta a la Fase 1 (ingesta) y a cómo la Fase 2 y el Net Pathway Score
-> tratan estos pares. Código: `codigo/extraer_info/polaridad.py` (`cerrar_sin_evidencia`).
+> tratan estos pares. Código: `codigo/fase1_ingesta/polaridad.py` (`cerrar_sin_evidencia`).
 
 ## 1. El problema
 

@@ -53,20 +53,20 @@ El LLM **no puede abstenerse**: para cada pregunta devuelve siempre un veredicto
 
 El control se organiza en tres capas:
 
-1. **Prompt** (`codigo/consulta_gen/prompt.py`). Pide las frases, el razonamiento y la confianza **antes** del veredicto. Explica cada trampa de dirección con un criterio explícito y enumera los campos del JSON con sus valores permitidos.
+1. **Prompt** (`codigo/fase2_inferencia/prompt.py`). Pide las frases, el razonamiento y la confianza **antes** del veredicto. Explica cada trampa de dirección con un criterio explícito y enumera los campos del JSON con sus valores permitidos.
    * El modelo siempre elige un veredicto. Las trampas se declaran como `limitacion` y bajan la confianza.
    * La confianza no tiene cifras ni umbral, solo una guía cualitativa de más a menos apoyo.
    * El modelo responde en inglés y el código traduce las limitaciones a los motivos de la tabla (`MOTIVO_MODELO_A_ADR`).
-2. **Reglas automáticas**, que no dependen del juicio del modelo (`codigo/consulta_gen/respuesta.py`):
+2. **Reglas automáticas**, que no dependen del juicio del modelo (`codigo/fase2_inferencia/respuesta.py`):
    * **Filtro previo** (`casos.py`): si el abstract no nombra al gen como palabra completa por su símbolo, sus alias de MyGene o su nombre completo, la pregunta se cierra con `no_menciona_gen` sin llamar al LLM. `CD7` no cuenta dentro de `CD70`, `CD-7` equivale a `CD7`, los alias de menos de 3 caracteres se ignoran y una forma escrita toda en minúsculas no cuenta como mención.
    * **Verificación de la cita:** el abstract va en frases numeradas (`[T]`, `[S1]`, `[S2]`…) y la cita debe estar dentro de la frase que indica el modelo. Se compara tras una normalización solo para comparar: minúsculas, todos los guiones unificados, letras griegas escritas como palabras (α→alpha, κ→kappa…) y sin puntuación. La cita debe tener **al menos 6 palabras** y coincidir con palabras enteras. El modelo da de 1 a 3 frases y basta con que una se verifique. Si ninguna se verifica, el signo pasa a `UNKNOWN` con `cita_no_verificada`, y se conserva el veredicto original del modelo (`signo_llm`) para auditoría.
    * **Formato:** un JSON no interpretable, un campo que falta o un valor fuera de los permitidos da `json_invalido`. También una confianza ausente o que no sea un entero de 0 a 100, y una lista de frases mal formada.
    * **Confianza y coherencia:** una confianza por debajo de `UMBRAL_VEREDICTO` (80) convierte el veredicto en `UNKNOWN` con `baja_confianza`, salvo que coincida con GO (capa 3). Un veredicto que llega al umbral pero trae una limitación se conserva, añade `incoherencia_respuesta` y queda en `revisar`.
-3. **Contraste con fuentes independientes** (`codigo/consulta_gen/resultados.py`):
+3. **Contraste con fuentes independientes** (`codigo/fase2_inferencia/resultados.py`):
    * **Gene Ontology**, fila a fila (gen, ruta, PMID). Solo se contrasta cuando las anotaciones de ese PMID dan una única `Polaridad_GO` (`+1` o `-1`). Se aplica la tabla de arriba; la coincidencia exige al menos una cita verificada.
    * **Dos modelos:** cada pregunta se evalúa con un **modelo principal** y un **modelo secundario**, ambos gratuitos. El `signo` final es el del principal y se registran los dos (`Signo_principal` y `Signo_secundario`). Cualquier diferencia entre ellos (signos opuestos, o uno `UNKNOWN` y el otro no) añade el motivo `discrepancia_entre_modelos` y deja el caso en `revisar`. Una respuesta del secundario con `json_invalido` no cuenta como discrepancia: no dice nada del abstract, solo que ese modelo falló el formato. **Respaldo:** si el principal no responde (límite diario, red) o su JSON no vale, y el secundario sí tiene una respuesta válida, decide la del secundario, con el motivo `respaldo_secundario` y la columna `Modelo_respuesta`. Esa pregunta se queda sin contraste entre modelos, y `confianza_final` aplica el factor `sin_segundo`. Si ninguno de los dos ha respondido, el caso queda `pendiente`, nunca `UNKNOWN`. Qué modelo es el principal y cuál el secundario se fija en el [ADR-005](adr-005-eleccion-modelo-coste-cero.md), a partir del benchmark.
 
-**Porcentaje final (`confianza_final`).** La confianza declarada suele estar inflada, así que el porcentaje que se muestra junto al signo y al motivo se corrige con señales que no dependen de lo que el modelo diga de sí mismo (`codigo/consulta_gen/confianza.py`):
+**Porcentaje final (`confianza_final`).** La confianza declarada suele estar inflada, así que el porcentaje que se muestra junto al signo y al motivo se corrige con señales que no dependen de lo que el modelo diga de sí mismo (`codigo/fase2_inferencia/confianza.py`):
 
 `confianza_final = confianza_modelo × factor_evidencia × factor_frase × factor_acuerdo`, entre 0 y 100.
 
@@ -146,15 +146,15 @@ Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga 
 
 ## Referencias
 * **Código del proyecto (estado actual):**
-  * `codigo/consulta_gen/respuesta.py`: validación de la respuesta (`_validar`), verificación de la cita, `UNKNOWN` forzado, `json_invalido`, `baja_confianza` e `incoherencia_respuesta`.
-  * `codigo/consulta_gen/esquema.py`: esquemas JSON estrictos (`ESQUEMA` / `ESQUEMA_LISTA`, `CAMPOS_CONTEXTO`), tabla de motivos y umbral (`UMBRAL_VEREDICTO`).
-  * `codigo/consulta_gen/prompt.py`: reglas del prompt.
-  * `codigo/consulta_gen/casos.py`: filtro previo `no_menciona_gen` (con `menciona_gen` de `extraer_info/relevancia.py`).
-  * `codigo/consulta_gen/limpieza.py`: `forma_comparacion()` y `segmentar_frases()`.
-  * `codigo/consulta_gen/resultados.py`: contraste entre modelos y con `Polaridad_GO`, y salida `fase2_resultados.xlsx`.
-  * `codigo/consulta_gen/confianza.py`: `confianza_final` y sus factores provisionales.
+  * `codigo/fase2_inferencia/respuesta.py`: validación de la respuesta (`_validar`), verificación de la cita, `UNKNOWN` forzado, `json_invalido`, `baja_confianza` e `incoherencia_respuesta`.
+  * `codigo/fase2_inferencia/esquema.py`: esquemas JSON estrictos (`ESQUEMA` / `ESQUEMA_LISTA`, `CAMPOS_CONTEXTO`), tabla de motivos y umbral (`UMBRAL_VEREDICTO`).
+  * `codigo/fase2_inferencia/prompt.py`: reglas del prompt.
+  * `codigo/fase2_inferencia/casos.py`: filtro previo `no_menciona_gen` (con `menciona_gen` de `fase1_ingesta/relevancia.py`).
+  * `codigo/fase2_inferencia/limpieza.py`: `forma_comparacion()` y `segmentar_frases()`.
+  * `codigo/fase2_inferencia/resultados.py`: contraste entre modelos y con `Polaridad_GO`, y salida `fase2_resultados.xlsx`.
+  * `codigo/fase2_inferencia/confianza.py`: `confianza_final` y sus factores provisionales.
   * `codigo/evaluacion/evaluar_gold.py`: métricas y calibración sobre el *gold set*.
-  * `codigo/extraer_info/polaridad.py`: cierre `sin_evidencia` de los pares sin abstract.
+  * `codigo/fase1_ingesta/polaridad.py`: cierre `sin_evidencia` de los pares sin abstract.
 * **Salidas estructuradas:**
   * Groq: [https://console.groq.com/docs/structured-outputs](https://console.groq.com/docs/structured-outputs)
   * Gemini API: [https://ai.google.dev/gemini-api/docs/structured-output](https://ai.google.dev/gemini-api/docs/structured-output)

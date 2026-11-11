@@ -5,7 +5,7 @@ from typing import Optional
 
 import pandas as pd
 
-from ._extraer_info import DESTINOS_SIN_LLM
+from ._fase1 import DESTINOS_SIN_LLM
 from .esquema import COLUMNAS_OBLIGATORIAS, HOJA_EVIDENCIAS
 
 

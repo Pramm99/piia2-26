@@ -6,7 +6,7 @@ state: Aceptado (fuentes externas añadidas el 2026-11-08; cifras de la ejecuci�
 # ADR 002 - Ingesta de Evidencias: GAF de Gene Ontology + Europe PMC con Respaldo en NCBI
 
 ## Decisión
-La ingesta de evidencias (Fase 1, `codigo/extraer_info/`) se resuelve en tres etapas:
+La ingesta de evidencias (Fase 1, `codigo/fase1_ingesta/`) se resuelve en tres etapas:
 
 1. **Mapeo gen–ruta → PMID a partir de ficheros oficiales de Gene Ontology**, descargados una sola vez:
    * `go-basic.obo` (ontología): sirve para construir el grafo de términos, resolver identificadores obsoletos o alternativos (`alt_id`, `replaced_by`) y propagar cada ruta del Excel a todo su subárbol mediante las relaciones `is_a`, `part_of`, `regulates`, `positively_regulates` y `negatively_regulates`. A lo largo del camino se componen el signo (`Polaridad_GO`) y la profundidad.
@@ -69,7 +69,7 @@ Aceptamos los compromisos asociados:
   * *Aplazadas.* Para los 668 pares que siguen sin abstract, el documento de la limitación propone, por orden: las anotaciones TAS de Reactome resueltas a su referencia, un diccionario fijo de palabras clave por ruta para Europe PMC, y gene2pubmed + MeSH. Están pendientes de decidir.
 
 ## Referencias
-* **Código del proyecto** (`codigo/extraer_info/`):
+* **Código del proyecto** (`codigo/fase1_ingesta/`):
   * `grafo_go.py`: OBO, propagación y composición de signos.
   * `cruce_gaf.py`: lectura del GAF.
   * `pmid_externos.py`, `relevancia.py` y `fuentes/` (`generif.py`, `europepmc.py`, `uniprot.py`, `cache.py`): fuentes externas.

@@ -2,8 +2,8 @@
 import pytest
 
 from abstracts import limpiar_texto
-from consulta_gen.limpieza import forma_comparacion, limpiar_abstract, normalizar_pmid, segmentar_frases
-from consulta_gen.respuesta import verificar_cita
+from fase2_inferencia.limpieza import forma_comparacion, limpiar_abstract, normalizar_pmid, segmentar_frases
+from fase2_inferencia.respuesta import verificar_cita
 from relevancia import menciona_gen, patron_gen
 
 ABSTRACT = ("Human K12-Fc stimulated the up-regulation of CD25, CD54, and CD69 on human NK cells. "

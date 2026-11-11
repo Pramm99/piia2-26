@@ -4,8 +4,8 @@ import socket
 import pandas as pd
 import pytest
 
-from scoring import config
-from scoring.nps import calcular, escribir, peso
+from fase3_scoring import config
+from fase3_scoring.nps import calcular, escribir, peso
 
 HUMANO, RATON = ("human", "NK"), ("mouse", "NK")
 

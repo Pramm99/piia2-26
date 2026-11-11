@@ -3,21 +3,21 @@ Definición de la estructura del código fuente
 
 El código del pipeline no vive en esta carpeta src/, sino en codigo/, dentro de la carpeta del
 equipo (entregas/cu-01-reinterpretacion-biologica/codigo/). Este fichero describe esa estructura:
-qué módulos existen y cuáles están previstos, siguiendo ARCHITECTURE.md (los números entre
-corchetes son los componentes de su diagrama). Estado a 2026-11-10.
+qué módulos existen, siguiendo ARCHITECTURE.md (los números entre corchetes son los componentes
+de su diagrama). Hay una carpeta por fase. Estado a 2026-11-11.
 
 Leyenda: (hecho) implementado · (en parte) implementado con cambios pendientes ·
          (previsto) pendiente; el nombre del fichero es una propuesta.
 
 codigo/
-├── extraer_info/                  # FASE 1 · Ingesta (spec descarga-evidencias-go-pmc, ADR-002)
-│   │                              #   Se ejecuta con: python codigo/extraer_info/main.py
+├── fase1_ingesta/                 # FASE 1 · Ingesta (spec descarga-evidencias-go-pmc, ADR-002)
+│   │                              #   Se ejecuta con: python codigo/fase1_ingesta/main.py
 │   ├── main.py                    #   (hecho) Orquesta la Fase 1 en orden.
 │   ├── config.py                  #   (hecho) Rutas (entrada: los Excels de tools_cimus/), URLs, umbrales y opciones
 │   │                              #   de filtrado; lee NCBI_EMAIL y NCBI_API_KEY de codigo/.env.
 │   ├── red.py                     #   (hecho) Sesión HTTP con reintentos y descarga atómica del OBO y el GAF.
-│   ├── entrada_excel.py           #   (en parte) [1] Lectura de los dos Excels de rutas -> pares (gen, ruta) con
-│   │                              #   Estado_Original. Pendiente: aceptar .csv y validar columnas con ValueError.
+│   ├── entrada_excel.py           #   (hecho) [1] Lectura de las dos listas de rutas (.xlsx o .csv) -> pares (gen,
+│   │                              #   ruta) con Estado_Original; ValueError si falta una columna, antes de la red.
 │   ├── grafo_go.py                #   (hecho) [2] Grafo GO, propagación al subárbol con profundidad y signo.
 │   ├── inmunoglobulinas.py        #   (hecho) [3] Genes de inmunoglobulina (HGNC) -> hoja Inmunoglobulinas, neutros.
 │   ├── cruce_gaf.py               #   (hecho) [4] Cruce con el GAF -> evidencias con PMID y tabla de anotaciones.
@@ -34,8 +34,8 @@ codigo/
 │   ├── salida.py                  #   (hecho) [8] Embudo por consola y Excel de la Fase 1 (7 hojas).
 │   └── fase1_dataset_abstracts.xlsx  # Salida de la Fase 1 y entrada de la Fase 2 (no se versiona).
 │
-├── consulta_gen/                  # FASE 2 · Inferencia (specs limpieza e inferencia-llm, ADR-003/004/005)
-│   │                              #   Se ejecuta desde codigo/ con: python -m consulta_gen ejecutar
+├── fase2_inferencia/              # FASE 2 · Inferencia (specs limpieza e inferencia-llm, ADR-003/004/005)
+│   │                              #   Se ejecuta desde codigo/ con: python -m fase2_inferencia ejecutar
 │   ├── esquema.py                 #   (hecho) Tipos inmutables (CasoProceso, PromptLLM, PromptLista), esquemas
 │   │                              #   JSON de la respuesta, motivos y umbral (UMBRAL_VEREDICTO = 80).
 │   ├── lectura.py                 #   (hecho) [9] Hoja Con_abstract de las dos listas -> filas que van al LLM.
@@ -53,11 +53,16 @@ codigo/
 │   ├── confianza.py               #   (hecho) [13] confianza_final (factores provisionales).
 │   ├── resultados.py              #   (hecho) [14] Contraste entre modelos y con GO; fase2_resultados.xlsx.
 │   ├── pipeline.py                #   (hecho) [14] Orquestación de la Fase 2 (ejecutar_fase2).
-│   ├── _extraer_info.py           #   (hecho) Puente hacia los módulos de la Fase 1.
+│   ├── _fase1.py                  #   (hecho) Puente hacia los módulos de la Fase 1.
 │   └── __init__.py / __main__.py  #   (hecho) API del paquete, ejecución completa y demo por línea de comandos.
 │
-├── scoring/                       # FASE 3 · Agregación y Net Pathway Score [15]
-│                                  #   (previsto) Sin especificar: falta la regla de agregación.
+├── fase3_scoring/                 # FASE 3 · Scoring (spec scoring-net-pathway-score) [15]
+│   │                              #   Se ejecuta desde codigo/ con: python -m fase3_scoring
+│   ├── nps.py                     #   (hecho) Votos ponderados por artículo -> signo del par -> NPS de cada ruta;
+│   │                              #   fase3_scoring.xlsx (Por_ruta, Por_par, Resumen).
+│   ├── config.py                  #   (hecho) Pesos de contexto, minoría de conflicto y umbrales de lectura
+│   │                              #   (provisionales).
+│   └── __init__.py / __main__.py  #   (hecho) API del paquete y línea de comandos.
 │
 ├── evaluacion/                    # BENCHMARK [16] (spec benchmark-gold-set, ADR-005)
 │   ├── seleccionar_gold.py        #   (hecho) Rehace el gold set sobre una Fase 1 nueva sin volver a sortear.
@@ -68,8 +73,8 @@ codigo/
 │   ├── plantilla_etiquetado.*     #   (hecho) Plantilla a ciegas (.jsonl versionado; .xlsx, con las columnas de la
 │   │                              #   guía, incluidas confianza y nota, no se versiona).
 │   ├── guia_etiquetado.md         #   (hecho) Guía de etiquetado a 4 clases.
-│   ├── etiquetas_provisionales/   #   (en parte) Etiquetas de anotadores Claude, con su SHA-256 y LEEME.md.
-│   │                              #   Faltan las etiquetas de CIMUS.
+│   ├── etiquetas_provisionales/   #   (hecho) Etiquetas del gold set (anotadores Claude a ciegas, doble etiqueta),
+│   │                              #   con su SHA-256 y LEEME.md.
 │   └── informe_gold_provisional.txt  # Informe del benchmark (Gemini y gpt-oss).
 │
 ├── pytest.ini                     # Configuración de pytest (python -m pytest desde codigo/).
@@ -80,6 +85,8 @@ codigo/
 │   ├── test_resultados.py         #   (hecho) Contraste con GO y entre modelos, y confianza_final.
 │   ├── test_ejecucion.py          #   (hecho) Registro y ejecución reanudable con el cliente simulado.
 │   ├── test_fase1.py              #   (hecho) Entrada, grafo GO, inmunoglobulinas, descarga simulada y .env.
+│   ├── test_entrada.py            #   (hecho) Entrada .xlsx y .csv y validación de columnas.
+│   ├── test_scoring.py            #   (hecho) Votos, signo del par, contribución y NPS.
 │   └── test_red.py                #   (hecho) Reintentos con espera exponencial de la sesión HTTP.
 │
 ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas (los únicos .xlsx versionados)
@@ -88,7 +95,7 @@ codigo/
 │                                  #   go-basic.obo, goa_human.gaf.gz, cachés (cache_abstracts.json,
 │                                  #   cache_mygene.json, cache_epmc_busquedas.json, cache_uniprot.json,
 │                                  #   hgnc_inmunoglobulinas.json), respuestas_llm.jsonl, llamadas_llm.jsonl,
-│                                  #   fase2_resultados.xlsx y los registros del benchmark (benchmark*/).
+│                                  #   fase2_resultados.xlsx, fase3_scoring.xlsx y los registros del benchmark.
 ├── requirements.txt               # Dependencias de Python: requests, pandas, openpyxl (y pytest para las pruebas).
 ├── .env.example                   # Nombres de las claves (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY,
 │                                  #   NCBI_EMAIL, NCBI_API_KEY), vacíos.
@@ -96,4 +103,4 @@ codigo/
 
 Eliminados (siguen en el historial de git):
   - ApiREST_OFICIAL.py             # Prototipo inicial contra AmiGO/GOlr (descartado en el ADR-002).
-  - consulta_gen/consultar_gen.py  # Primera versión con Groq y llama3-8b-8192; sustituida por cliente.py.
+  - consultar_gen.py               # Primera versión de la Fase 2 con Groq y llama3-8b-8192; sustituida por cliente.py.

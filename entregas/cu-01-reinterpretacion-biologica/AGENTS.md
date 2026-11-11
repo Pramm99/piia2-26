@@ -12,9 +12,9 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 
 | Ruta | Contenido |
 |---|---|
-| `codigo/extraer_info/` | **Fase 1 · Ingesta.** Excels de CIMUS → pares → GAF de GO → PMIDs → abstracts → `fase1_dataset_abstracts.xlsx`. Usa imports planos (`import config`). |
-| `codigo/consulta_gen/` | **Fase 2 · Inferencia.** Preguntas (gen, PMID, proceso núcleo) → dos LLM → validación → contraste → `codigo/data/fase2_resultados.xlsx`. Es un paquete: se ejecuta con `python -m consulta_gen` desde `codigo/`. Lee la Fase 1 a través del puente `_extraer_info.py`. |
-| `codigo/scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m scoring` desde `codigo/`; los umbrales están en `scoring/config.py`. |
+| `codigo/fase1_ingesta/` | **Fase 1 · Ingesta.** Excels de CIMUS → pares → GAF de GO → PMIDs → abstracts → `fase1_dataset_abstracts.xlsx`. Usa imports planos (`import config`). |
+| `codigo/fase2_inferencia/` | **Fase 2 · Inferencia.** Preguntas (gen, PMID, proceso núcleo) → dos LLM → validación → contraste → `codigo/data/fase2_resultados.xlsx`. Es un paquete: se ejecuta con `python -m fase2_inferencia` desde `codigo/`. Lee la Fase 1 a través del puente `_fase1.py`. |
+| `codigo/fase3_scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m fase3_scoring` desde `codigo/`; los umbrales están en `fase3_scoring/config.py`. |
 | `codigo/evaluacion/` | Benchmark: gold set, guía de etiquetado, `evaluar_gold.py`, `seleccionar_gold.py` y `buscar_neutros.py`. |
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
 | `codigo/tools_cimus/` | Entrada original de CIMUS (únicos Excels versionados). |
@@ -29,16 +29,16 @@ Desde `codigo/`. Está probado con Python 3.14. El entorno virtual es `codigo/pi
 pip install -r requirements.txt
 cp .env.example .env          # y rellena las claves que vayas a usar
 
-python extraer_info/main.py   # Fase 1 (unos 58 min en frío, unos minutos con caché)
-python -m consulta_gen CD7    # Fase 2 en modo demo: imprime la primera llamada, sin llamar a nadie
-python -m consulta_gen ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel]   # Fase 2 real, reanudable
-python -m scoring [excel_fase1] [excel_fase2] [log2fc]   # Fase 3, sin red (segundos)
+python fase1_ingesta/main.py   # Fase 1 (unos 58 min en frío, unos minutos con caché)
+python -m fase2_inferencia CD7    # Fase 2 en modo demo: imprime la primera llamada, sin llamar a nadie
+python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel]   # Fase 2 real, reanudable
+python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc]   # Fase 3, sin red (segundos)
 python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
 ```
 
 * **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta.
-* **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b` (en prueba). Si Gemini no responde o su JSON no vale, decide gpt-oss (`respaldo_secundario`). Con `--solo-respaldo`, gpt-oss solo recibe esas preguntas, para ahorrar su cupo diario. Los nombres válidos son las claves de `consulta_gen/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
+* **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b` (en prueba). Si Gemini no responde o su JSON no vale, decide gpt-oss (`respaldo_secundario`). Con `--solo-respaldo`, gpt-oss solo recibe esas preguntas, para ahorrar su cupo diario. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
 
 ## Reglas que no se negocian
 1. **Coste cero.** Solo planes gratuitos. No propongas ningún servicio, modelo ni API de pago.
@@ -55,10 +55,10 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
   * «genes *up*/*down*» es la dirección de expresión del gen en NK (un gen está en una sola lista);
   * «rutas activadas/suprimidas» es solo el **nombre de las dos listas** de CIMUS: la lectura ingenua que el proyecto pone en duda, no una conclusión.
   * En el código, `Estado_Original` vale `Activada` o `Suprimida`, y de ahí sale *up* o *down*. **Se procesan las dos listas.**
-* **Signos:** `+1`, `-1`, `neutro`, `UNKNOWN` (constantes de `consulta_gen/esquema.py`). Los estados son `resuelto`, `revisar`, `no_concluyente` y `pendiente`, y los motivos son los del [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md). No inventes un signo `CONTRADICCION`: el conflicto se expresa con estado y motivo.
+* **Signos:** `+1`, `-1`, `neutro`, `UNKNOWN` (constantes de `fase2_inferencia/esquema.py`). Los estados son `resuelto`, `revisar`, `no_concluyente` y `pendiente`, y los motivos son los del [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md). No inventes un signo `CONTRADICCION`: el conflicto se expresa con estado y motivo.
 * **Inmunoglobulinas:** se detectan con la lista de HGNC `immunoglobulin gene`, más JCHAIN y PIGR, y **no por el prefijo «IG»** (IGFBP7 no es una Ig). Salen como `neutro`, evaluando la Ig completa.
 * **Subárbol GO:** el gen casi nunca está anotado a la ruta misma, así que la búsqueda recorre todo el subárbol. Las rutas «regulation of X» sin dirección se tratan como X (`SIN_DIRECCION_COMO_PROCESO`, común a las dos fases).
-* **Prompt** (`consulta_gen/prompt.py`):
+* **Prompt** (`fase2_inferencia/prompt.py`):
   * es el mismo para todos los modelos, en inglés y con claves JSON en español;
   * **no** incluye la dirección del gen, ni `Polaridad_GO`, ni el contexto del tumor, ni ningún umbral o cifra de corte de la confianza. El umbral (`UMBRAL_VEREDICTO`) solo lo conoce el código;
   * el modelo siempre da un veredicto, y el `UNKNOWN` lo decide el código;
@@ -73,7 +73,7 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 * **Documentación:** describe solo el estado actual, sin versiones antiguas ni históricos. Las cifras de la Fase 1 son las de la ejecución de referencia del 2026-11-09, indicando la fecha.
 * **No toques una fase que no te han pedido:** un cambio en la Fase 1 altera el Excel del que dependen la Fase 2, el gold set y el benchmark.
 * **No afirmes decisiones** que solo aparecen en un comentario del código: compruébalas en los ADR o pregunta.
-* **Commits:** el título lleva la fase que cambia, p. ej. `Fase 1 (INGESTA): …`, `Fase 2: …` o `Fase 3 (SCORING): …`. Si toca varias, nómbralas todas. Añade los ficheros con rutas explícitas, nunca con `git add -A`. El push va a `main` del fork `Pramm99/piia2-26`, que alimenta el PR #10 de `usc-gria/piia2-26`.
+* **Commits:** el título lleva la fase que cambia, p. ej. `Fase 1 (INGESTA): …`, `Fase 2: …` o `Fase 3 (SCORING): …`. Si toca varias, nómbralas todas. Añade los ficheros con rutas explícitas, nunca con `git add -A`. El push va a `main` del fork `Pramm99/piia2-26`, que alimenta el PR #19 (Entrega 2) de `usc-gria/piia2-26`.
 * **Varios asistentes a la vez:** si otra sesión tiene cambios sin commit en la misma carpeta, no los incluyas en tu commit ni edites sus ficheros hasta que termine.
 
 ## Estado y pendientes
@@ -82,5 +82,4 @@ El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTU
 * confirmar gpt-oss como modelo secundario;
 * las etiquetas de CIMUS para el gold set;
 * el fichero de log2FC por gen de CIMUS y los umbrales definitivos del scoring;
-* el contraste entre modelos: relanzar la Fase 2 sin `--solo-respaldo` (varios días por el cupo de Groq);
-* reorganizar `codigo/` en una carpeta por fase (cuando se haga, hay que mover a la vez los imports, el puente, las specs, los ADR y este fichero).
+* el contraste entre modelos: relanzar la Fase 2 sin `--solo-respaldo` (varios días por el cupo de Groq).

@@ -4,7 +4,7 @@ import unicodedata
 
 import pandas as pd
 
-from ._extraer_info import limpiar_texto  # puente hacia extraer_info (Fase 1)
+from ._fase1 import limpiar_texto  # puente hacia fase1_ingesta (Fase 1)
 
 _ESPACIOS = re.compile(r"\s+")
 

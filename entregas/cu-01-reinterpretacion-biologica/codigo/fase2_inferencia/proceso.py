@@ -17,7 +17,7 @@ traslada el efecto a la ruta del Excel:
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
-from ._extraer_info import (OBO_FILE, SIN_DIRECCION_COMO_PROCESO, cargar_go, cargar_nombres, cargar_sinonimos,
+from ._fase1 import (OBO_FILE, SIN_DIRECCION_COMO_PROCESO, cargar_go, cargar_nombres, cargar_sinonimos,
                             descendientes, estados_efectivos)
 
 SIGNO_REGULA = {"positively_regulates": 1, "negatively_regulates": -1,

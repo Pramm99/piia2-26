@@ -4,9 +4,9 @@ Este documento describe las piezas del pipeline, de qué se responsabiliza cada 
 
 El código vive en `codigo/`, dentro de esta misma carpeta del equipo (`entregas/cu-01-reinterpretacion-biologica/codigo/`), y se organiza en tres fases:
 
-* **Fase 1, ingesta** (`codigo/extraer_info/`, `python codigo/extraer_info/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
-* **Fase 2, inferencia** (`codigo/consulta_gen/`, `python -m consulta_gen ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**; el modelo secundario está pendiente de confirmar con el benchmark (ADR-005).
-* **Fase 3, scoring** (`codigo/scoring/`, `python -m scoring`, [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Implementada**; sus umbrales son provisionales.
+* **Fase 1, ingesta** (`codigo/fase1_ingesta/`, `python codigo/fase1_ingesta/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
+* **Fase 2, inferencia** (`codigo/fase2_inferencia/`, `python -m fase2_inferencia ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**; el modelo secundario está pendiente de confirmar con el benchmark (ADR-005).
+* **Fase 3, scoring** (`codigo/fase3_scoring/`, `python -m fase3_scoring`, [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Implementada**; sus umbrales son provisionales.
 
 ## Diagrama
 
@@ -21,7 +21,7 @@ flowchart TD
         LLMS["Modelos gratuitos<br/>Gemini · Groq · Ollama"]
     end
 
-    subgraph F1["Fase 1 · Ingesta · codigo/extraer_info"]
+    subgraph F1["Fase 1 · Ingesta · codigo/fase1_ingesta"]
         E1["1. Entrada<br/>entrada_excel.py"]
         E2["2. Grafo GO<br/>grafo_go.py · red.py"]
         E3["3. Inmunoglobulinas<br/>inmunoglobulinas.py"]
@@ -34,12 +34,12 @@ flowchart TD
 
     subgraph DATA["Ficheros locales"]
         CACHE[("codigo/data: cachés desechables<br/>OBO · GAF · abstracts · MyGene · Europe PMC · UniProt · HGNC")]
-        XLSX[("codigo/extraer_info/<br/>fase1_dataset_abstracts.xlsx")]
+        XLSX[("codigo/fase1_ingesta/<br/>fase1_dataset_abstracts.xlsx")]
         REG[("codigo/data: respuestas_llm.jsonl<br/>llamadas_llm.jsonl")]
         RES[("codigo/data: fase2_resultados.xlsx")]
     end
 
-    subgraph F2["Fase 2 · Inferencia · codigo/consulta_gen"]
+    subgraph F2["Fase 2 · Inferencia · codigo/fase2_inferencia"]
         L1["9. Lectura y limpieza<br/>lectura.py · limpieza.py"]
         L2["10. Casos y filtro de mención del gen<br/>casos.py · proceso.py"]
         L3["11. Construcción del prompt<br/>prompt.py · esquema.py"]
@@ -49,7 +49,7 @@ flowchart TD
     end
 
     subgraph F3["Fase 3 · Scoring"]
-        S1["15. Agregación y<br/>Net Pathway Score<br/>scoring/nps.py"]
+        S1["15. Agregación y<br/>Net Pathway Score<br/>fase3_scoring/nps.py"]
     end
 
     B1["16. Benchmark<br/>codigo/evaluacion"]
@@ -117,7 +117,7 @@ El orden de ejecución es el de `main.py`.
 | 5 | **Triaje del signo GO** (`polaridad.py`) | Decidir, para cada par, si el signo de GO basta o hace falta el LLM. | Anotaciones del componente 4. | Columna `Destino`: `aceptar_GO` (signo de GO aceptado, sin LLM), `LLM`, `LLM_y_revision` o `sin_evidencia` (el par no tiene ningún abstract y se cierra como `UNKNOWN`), con su motivo, la profundidad y la bandera de freno o retroalimentación. Hoja `Triaje_polaridad`. | Hecho. |
 | 6 | **Fuentes externas** (`pmid_externos.py`, `relevancia.py`, `fuentes/generif.py`, `fuentes/europepmc.py`) | Buscar PMIDs para los pares sin abstract utilizable en el GAF. | Pares sin abstract, subárbol de cada ruta y sinónimos del OBO. | PMIDs de NCBI GeneRIF (vía MyGene.info, solo si el texto nombra al gen) y, para los que siguen vacíos, de una búsqueda dirigida en Europe PMC (el gen y un término del subárbol en la misma frase). Como máximo 10 PMIDs por par. | Hecho. |
 | 7 | **Descarga de abstracts** (`abstracts.py`) | Obtener título y abstract de cada PMID: Europe PMC por lotes y NCBI como respaldo, con reintentos y caché. | Lista de PMIDs únicos. | Tabla (`PMID`, `Titulo`, `Abstract`). `cache_abstracts.json` guarda el texto en crudo, y `limpiar_texto` se aplica al leerlo. | Hecho. |
-| 8 | **Salida de Fase 1** (`salida.py`) | Unir entrada, evidencias, triaje y abstracts, mostrar el embudo por consola y escribir el Excel. | Salidas de 1 a 7. | `codigo/extraer_info/fase1_dataset_abstracts.xlsx` con 7 hojas: `Con_abstract`, `PMID_sin_abstract`, `Anotado_sin_PMID`, `Genes_no_encontrados`, `Triaje_polaridad`, `Inmunoglobulinas` y `Sin_evidencia`. Las tres primeras llevan el `Destino` del triaje. | Hecho. |
+| 8 | **Salida de Fase 1** (`salida.py`) | Unir entrada, evidencias, triaje y abstracts, mostrar el embudo por consola y escribir el Excel. | Salidas de 1 a 7. | `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` con 7 hojas: `Con_abstract`, `PMID_sin_abstract`, `Anotado_sin_PMID`, `Genes_no_encontrados`, `Triaje_polaridad`, `Inmunoglobulinas` y `Sin_evidencia`. Las tres primeras llevan el `Destino` del triaje. | Hecho. |
 
 ### Fase 2 · Inferencia ([spec de limpieza](specs/limpieza-abstracts-particion-genica.md) · [spec de inferencia](specs/inferencia-llm.md) · [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md) · [ADR-004](decisions/adr-004-persistencia-ficheros-locales.md) · [ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md))
 
@@ -134,7 +134,7 @@ El orden de ejecución es el de `main.py`.
 
 | # | Componente | Responsabilidad | Estado |
 |---|---|---|---|
-| 15 | **Agregación y Net Pathway Score** (`scoring/nps.py`, `scoring/config.py`) | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con la dirección del gen y su log2 Fold-Change para obtener la contribución neta a la ruta. Sin red ni LLM, determinista. | Hecho según [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md): voto ponderado por `Confianza_final` y contexto, conflicto a `revisar` si la minoría pesa ⅓ o más, y `NPS = Σ signo × dirección × |log2FC| / Σ |log2FC|`. Escribe `codigo/data/fase3_scoring.xlsx` (hojas `Por_ruta`, `Por_par` y `Resumen`). Sin el fichero de log2FC de CIMUS, `|log2FC| = 1`. |
+| 15 | **Agregación y Net Pathway Score** (`fase3_scoring/nps.py`, `fase3_scoring/config.py`) | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con la dirección del gen y su log2 Fold-Change para obtener la contribución neta a la ruta. Sin red ni LLM, determinista. | Hecho según [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md): voto ponderado por `Confianza_final` y contexto, conflicto a `revisar` si la minoría pesa ⅓ o más, y `NPS = Σ signo × dirección × |log2FC| / Σ |log2FC|`. Escribe `codigo/data/fase3_scoring.xlsx` (hojas `Por_ruta`, `Por_par` y `Resumen`). Sin el fichero de log2FC de CIMUS, `|log2FC| = 1`. |
 | 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | En parte: funciona sobre el *gold set* (100 casos: 65 de genes *up* y 35 de genes *down*) con etiquetas provisionales de anotadores Claude. Gemini y gpt-oss están completos (100 de 100); faltan las etiquetas de CIMUS. |
 
 ## Flujo de principio a fin

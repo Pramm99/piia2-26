@@ -3,7 +3,7 @@ primeras rutas. Viven aquí para ajustarlos sin tocar la lógica."""
 from pathlib import Path
 
 DIR_CODIGO = Path(__file__).resolve().parent.parent
-FICHERO_FASE1 = DIR_CODIGO / "extraer_info" / "fase1_dataset_abstracts.xlsx"
+FICHERO_FASE1 = DIR_CODIGO / "fase1_ingesta" / "fase1_dataset_abstracts.xlsx"
 FICHERO_FASE2 = DIR_CODIGO / "data" / "fase2_resultados.xlsx"
 FICHERO_SCORING = DIR_CODIGO / "data" / "fase3_scoring.xlsx"
 

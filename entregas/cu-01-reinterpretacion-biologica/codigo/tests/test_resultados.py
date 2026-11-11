@@ -1,9 +1,9 @@
 """ADR-003: contraste entre modelos y con Gene Ontology, y porcentaje final (confianza_final)."""
 from conftest import caso, hoja_fase1, respuesta
-from consulta_gen.confianza import confianza_final
-from consulta_gen.ejecucion import ResultadoCaso
-from consulta_gen.respuesta import validar_respuesta
-from consulta_gen.resultados import contrastar, tablas
+from fase2_inferencia.confianza import confianza_final
+from fase2_inferencia.ejecucion import ResultadoCaso
+from fase2_inferencia.respuesta import validar_respuesta
+from fase2_inferencia.resultados import contrastar, tablas
 
 
 def _fila_ruta(prompt, polaridad, principal_txt, secundario_txt=None):

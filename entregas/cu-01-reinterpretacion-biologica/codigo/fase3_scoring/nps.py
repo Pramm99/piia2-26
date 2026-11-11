@@ -17,9 +17,9 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from consulta_gen.esquema import (ESTADO_NO_CONCLUYENTE, ESTADO_PENDIENTE, ESTADO_RESUELTO, ESTADO_REVISAR,
+from fase2_inferencia.esquema import (ESTADO_NO_CONCLUYENTE, ESTADO_PENDIENTE, ESTADO_RESUELTO, ESTADO_REVISAR,
                                   SIGNO_DESCONOCIDO, SIGNO_NEGATIVO, SIGNO_NEUTRO, SIGNO_POSITIVO)
-from consulta_gen.limpieza import normalizar_pmid, valor_texto
+from fase2_inferencia.limpieza import normalizar_pmid, valor_texto
 
 from . import config
 

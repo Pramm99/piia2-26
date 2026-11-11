@@ -1,7 +1,7 @@
 # Spec: Agregación de Evidencias y Net Pathway Score (Fase 3)
 
 ## Qué hay que construir
-Un módulo de scoring (Fase 3, `codigo/scoring/`, `python -m scoring [excel_fase1] [excel_fase2] [log2fc]` desde `codigo/`) que, a partir de las salidas de las Fases 1 y 2, haga dos cosas:
+Un módulo de scoring (Fase 3, `codigo/fase3_scoring/`, `python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc]` desde `codigo/`) que, a partir de las salidas de las Fases 1 y 2, haga dos cosas:
 
 1. **Agregar** los signos de todos los artículos de cada par (gen, ruta) en un único signo del par, con su estado.
 2. **Calcular** para cada ruta GO un *Net Pathway Score* (NPS) que combine el signo de cada gen sobre la ruta con la dirección de expresión del gen en las células NK.
@@ -13,8 +13,8 @@ El módulo **no llama a ningún modelo ni a la red**: solo lee ficheros locales 
 |---|---|---|
 | `codigo/data/fase2_resultados.xlsx` | `Por_ruta` | Una fila por (gen, ruta, PMID, proceso): `Signo_ruta`, `Estado`, `Motivos`, `Confianza_final`. |
 | `codigo/data/fase2_resultados.xlsx` | `Preguntas` | `Organismo` y `Tipo_celular` de cada pregunta (gen, PMID, proceso), unidos a `Por_ruta` por (`Gen`, `PMID`, `Proceso_ID`). |
-| `codigo/extraer_info/fase1_dataset_abstracts.xlsx` | `Triaje_polaridad` | Todos los pares (gen, ruta) que no son inmunoglobulinas, con `Destino`, `Signo_GO` y `Estado_Original`. |
-| `codigo/extraer_info/fase1_dataset_abstracts.xlsx` | `Inmunoglobulinas` | Pares de inmunoglobulinas, ya con signo `neutro`. |
+| `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` | `Triaje_polaridad` | Todos los pares (gen, ruta) que no son inmunoglobulinas, con `Destino`, `Signo_GO` y `Estado_Original`. |
+| `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` | `Inmunoglobulinas` | Pares de inmunoglobulinas, ya con signo `neutro`. |
 | Fichero opcional de CIMUS (`.xlsx` o `.csv`) | — | Columnas `Gen` y `log2FC` (log2 Fold-Change de NK en HNSC). Hoy no existe: los Excels de enriquecimiento no traen el log2FC por gen. |
 
 `Estado_Original` da la **dirección del gen**: `Activada` (lista de genes *up*) → `d = +1`; `Suprimida` (lista de genes *down*) → `d = −1`. «Activada» y «suprimida» son solo los nombres de las listas de CIMUS, no una conclusión sobre la ruta.
@@ -26,7 +26,7 @@ Cada fila de `Por_ruta` es un caso. Su signo sobre la ruta (`Signo_ruta`) ya vie
 * **Peso del voto:** `w = Confianza_final / 100 × f_contexto`.
   * `f_contexto` = 1,0 si el experimento es en humano (`Organismo` = `human` o `not_stated`) y en células inmunes (`Tipo_celular` ∈ {`NK`, `T`, `other_immune`, `not_stated`}).
   * Vale 0,5 por cada condición que no se cumpla: ratón u otro organismo, o tumor u otro tipo celular. Si fallan las dos, 0,25.
-  * El tipo de evidencia (afirmación de fondo, correlación…), la posición de la frase y el acuerdo entre modelos **ya están dentro de `Confianza_final`** (`consulta_gen/confianza.py`), así que no se vuelven a penalizar aquí.
+  * El tipo de evidencia (afirmación de fondo, correlación…), la posición de la frase y el acuerdo entre modelos **ya están dentro de `Confianza_final`** (`fase2_inferencia/confianza.py`), así que no se vuelven a penalizar aquí.
   * Si `Confianza_final` falta en una fila resuelta, se toma 0,5 y la fila lleva la marca `peso_por_defecto`.
 
 ### Paso 2 · Signo del par (gen, ruta)
@@ -67,7 +67,7 @@ Además:
   * Los pares `neutro` no entran en el cociente, porque no empujan la ruta en ningún sentido. Se informan como `Fraccion_neutros`.
   * Los pares `revisar`, `no_concluyente`, `pendiente` y `sin_evidencia` aportan 0 y se cuentan aparte.
 * **Sensibilidad:** se calcula también `NPS_con_revisar`, que incluye los pares en `revisar` con la clase de mayor peso, para que el experto vea cuánto cambiaría el score si se confirmaran. Esa clase va en `Signo_revisar`: la de los votos resueltos o, si no hay, la de los casos `revisar` de la Fase 2; con empate o sin signo, el par no cuenta.
-* **Conclusión de la ruta** (`Lectura`), con umbrales en `scoring/config.py`:
+* **Conclusión de la ruta** (`Lectura`), con umbrales en `fase3_scoring/config.py`:
   * `insuficiente` si `n_con_signo < MIN_PARES_CON_SIGNO` (3) o `Cobertura < MIN_COBERTURA` (0,30);
   * si no: `activada` si `NPS ≥ UMBRAL_NPS` (+0,33), `inhibida` si `NPS ≤ −UMBRAL_NPS` y `mixta` en el resto.
   * Son umbrales provisionales: los fijará el equipo con CIMUS al revisar las primeras rutas.
@@ -100,7 +100,7 @@ Las rutas se ordenan por `|NPS|` descendente y, a igualdad, por `GO_ID`; los par
   * si falta `fase2_resultados.xlsx` o alguna de las hojas o columnas usadas, `ValueError` con el nombre de lo que falta;
   * si el fichero de log2FC trae un gen cuyo signo de log2FC contradice su lista (log2FC < 0 en la lista de genes *up*, o > 0 en la de *down*), `ValueError` con el gen;
   * un gen sin log2FC en el fichero usa `m = 1` y lleva la marca `sin_log2FC`.
-* **Parámetros en un único sitio:** los pesos de contexto, el umbral de minoría (⅓) y los umbrales de lectura viven en `scoring/config.py`, para que el equipo los ajuste sin tocar la lógica.
+* **Parámetros en un único sitio:** los pesos de contexto, el umbral de minoría (⅓) y los umbrales de lectura viven en `fase3_scoring/config.py`, para que el equipo los ajuste sin tocar la lógica.
 * **Sin modelado no lineal:** el score es una suma ponderada y explicable. No modela interacciones entre genes ni epistasia (fuera de alcance, ver README).
 
 ## Criterios de aceptación

@@ -1,7 +1,7 @@
 # Spec: Ingesta de Evidencias de Regulación GO y Descarga de Abstracts desde Europe PMC
 
 ## Qué hay que construir
-Un módulo de ingesta (Fase 1, `codigo/extraer_info/`, `python codigo/extraer_info/main.py`) que tome como entrada los resultados de enriquecimiento funcional de Gene Ontology (ontología *Biological Process*) proporcionados por CIMUS, obtenidos a partir de los genes diferencialmente expresados en células NK de tumores de cabeza y cuello (HNSC). Hay dos listas: rutas enriquecidas con genes *up* («rutas activadas») y con genes *down* («rutas suprimidas»). El módulo realiza este flujo automatizado, en el orden de `main.py`:
+Un módulo de ingesta (Fase 1, `codigo/fase1_ingesta/`, `python codigo/fase1_ingesta/main.py`) que tome como entrada los resultados de enriquecimiento funcional de Gene Ontology (ontología *Biological Process*) proporcionados por CIMUS, obtenidos a partir de los genes diferencialmente expresados en células NK de tumores de cabeza y cuello (HNSC). Hay dos listas: rutas enriquecidas con genes *up* («rutas activadas») y con genes *down* («rutas suprimidas»). El módulo realiza este flujo automatizado, en el orden de `main.py`:
 
 1. **Descarga de Gene Ontology** (`red.py`): `go-basic.obo` y `goa_human.gaf.gz` ([ADR-002](../decisions/adr-002-europe-pmc-api.md)), solo la primera vez.
 2. **Extracción de identificadores** (`entrada_excel.py`): leer los dos ficheros y, de cada fila, extraer el identificador de la ruta en Gene Ontology (columna `ID`), su nombre (`Description`) y los símbolos oficiales de los genes asociados (columna `geneID`, separados por `/`, nomenclatura HGNC).
@@ -30,7 +30,7 @@ Un módulo de ingesta (Fase 1, `codigo/extraer_info/`, `python codigo/extraer_in
 
    Estas filas guardan su `Fuente`, la `Frase_fuente`, el `Termino_coincidente` y dónde coincide (`Coincide_en`).
 7. **Descarga de literatura científica** (`abstracts.py`): recuperar el título y el abstract de cada `PMID` desde la API REST de **Europe PMC** y, para los que no devuelva, desde **NCBI E-utilities** como respaldo. La caché guarda el texto en crudo, y `limpiar_texto` (desescapado y etiquetas HTML conocidas, sin borrar texto entre «<» y «>») se aplica al leerlo.
-8. **Salida** (`salida.py`): el embudo por consola y un Excel, `codigo/extraer_info/fase1_dataset_abstracts.xlsx`, que es la entrada de la Fase 2. Tiene siete hojas:
+8. **Salida** (`salida.py`): el embudo por consola y un Excel, `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx`, que es la entrada de la Fase 2. Tiene siete hojas:
    * `Con_abstract`: una fila por (gen, ruta, PMID) con abstract.
    * `PMID_sin_abstract`: evidencias cuyo PMID no tiene abstract disponible.
    * `Anotado_sin_PMID`: pares gen–ruta anotados en GO pero sin ningún PMID (se conservan por su polaridad).

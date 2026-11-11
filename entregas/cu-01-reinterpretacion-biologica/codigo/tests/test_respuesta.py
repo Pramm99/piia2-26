@@ -4,9 +4,9 @@ import json
 import pytest
 
 from conftest import CITA, respuesta
-from consulta_gen.esquema import UMBRAL_VEREDICTO
-from consulta_gen.prompt import construir_prompt_lista
-from consulta_gen.respuesta import extraer_json, repartir_lista, signo_en_ruta, validar_respuesta
+from fase2_inferencia.esquema import UMBRAL_VEREDICTO
+from fase2_inferencia.prompt import construir_prompt_lista
+from fase2_inferencia.respuesta import extraer_json, repartir_lista, signo_en_ruta, validar_respuesta
 
 
 # --- Veredicto, cita y confianza ---

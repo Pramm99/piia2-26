@@ -1,20 +1,20 @@
 """Fase 3 desde la línea de comandos (sin red ni LLM; se puede repetir cuantas veces se quiera):
-  python -m scoring [excel_fase1|-] [excel_fase2|-] [log2fc.xlsx|.csv]
+  python -m fase3_scoring [excel_fase1|-] [excel_fase2|-] [log2fc.xlsx|.csv]
 Escribe codigo/data/fase3_scoring.xlsx (hojas Por_ruta, Por_par y Resumen). Por defecto lee
-codigo/extraer_info/fase1_dataset_abstracts.xlsx y codigo/data/fase2_resultados.xlsx. Un «-» deja ese
+codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx y codigo/data/fase2_resultados.xlsx. Un «-» deja ese
 argumento por defecto.
 """
 import sys
 from pathlib import Path
 
-# Como script suelto (python scoring/__main__.py): codigo/ en sys.path para importar los paquetes.
+# Como script suelto (python fase3_scoring/__main__.py): codigo/ en sys.path para importar los paquetes.
 if not __package__:
     _aqui = Path(__file__).resolve().parent
     sys.path = [p for p in sys.path if Path(p or ".").resolve() != _aqui]
     sys.path.insert(0, str(_aqui.parent))
 
-from scoring import config
-from scoring.nps import calcular, escribir
+from fase3_scoring import config
+from fase3_scoring.nps import calcular, escribir
 
 
 def main(argv) -> None:

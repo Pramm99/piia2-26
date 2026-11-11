@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 
-from ._extraer_info import MIN_ALIAS, datos_mygene, menciona_gen, patron_gen
+from ._fase1 import MIN_ALIAS, datos_mygene, menciona_gen, patron_gen
 from .esquema import CasoProceso
 from .limpieza import limpiar_abstract, normalizar_pmid, segmentar_frases, valor_texto
 from .proceso import nombre, nucleo_y_polaridad, resolver_termino, signo_camino

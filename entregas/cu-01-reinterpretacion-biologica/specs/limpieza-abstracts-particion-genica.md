@@ -1,7 +1,7 @@
 # Spec: Sanitización de Abstracts Biomédicos y Dirección de Expresión Génica (Up/Down)
 
 ## Qué hay que construir
-Un componente de procesamiento y sanitización de texto que ejecute tres responsabilidades. Está repartido entre `limpiar_texto` de la Fase 1 (`codigo/extraer_info/abstracts.py`), `codigo/consulta_gen/limpieza.py` y el filtro de mención del gen (`codigo/extraer_info/relevancia.py`, usado por `consulta_gen/casos.py`):
+Un componente de procesamiento y sanitización de texto que ejecute tres responsabilidades. Está repartido entre `limpiar_texto` de la Fase 1 (`codigo/fase1_ingesta/abstracts.py`), `codigo/fase2_inferencia/limpieza.py` y el filtro de mención del gen (`codigo/fase1_ingesta/relevancia.py`, usado por `fase2_inferencia/casos.py`):
 
 1. **Sanitización del texto que lee el LLM (normalización conservadora, `limpiar_texto` y `limpiar_abstract`):** procesar el título y el abstract crudos descargados de la literatura científica.
    * **Pasos, en este orden:**
@@ -64,7 +64,7 @@ Los marcados están cubiertos por `codigo/tests/test_limpieza.py` (pytest, sin r
   Un guion suprimido sin espacio (`K12Fc`) **no** se verifica.
 * [x] ✅ **Rechazo de citas no válidas:** Sobre el mismo abstract, se rechazan una paráfrasis (*"K12-Fc increased CD25 and CD69 on NK cells"*) y cualquier cita de menos de 6 palabras (p. ej. `CD7`).
 * [x] ✅ **Mención del gen por palabra completa:** En un texto que solo menciona `CD70`, el gen `CD7` no se detecta; en uno que menciona `CD-7`, sí; `cd7` en minúsculas no cuenta.
-* [x] ✅ **Sin red:** `consulta_gen/limpieza.py` y la parte de limpieza de `extraer_info/abstracts.py` no usan la red: ninguna de sus funciones llama a `requests` ni a un cliente de LLM. `test_limpieza.py` se ejecuta sin conexión.
+* [x] ✅ **Sin red:** `fase2_inferencia/limpieza.py` y la parte de limpieza de `fase1_ingesta/abstracts.py` no usan la red: ninguna de sus funciones llama a `requests` ni a un cliente de LLM. `test_limpieza.py` se ejecuta sin conexión.
 * [ ] **Dirección conservada:** todas las filas de `Con_abstract` llevan `Estado_Original` con «Activada» o «Suprimida», ningún gen aparece con los dos valores y cada fila de `Por_ruta` de la Fase 2 se puede unir con su `Estado_Original` por (gen, ruta).
 * [ ] **Cobertura de tests unitarios:** La suite de `pytest` (`codigo/tests/test_limpieza.py`) valida estos criterios y algunos casos límite (valores vacíos del Excel, idempotencia). Falta medir la cobertura, que debe ser $\ge 90\%$ sobre el módulo de limpieza.
 * [x] ✅ **Frases tras «et al.»:** `segmentar_frases` no corta la frase después de «et al.» (compara las dos últimas palabras con las abreviaturas). `"As shown by Smith et al. NK cells rose. End."` da dos frases: `"As shown by Smith et al. NK cells rose."` y `"End."`. (`tests/test_limpieza.py`.)

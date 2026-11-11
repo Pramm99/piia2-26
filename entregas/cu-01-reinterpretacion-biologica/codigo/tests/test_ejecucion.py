@@ -2,10 +2,10 @@
 import json
 
 from conftest import caso, respuesta
-from consulta_gen.cliente import ClienteSimulado
-from consulta_gen.ejecucion import ejecutar
-from consulta_gen.prompt import construir_prompt
-from consulta_gen.registro import Registro, clave
+from fase2_inferencia.cliente import ClienteSimulado
+from fase2_inferencia.ejecucion import ejecutar
+from fase2_inferencia.prompt import construir_prompt
+from fase2_inferencia.registro import Registro, clave
 
 
 def _preguntas():

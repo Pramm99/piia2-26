@@ -1,6 +1,6 @@
 ---
 description: Persistencia mediante ficheros locales (cachés desechables y un registro JSONL de respuestas del LLM) en lugar de ejecución puramente en memoria o bases de datos.
-state: Aceptado (registro implementado el 2026-11-08 en codigo/consulta_gen/registro.py; dos ficheros y salida de la Fase 2 desde el 2026-11-10)
+state: Aceptado (registro implementado el 2026-11-08 en codigo/fase2_inferencia/registro.py; dos ficheros y salida de la Fase 2 desde el 2026-11-10)
 ---
 
 # ADR 004 - Persistencia en Ficheros Locales: Cachés Desechables y Registro de Respuestas del LLM
@@ -11,7 +11,7 @@ El pipeline **no usa bases de datos ni servicios de almacenamiento**. Guarda su 
 | Tipo | Ficheros | ¿Se puede borrar? |
 |---|---|---|
 | **Caché desechable** | Fase 1: `go-basic.obo`, `goa_human.gaf.gz`, `cache_abstracts.json` (título y abstract en crudo), `cache_mygene.json` (alias, nombre y GeneRIF), `cache_epmc_busquedas.json` (búsqueda dirigida en Europe PMC), `cache_uniprot.json` (función de las inmunoglobulinas) y `hgnc_inmunoglobulinas.json`. La Fase 2 reutiliza `cache_mygene.json` para los alias del gen | Sí: el resultado no cambia, solo tarda más en reconstruirse. |
-| **Artefacto intermedio regenerable** | `codigo/extraer_info/fase1_dataset_abstracts.xlsx` (salida de la Fase 1, entrada de la Fase 2) | Sí: se regenera a partir de las cachés. |
+| **Artefacto intermedio regenerable** | `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` (salida de la Fase 1, entrada de la Fase 2) | Sí: se regenera a partir de las cachés. |
 | **Artefacto de salida regenerable** | `fase2_resultados.xlsx` (salida de la Fase 2, entrada del scoring) | Sí: se regenera desde el registro sin llamar a ningún modelo. |
 | **Registro de respuestas del LLM** | `respuestas_llm.jsonl` y `llamadas_llm.jsonl` | **No**: es el resultado del experimento y no puede reconstruirse de forma idéntica. |
 
@@ -53,14 +53,14 @@ Aceptamos los compromisos asociados: el registro crece con cada cambio de prompt
 
 ## Referencias
 * **Código del proyecto:**
-  * `codigo/consulta_gen/registro.py` (`Registro`, `clave`, `huella`; escritura con `fsync` línea a línea).
-  * `codigo/consulta_gen/ejecucion.py` (ejecución reanudable, revalidación, preguntas saltadas y salidas cortadas).
-  * `codigo/consulta_gen/cliente.py` (metadatos de cada llamada: proveedor, modelo, `system_fingerprint`, `tokens`, `fin`, `segundos`).
-  * `codigo/consulta_gen/resultados.py` (`fase2_resultados.xlsx`).
+  * `codigo/fase2_inferencia/registro.py` (`Registro`, `clave`, `huella`; escritura con `fsync` línea a línea).
+  * `codigo/fase2_inferencia/ejecucion.py` (ejecución reanudable, revalidación, preguntas saltadas y salidas cortadas).
+  * `codigo/fase2_inferencia/cliente.py` (metadatos de cada llamada: proveedor, modelo, `system_fingerprint`, `tokens`, `fin`, `segundos`).
+  * `codigo/fase2_inferencia/resultados.py` (`fase2_resultados.xlsx`).
   * `codigo/evaluacion/evaluar_gold.py` (registro por modelo del benchmark, `claves.json`, `prompts.json` y `ejecuciones.jsonl`).
-  * `codigo/extraer_info/abstracts.py` (`cargar_cache` / `guardar_cache`) y `codigo/extraer_info/fuentes/cache.py` (`guardar_json`): escritura atómica con `os.replace`.
-  * `codigo/extraer_info/red.py` (`descargar_archivo`, descarga atómica del OBO y el GAF).
-  * `codigo/extraer_info/config.py` (rutas de los ficheros).
+  * `codigo/fase1_ingesta/abstracts.py` (`cargar_cache` / `guardar_cache`) y `codigo/fase1_ingesta/fuentes/cache.py` (`guardar_json`): escritura atómica con `os.replace`.
+  * `codigo/fase1_ingesta/red.py` (`descargar_archivo`, descarga atómica del OBO y el GAF).
+  * `codigo/fase1_ingesta/config.py` (rutas de los ficheros).
 * **Formato JSON Lines:** [https://jsonlines.org/](https://jsonlines.org/)
 * **Ejemplo de lectura del registro y de las preguntas ya evaluadas:**
 
@@ -70,7 +70,7 @@ Aceptamos los compromisos asociados: el registro crece con cada cambio de prompt
   registro = pd.read_json("data/respuestas_llm.jsonl", lines=True, dtype={"clave": object})
   registro[["version", "gen", "pmid", "go_id", "modelo", "huella"]] = pd.DataFrame(
       registro["clave"].tolist(), index=registro.index)
-  hechos = set(map(tuple, registro["clave"]))  # misma clave que consulta_gen.registro.clave(prompt, modelo)
+  hechos = set(map(tuple, registro["clave"]))  # misma clave que fase2_inferencia.registro.clave(prompt, modelo)
   ```
 
   Para comprobar una pregunta concreta desde el código basta con `clave(prompt, modelo) in Registro()`.

@@ -21,7 +21,7 @@ El proyecto **solo usa modelos que no exijan pagar ninguna cantidad**. Los model
 
 **Por qué Gemini es el principal.** El principal da el signo final y tiene que responder a todas las preguntas; si no responde, la pregunta queda `pendiente` (ADR-003). En el benchmark, Gemini responde a las 100 preguntas con JSON siempre válido en 5,5 minutos; gpt-oss tarda 14,9 minutos y da 4 JSON inválidos. Además, el plan gratuito de Groq (200 K tokens/día) corta a gpt-oss en las ejecuciones largas, y una pasada completa de producción le llevaría unos 15 días (ver Motivación). Como secundario ese retraso es aceptable: mientras no responde, el caso sigue adelante con el principal y solo pierde el contraste entre modelos.
 
-**El secundario es también el respaldo del principal.** Si Gemini no responde (cupo agotado, red) o devuelve un JSON que no vale, decide la respuesta de gpt-oss, marcada con `respaldo_secundario` (ADR-003). Con `--solo-respaldo` (`python -m consulta_gen ejecutar - - - - <excel> --solo-respaldo`), gpt-oss solo recibe esas preguntas: el cupo diario de Groq se reserva para los fallos de Gemini en vez de gastarse en el contraste. Una ejecución posterior sin la opción reutiliza todo lo registrado y añade el contraste de forma gradual.
+**El secundario es también el respaldo del principal.** Si Gemini no responde (cupo agotado, red) o devuelve un JSON que no vale, decide la respuesta de gpt-oss, marcada con `respaldo_secundario` (ADR-003). Con `--solo-respaldo` (`python -m fase2_inferencia ejecutar - - - - <excel> --solo-respaldo`), gpt-oss solo recibe esas preguntas: el cupo diario de Groq se reserva para los fallos de Gemini en vez de gastarse en el contraste. Una ejecución posterior sin la opción reutiliza todo lo registrado y añade el contraste de forma gradual.
 
 **Prompt:** el benchmark usa el mismo prompt y el mismo validador que producción (veredicto obligado y `UNKNOWN` decidido por el código), con las preguntas por proceso núcleo enviadas por gen (spec de inferencia).
 
@@ -65,7 +65,7 @@ Hoy las etiquetas son **provisionales**. Las pusieron anotadores Claude a ciegas
 
 gpt-oss es algo más preciso y más prudente (cobertura del 34 % frente al 40 %), pero tiene 4 JSON inválidos y tarda casi el triple. Las diferencias de exactitud y precisión caben dentro de los intervalos. El papel de cada modelo no cambia: Gemini principal, porque responde a todo y rápido, y gpt-oss secundario, cuya independencia de errores es lo que usa el ADR-003. Falta que el equipo confirme el secundario.
 
-**Configuración común** (`codigo/consulta_gen/cliente.py`): un único conector compatible con la API de chat de OpenAI (`ClienteOpenAICompatible`) para Groq, Gemini (modo compatible), Cerebras y Ollama. Usa temperatura 0, `seed` y salida JSON estricta con el esquema del prompt cuando el proveedor lo admite. Gemini ignora la temperatura y su modo compatible rechaza `seed` (HTTP 400), así que no se le envía ninguno de los dos. gpt-oss usa `reasoning_effort = "low"`. El nombre exacto del modelo que devuelve el proveedor se guarda en cada llamada (ADR-004). Los mensajes se construyen una sola vez (`PromptLista.como_mensajes()`) y solo cambia la configuración de cada modelo (`MODELOS`). En producción las preguntas de un gen se trocean con el presupuesto por llamada más pequeño de los dos modelos (Groq, 7.500 tokens), para que los dos reciban la misma agrupación.
+**Configuración común** (`codigo/fase2_inferencia/cliente.py`): un único conector compatible con la API de chat de OpenAI (`ClienteOpenAICompatible`) para Groq, Gemini (modo compatible), Cerebras y Ollama. Usa temperatura 0, `seed` y salida JSON estricta con el esquema del prompt cuando el proveedor lo admite. Gemini ignora la temperatura y su modo compatible rechaza `seed` (HTTP 400), así que no se le envía ninguno de los dos. gpt-oss usa `reasoning_effort = "low"`. El nombre exacto del modelo que devuelve el proveedor se guarda en cada llamada (ADR-004). Los mensajes se construyen una sola vez (`PromptLista.como_mensajes()`) y solo cambia la configuración de cada modelo (`MODELOS`). En producción las preguntas de un gen se trocean con el presupuesto por llamada más pequeño de los dos modelos (Groq, 7.500 tokens), para que los dos reciban la misma agrupación.
 
 ## Motivación
 1. **Restricción del equipo:** no se pagará ninguna cantidad. Esto descarta los proveedores que solo ofrecen un crédito inicial (Anthropic, OpenAI, xAI), porque una vez agotado obligan a pagar.
@@ -98,10 +98,10 @@ Aceptamos los compromisos asociados:
 
 ## Referencias
 * **Código del proyecto:**
-  * `codigo/consulta_gen/cliente.py` (`ConfigModelo`, `MODELOS` con las configuraciones de Gemini, Groq, Cerebras y Ollama, y `ClienteOpenAICompatible`).
-  * `codigo/consulta_gen/esquema.py` (`PromptLista.como_mensajes()`, formato de chat estándar `role`/`content`).
-  * `codigo/consulta_gen/prompt.py` (el prompt: `SYSTEM`, `construir_prompt` y `construir_prompt_lista`).
-  * `codigo/consulta_gen/__main__.py` (modelos por defecto de `python -m consulta_gen ejecutar`).
+  * `codigo/fase2_inferencia/cliente.py` (`ConfigModelo`, `MODELOS` con las configuraciones de Gemini, Groq, Cerebras y Ollama, y `ClienteOpenAICompatible`).
+  * `codigo/fase2_inferencia/esquema.py` (`PromptLista.como_mensajes()`, formato de chat estándar `role`/`content`).
+  * `codigo/fase2_inferencia/prompt.py` (el prompt: `SYSTEM`, `construir_prompt` y `construir_prompt_lista`).
+  * `codigo/fase2_inferencia/__main__.py` (modelos por defecto de `python -m fase2_inferencia ejecutar`).
   * `codigo/evaluacion/evaluar_gold.py` y el informe `codigo/evaluacion/informe_gold_provisional.txt`.
 * **Proveedores** (comprobar límites y catálogo en la consola de cada uno antes de ejecutar):
   * Gemini API, límites de uso: [https://ai.google.dev/gemini-api/docs/rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits)
