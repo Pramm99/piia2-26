@@ -1,0 +1,40 @@
+format-version: 1.2
+ontology: go
+
+[Term]
+id: GO:9000001
+name: natural killer cell mediated cytotoxicity
+synonym: "NK cell mediated cytotoxicity" EXACT []
+
+[Term]
+id: GO:9000002
+name: positive regulation of natural killer cell mediated cytotoxicity
+relationship: positively_regulates GO:9000001
+
+[Term]
+id: GO:9000003
+name: negative regulation of natural killer cell mediated cytotoxicity
+relationship: negatively_regulates GO:9000001
+
+[Term]
+id: GO:9000010
+name: leukocyte migration
+
+[Term]
+id: GO:9000011
+name: leukocyte chemotaxis
+is_a: GO:9000010
+
+[Term]
+id: GO:9000020
+name: interferon-gamma production
+
+[Term]
+id: GO:9000099
+name: obsolete interferon-gamma secretion
+is_obsolete: true
+replaced_by: GO:9000020
+
+[Typedef]
+id: positively_regulates
+name: positively regulates

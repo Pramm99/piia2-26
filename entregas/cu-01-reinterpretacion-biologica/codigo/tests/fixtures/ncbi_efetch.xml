@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Respuesta de NCBI efetch (PubMed) para los PMIDs que Europe PMC no devuelve: 101 y 102 sin abstract,
+     103 con abstract estructurado (AbstractText con Label). El 201 no lo conoce. -->
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation><PMID>101</PMID><Article><ArticleTitle>Perforin and NK cell killing</ArticleTitle></Article></MedlineCitation>
+  </PubmedArticle>
+  <PubmedArticle>
+    <MedlineCitation><PMID>102</PMID><Article><ArticleTitle>Granzyme B review</ArticleTitle></Article></MedlineCitation>
+  </PubmedArticle>
+  <PubmedArticle>
+    <MedlineCitation><PMID>103</PMID><Article><ArticleTitle>CXCR4 guides <i>NK</i> cells</ArticleTitle>
+      <Abstract>
+        <AbstractText Label="BACKGROUND">Chemokines guide leukocytes.</AbstractText>
+        <AbstractText Label="RESULTS">CXCR4 blockade reduced leukocyte chemotaxis of human NK cells.</AbstractText>
+      </Abstract></Article></MedlineCitation>
+  </PubmedArticle>
+</PubmedArticleSet>

@@ -3,3 +3,4 @@ pandas>=2.0
 openpyxl>=3.1
 # Solo para las pruebas (python -m pytest desde codigo/)
 pytest>=8
+pytest-cov>=5      # cobertura: python -m pytest --cov=fase1_ingesta --cov=fase2_inferencia --cov=fase3_scoring

@@ -1,0 +1,10 @@
+{
+  "Activada": [
+    {"ID": "GO:9000001", "Description": "natural killer cell mediated cytotoxicity",
+     "geneID": "NKG7/PRF1/GZMB/IGKC/IGFBP7/TIGIT"},
+    {"ID": "GO:9000099", "Description": "interferon-gamma production", "geneID": "CCL5"}
+  ],
+  "Suprimida": [
+    {"ID": "GO:9000010", "Description": "leukocyte migration", "geneID": "CXCR4/SELL/IGHM/FAM89B"}
+  ]
+}

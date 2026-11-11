@@ -1,0 +1,13 @@
+!gaf-version: 2.2
+!GAF mínimo para la prueba de extremo a extremo de la Fase 1 (tests/test_fase1_e2e.py)
+UniProtKB	P00001	NKG7	involved_in	GO:9000002	PMID:100	IDA		P	NKG7 protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00002	PRF1	involved_in	GO:9000003	PMID:101	IMP		P	PRF1 protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00003	GZMB	involved_in	GO:9000001	PMID:102	TAS		P	GZMB protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00004	IGFBP7	involved_in	GO:9000001	GO_REF:0000107	IEA		P	IGFBP7 protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00005	CXCR4	involved_in	GO:9000011	PMID:103	IDA		P	CXCR4 protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00006	CXCR4	NOT|involved_in	GO:9000010	PMID:998	IDA		P	CXCR4 protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00007	CXCR4	involved_in	GO:9000010	PMID:997	IDA		P	CXCR4 protein		protein	taxon:10090	20260101	UniProt		
+UniProtKB	P00008	TIGIT	involved_in	GO:9000003	PMID:104	IDA		P	TIGIT protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00009	TIGIT	involved_in	GO:9000002	PMID:105	IMP		P	TIGIT protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00010	IGKC	involved_in	GO:9000001	PMID:106	IDA		P	IGKC protein		protein	taxon:9606	20260101	UniProt		
+UniProtKB	P00011	IGHM	involved_in	GO:9000010	PMID:107	IDA		P	IGHM protein		protein	taxon:9606	20260101	UniProt		

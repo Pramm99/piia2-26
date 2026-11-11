@@ -63,9 +63,9 @@ Estos pares se cierran de forma determinista en la Fase 1 y nunca generan prompt
 - **`Evidencias_GO`, `Referencias_GO` y `With_From_GO`**: las anotaciones de origen. Permiten auditar el par y
   son la entrada de la resolución del § 3. Por ejemplo, `Reactome:R-HSA-…` o la proteína de ratón de una ISS.
 - En la hoja `Triaje_polaridad`, estos pares tienen `Destino = sin_evidencia` (y «sin_evidencia» añadido a su
-  `Motivo`), sin `Contribucion` y sin bandera de freno. **No cuentan en el Net Pathway Score.** Cada ruta debe
-  informar su cobertura (`n_con_signo / n_total`) para que se vea qué parte de la ruta queda sin evidencia. Esto
-  lo tendrá que calcular la Fase 3, que está pendiente.
+  `Motivo`), sin `Contribucion` y sin bandera de freno. **No cuentan en el Net Pathway Score.** La Fase 3
+  informa la cobertura de cada ruta (columna `Cobertura` de `Por_ruta`), para que se vea qué parte de la ruta
+  queda sin evidencia.
 
 **Excepción: pares `aceptar_GO` sin abstract.** Si el triaje ya había aceptado el signo GO de un par (una anotación
 experimental con PMID, a poca profundidad) y ese PMID no tiene abstract, el par no se cierra como `UNKNOWN`: sale

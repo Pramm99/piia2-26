@@ -11,3 +11,5 @@ data/
 llm_queue.jsonl
 .env
 .pytest_cache/
+.coverage
+htmlcov/

@@ -87,7 +87,11 @@ codigo/
 │   ├── test_fase1.py              #   (hecho) Entrada, grafo GO, inmunoglobulinas, descarga simulada y .env.
 │   ├── test_entrada.py            #   (hecho) Entrada .xlsx y .csv y validación de columnas.
 │   ├── test_scoring.py            #   (hecho) Votos, signo del par, contribución y NPS.
-│   └── test_red.py                #   (hecho) Reintentos con espera exponencial de la sesión HTTP.
+│   ├── test_fase1_e2e.py          #   (hecho) Fase 1 completa sobre fixtures, sin red, y su paso por las Fases 2 y 3.
+│   ├── test_cliente.py            #   (hecho) Conector LLM con HTTP simulado (reintentos, 429, errores de JSON).
+│   ├── test_red.py                #   (hecho) Reintentos con espera exponencial y descarga atómica.
+│   └── fixtures/                  #   OBO y GAF mínimos, listas de CIMUS y respuestas HTTP grabadas (texto, sin
+│                                  #   Excels: los .xlsx de entrada se escriben en una carpeta temporal).
 │
 ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas (los únicos .xlsx versionados)
 │                                  #   y su script de análisis.
