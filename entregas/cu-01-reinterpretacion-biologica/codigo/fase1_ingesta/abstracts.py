@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 
 from config import CACHE_FILE, EPMC_API, NCBI_API_KEY, NCBI_EMAIL, NCBI_URL
-from red import configurar_sesion
+from red import Progreso, configurar_sesion
 
 GUARDAR_CADA = 25  # lotes entre guardados de la caché (unos 1.000 PMIDs en Europe PMC, 2.500 en NCBI)
 
@@ -104,6 +104,7 @@ def descargar_abstracts(pmids):
     print(f"🌐 {len(pmids)} PMIDs únicos | {len(pmids) - len(pendientes)} en caché | {len(pendientes)} por descargar")
 
     # 1) Europe PMC
+    progreso = Progreso("Europe PMC (abstracts)", len(pendientes))
     for i in range(0, len(pendientes), 40):
         lote = pendientes[i:i + 40]
         try:
@@ -112,6 +113,7 @@ def descargar_abstracts(pmids):
             print(f"⚠️ Europe PMC (lote {i // 40}): {e}")
         if (i // 40 + 1) % GUARDAR_CADA == 0:  # si la ejecución se corta, no se repite lo ya descargado
             guardar_cache(cache)
+        progreso.avanzar(min(i + 40, len(pendientes)))
         time.sleep(0.2)
     guardar_cache(cache)
 
@@ -119,6 +121,7 @@ def descargar_abstracts(pmids):
     pendientes = [p for p in pendientes if not cache.get(p, {}).get("Crudo")]
     print(f"🔄 Pasando {len(pendientes)} PMIDs a NCBI...")
     pausa = 0.12 if NCBI_API_KEY else 0.35
+    progreso = Progreso("NCBI (abstracts)", len(pendientes))
     for i in range(0, len(pendientes), 100):
         lote = pendientes[i:i + 100]
         try:
@@ -135,6 +138,7 @@ def descargar_abstracts(pmids):
         cache.update(res)  # incluye los confirmados sin abstract ("")
         if (i // 100 + 1) % GUARDAR_CADA == 0:
             guardar_cache(cache)
+        progreso.avanzar(min(i + 100, len(pendientes)))
         time.sleep(pausa)
     guardar_cache(cache)
 

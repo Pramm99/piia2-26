@@ -57,3 +57,29 @@ def test_descarga_cortada_no_deja_fichero(tmp_path, monkeypatch):
     except ConnectionError:
         pass
     assert not destino.exists()  # solo queda el .tmp, que la siguiente ejecución sobrescribe
+
+
+def test_progreso_avisa_con_porcentaje_y_tiempo(monkeypatch, capsys):
+    reloj = iter([0, 5, 30, 60, 90, 120])  # inicio y un instante por cada llamada a avanzar
+    monkeypatch.setattr(red.time, "monotonic", lambda: next(reloj))
+    p = red.Progreso("Europe PMC (abstracts)", 400, paso=25, cada_s=10)
+    p.avanzar(40)   # 10 %: no cruza el 25 %
+    p.avanzar(100)  # 25 %, a los 30 s
+    p.avanzar(120)  # 30 %: no cruza el 50 %
+    p.avanzar(300)  # 75 %: salta el 50 y el 75
+    p.avanzar(400)  # fin
+    lineas = capsys.readouterr().out.splitlines()
+    assert lineas == [
+        "   ⏳ Europe PMC (abstracts): 100/400 (25 %) · 0 min 30 s · quedan ~1 min 30 s",
+        "   ⏳ Europe PMC (abstracts): 300/400 (75 %) · 1 min 30 s · quedan ~0 min 30 s",
+        "   ⏳ Europe PMC (abstracts): 400/400 (100 %) · 2 min 00 s",
+    ]
+
+
+def test_progreso_no_avisa_en_una_descarga_corta(monkeypatch, capsys):
+    reloj = iter([0, 1, 2, 3])
+    monkeypatch.setattr(red.time, "monotonic", lambda: next(reloj))
+    p = red.Progreso("NCBI (abstracts)", 300)
+    for hechos in (100, 200, 300):
+        p.avanzar(hechos)
+    assert capsys.readouterr().out == ""

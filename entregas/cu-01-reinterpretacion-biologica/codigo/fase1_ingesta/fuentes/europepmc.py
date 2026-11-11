@@ -4,7 +4,7 @@ import time
 from config import (EPMC_BUSQUEDAS_CACHE, EPMC_FRASES_POR_CONSULTA, EPMC_RESULTADOS_POR_CONSULTA,
                     EPMC_SEARCH_POST)
 from fuentes.cache import cargar_json, guardar_json
-from red import configurar_sesion
+from red import Progreso, configurar_sesion
 
 
 def _bloque(campo_valores):
@@ -26,6 +26,7 @@ def buscar(consultas, destino=EPMC_BUSQUEDAS_CACHE):
     if pendientes:
         print(f"📥 Europe PMC: {len(pendientes)} búsquedas dirigidas ...")
         sesion = configurar_sesion()
+        progreso = Progreso("Europe PMC (búsquedas)", len(pendientes))
         for i, q in enumerate(pendientes, 1):
             try:
                 r = sesion.post(EPMC_SEARCH_POST, data={"query": q, "format": "json", "resultType": "lite",
@@ -37,6 +38,7 @@ def buscar(consultas, destino=EPMC_BUSQUEDAS_CACHE):
                 print(f"⚠️ Europe PMC: {e}")  # no se cachea: se reintentará en la próxima ejecución
             if i % 100 == 0:
                 guardar_json(cache, destino)
+            progreso.avanzar(i)
             time.sleep(0.1)
         guardar_json(cache, destino)
     return {q: cache.get(q, []) for q in consultas}

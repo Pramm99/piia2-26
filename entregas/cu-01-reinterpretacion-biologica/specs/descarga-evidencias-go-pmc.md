@@ -70,6 +70,7 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
   * **Reintentos con espera exponencial (*exponential backoff*):** todas las peticiones a las APIs usan la sesión de `red.configurar_sesion` (Europe PMC, NCBI, MyGene, HGNC y UniProt).
     * Esa sesión reintenta hasta **5 veces** (`Retry(total=5, backoff_factor=1)`) ante HTTP `429`, `500`, `502`, `503` y `504`, tanto en GET como en POST.
     * Con urllib3 2.x, la espera antes de cada reintento es de 0, 2, 4, 8 y 16 s, unos 30 s como máximo. Si el servidor envía la cabecera `Retry-After`, se respeta.
+  * **Aviso de progreso:** las descargas largas (abstracts de Europe PMC y NCBI, y búsquedas dirigidas de Europe PMC) escriben por consola lo que llevan, su porcentaje, el tiempo transcurrido y una estimación de lo que falta (`red.Progreso`), cada 5 % y como mucho una vez cada 10 s. En frío, la descarga de los abstracts de GeneRIF dura unos 30 min y, sin el aviso, parecería colgada. Una descarga de menos de 10 s no escribe nada.
   * **Tiempos de espera por petición:**
     * Europe PMC (abstracts): 30 s;
     * NCBI, búsqueda dirigida, HGNC y UniProt: 60 s;
@@ -93,6 +94,7 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
 * [x] ✅ **Validación de columnas:** Un fichero (`.xlsx` o `.csv`) al que le falte `ID`, `Description` o `geneID` se rechaza con un `ValueError` que nombra la columna que falta, antes de ninguna petición de red: `ejecutar_fase_1` no llega a llamar a `descargar_archivo`. (`tests/test_entrada.py`.)
 * [x] ✅ **Entrada `.csv`:** Un `.csv` con las mismas columnas y el mismo contenido que un `.xlsx`, separado por `,` o por `;`, da exactamente las mismas filas. (`tests/test_entrada.py`.)
 * [x] ✅ **Reintentos:** La sesión de `red.configurar_sesion` reintenta 5 veces con `backoff_factor` 1 ante los códigos `429`, `500`, `502`, `503` y `504`, en GET y POST, y sus esperas son 0, 2, 4, 8 y 16 s. (`tests/test_red.py`.)
+* [x] ✅ **Aviso de progreso:** `red.Progreso` avisa al cruzar cada paso de porcentaje con lo que lleva, el porcentaje, el tiempo transcurrido y lo que falta, da una última línea al 100 % y no escribe nada en una descarga corta. (`tests/test_red.py`.)
 * [x] ✅ **Credenciales:**
   * `NCBI_EMAIL` y `NCBI_API_KEY` se leen de `codigo/.env`, que ignora los comentarios y las líneas sin `=`;
   * una variable de entorno tiene prioridad sobre el fichero;

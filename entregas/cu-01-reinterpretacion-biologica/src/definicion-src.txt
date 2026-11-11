@@ -15,7 +15,8 @@ codigo/
 │   ├── main.py                    #   (hecho) Orquesta la Fase 1 en orden.
 │   ├── config.py                  #   (hecho) Rutas (entrada: los Excels de tools_cimus/), URLs, umbrales y opciones
 │   │                              #   de filtrado; lee NCBI_EMAIL y NCBI_API_KEY de codigo/.env.
-│   ├── red.py                     #   (hecho) Sesión HTTP con reintentos y descarga atómica del OBO y el GAF.
+│   ├── red.py                     #   (hecho) Sesión HTTP con reintentos, descarga atómica del OBO y el GAF y
+│   │                              #   aviso de progreso (porcentaje y tiempo) de las descargas largas.
 │   ├── entrada_excel.py           #   (hecho) [1] Lectura de las dos listas de rutas (.xlsx o .csv) -> pares (gen,
 │   │                              #   ruta) con Estado_Original; ValueError si falta una columna, antes de la red.
 │   ├── grafo_go.py                #   (hecho) [2] Grafo GO, propagación al subárbol con profundidad y signo.
