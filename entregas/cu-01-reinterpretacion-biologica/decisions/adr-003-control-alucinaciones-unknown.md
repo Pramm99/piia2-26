@@ -119,13 +119,11 @@ Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga 
 
 **Sin confianza mínima para `coincide_polaridad_GO`** (decidido por el equipo el 2026-11-11): si el veredicto coincide con GO y tiene una cita verificada, se acepta con cualquier confianza. En el benchmark, esta regla acepta 5 signos de Gemini por debajo del umbral y acierta 3 (los 2 errores tenían confianza 0 y 30 y la etiqueta era `UNKNOWN`); en gpt-oss acepta 3 y acierta 1.
 
-### Pendiente de decidir
-* **Umbral sobre `confianza_final` en lugar de `confianza_modelo`:** en el benchmark el resultado es mixto:
-  * para Gemini, `confianza_final` separa algo mejor (AUROC de 0,76 frente a 0,72) y está mejor calibrada (ECE de 7 puntos frente a 15);
-  * para gpt-oss es al revés (AUROC de 0,66 frente a 0,74; ECE de 15 frente a 5);
-  * con 40 y 34 signos, ninguna de las diferencias es concluyente.
-
-  Se decidirá con los factores de `confianza_final` reajustados sobre respuestas que no se usaron para fijarlos.
+**El umbral se aplica a `confianza_modelo`, no a `confianza_final`** (decidido por el equipo el 2026-11-11). `confianza_modelo` decide si hay signo (≥ `UMBRAL_VEREDICTO`, 80) y `confianza_final` solo pesa ese signo en la agregación (spec de scoring). Motivos:
+* **Estabilidad:** `confianza_final` incluye el acuerdo con el otro modelo, y mientras el secundario no responde vale ×0,9 (`sin_segundo`). En la ejecución completa del 2026-11-11 gpt-oss solo había respondido 72 de 1.694 preguntas, así que un umbral sobre `confianza_final` cambiaría el resultado de cada caso a medida que avanza el contraste.
+* **Recorte:** sobre los 563 signos de esa ejecución (todos con `confianza_modelo` entre 80 y 100, mediana 90), `confianza_final` ≥ 80 quitaría 380 (67 %) y ≥ 70, 164 (29 %).
+* **Sin doble penalización:** el tipo de evidencia y la frase citada ya rebajan el peso del voto en el scoring; si decidieran también el umbral, contarían dos veces.
+* **El benchmark no la favorece:** para Gemini, `confianza_final` separa algo mejor (AUROC de 0,76 frente a 0,72; ECE de 7 puntos frente a 15), pero para gpt-oss es al revés (AUROC de 0,66 frente a 0,74; ECE de 15 frente a 5). Con 40 y 34 signos ninguna diferencia es concluyente, y sus factores se fijaron con un prompt anterior.
 
 ## Alternativas
 * **`UNKNOWN` simple, sin motivo:**
@@ -134,6 +132,8 @@ Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga 
   * *Motivo de descarte:* el corte depende del juicio de cada modelo y no se puede ajustar sin cambiar el prompt y volver a llamar.
 * **Usar la confianza declarada tal cual, sin umbral ajustado ni corrección:**
   * *Motivo de descarte:* la confianza verbalizada de los LLM está mal calibrada y tiende a ser excesiva (se concentra entre 80 y 100 aunque el modelo se equivoque). Por eso el umbral se fija con el benchmark y no en el prompt, y el porcentaje que se muestra es la `confianza_final`, cuya calibración se mide (fiabilidad, ECE, AUROC y curva riesgo-cobertura).
+* **Aplicar el umbral a `confianza_final`:**
+  * *Motivo de descarte:* depende de si el secundario ya ha respondido, recorta dos tercios de los signos con umbral 80 y penaliza dos veces el tipo de evidencia y la frase citada, que ya pesan en el scoring.
 * **Marcar `revisar` cuando la cita no se verifica, en lugar de `UNKNOWN`:**
   * *Motivo de descarte:* una cita que no está en el abstract es justo la señal de alucinación que se quiere bloquear; el equipo decidió tratarla como falta de evidencia.
 * **Convertir en `UNKNOWN` cualquier discrepancia (con GO o entre modelos):**

@@ -96,8 +96,7 @@ flowchart TD
     classDef pendiente fill:#f9dada,stroke:#b3261e,color:#111,stroke-dasharray:5 5
     class E1,E2,E3,E4,E5,E6,E7,E8 hecho
     class L1,L2,L3,L4,L5,L6,REG,RES hecho
-    class B1 parcial
-    class S1 pendiente
+    class S1,B1 hecho
 ```
 
 **Leyenda:** verde = implementado · amarillo = implementado en parte · rojo discontinuo = pendiente. Las flechas discontinuas indican lectura o escritura de ficheros y evaluación.
@@ -165,7 +164,6 @@ Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09 y, desde el
 5. **Componente 14:** como el veredicto (neutro) no coincide con la `Polaridad_GO` (+1), la fila de `Por_ruta` sale con `Signo_ruta = UNKNOWN`, `Estado = revisar` y los motivos `baja_confianza`, `contexto_ajeno` y `discrepancia_polaridad_GO`. El caso pasa al experto con la cita y las dos fuentes, en vez de aceptar el `+1` que habría dado un modelo complaciente.
 
 ## Pendiente de decidir
-* **Umbral:** si debe aplicarse a `confianza_final` en lugar de a la confianza del modelo (ADR-003). La aceptación por `coincide_polaridad_GO` no exige confianza mínima (decidido el 2026-11-11).
 * **Fase 3:** los valores provisionales de la spec de scoring (pesos de contexto, minoría de ⅓ y umbrales de lectura del NPS) y el fichero de log2FC por gen, que CIMUS aún no ha entregado.
 
 ## Decisiones de arquitectura
