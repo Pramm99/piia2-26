@@ -14,7 +14,7 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 |---|---|
 | `codigo/extraer_info/` | **Fase 1 · Ingesta.** Excels de CIMUS → pares → GAF de GO → PMIDs → abstracts → `fase1_dataset_abstracts.xlsx`. Usa imports planos (`import config`). |
 | `codigo/consulta_gen/` | **Fase 2 · Inferencia.** Preguntas (gen, PMID, proceso núcleo) → dos LLM → validación → contraste → `codigo/data/fase2_resultados.xlsx`. Es un paquete: se ejecuta con `python -m consulta_gen` desde `codigo/`. Lee la Fase 1 a través del puente `_extraer_info.py`. |
-| `codigo/scoring/` | **Fase 3 · Scoring** (pendiente de implementar; ver [spec](specs/scoring-net-pathway-score.md)). |
+| `codigo/scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m scoring` desde `codigo/`; los umbrales están en `scoring/config.py`. |
 | `codigo/evaluacion/` | Benchmark: gold set, guía de etiquetado, `evaluar_gold.py`, `seleccionar_gold.py` y `buscar_neutros.py`. |
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
 | `codigo/tools_cimus/` | Entrada original de CIMUS (únicos Excels versionados). |
@@ -32,6 +32,7 @@ cp .env.example .env          # y rellena las claves que vayas a usar
 python extraer_info/main.py   # Fase 1 (unos 58 min en frío, unos minutos con caché)
 python -m consulta_gen CD7    # Fase 2 en modo demo: imprime la primera llamada, sin llamar a nadie
 python -m consulta_gen ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel]   # Fase 2 real, reanudable
+python -m scoring [excel_fase1] [excel_fase2] [log2fc]   # Fase 3, sin red (segundos)
 python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
 ```
@@ -79,7 +80,7 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
 * confirmar gpt-oss como modelo secundario;
-* la ejecución completa de la Fase 2;
 * las etiquetas de CIMUS para el gold set;
-* el código de la Fase 3;
+* el fichero de log2FC por gen de CIMUS y los umbrales definitivos del scoring;
+* el contraste entre modelos: relanzar la Fase 2 sin `--solo-respaldo` (varios días por el cupo de Groq);
 * reorganizar `codigo/` en una carpeta por fase (cuando se haga, hay que mover a la vez los imports, el puente, las specs, los ADR y este fichero).

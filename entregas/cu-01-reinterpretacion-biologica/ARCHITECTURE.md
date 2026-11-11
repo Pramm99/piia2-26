@@ -6,7 +6,7 @@ El código vive en `codigo/`, dentro de esta misma carpeta del equipo (`entregas
 
 * **Fase 1, ingesta** (`codigo/extraer_info/`, `python codigo/extraer_info/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
 * **Fase 2, inferencia** (`codigo/consulta_gen/`, `python -m consulta_gen ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**; el modelo secundario está pendiente de confirmar con el benchmark (ADR-005).
-* **Fase 3, scoring** (`codigo/scoring/`, [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Especificada; código pendiente.**
+* **Fase 3, scoring** (`codigo/scoring/`, `python -m scoring`, [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Implementada**; sus umbrales son provisionales.
 
 ## Diagrama
 
@@ -49,7 +49,7 @@ flowchart TD
     end
 
     subgraph F3["Fase 3 · Scoring"]
-        S1["15. Agregación y<br/>Net Pathway Score"]
+        S1["15. Agregación y<br/>Net Pathway Score<br/>scoring/nps.py"]
     end
 
     B1["16. Benchmark<br/>codigo/evaluacion"]
@@ -134,12 +134,12 @@ El orden de ejecución es el de `main.py`.
 
 | # | Componente | Responsabilidad | Estado |
 |---|---|---|---|
-| 15 | **Agregación y Net Pathway Score** | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con la dirección del gen y su log2 Fold-Change para obtener la contribución neta a la ruta. | Especificado en [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md): voto ponderado por `Confianza_final` y contexto, conflicto a `revisar` si la minoría pesa ⅓ o más, y `NPS = Σ signo × dirección × |log2FC| / Σ |log2FC|`. Código pendiente. |
+| 15 | **Agregación y Net Pathway Score** (`scoring/nps.py`, `scoring/config.py`) | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con la dirección del gen y su log2 Fold-Change para obtener la contribución neta a la ruta. Sin red ni LLM, determinista. | Hecho según [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md): voto ponderado por `Confianza_final` y contexto, conflicto a `revisar` si la minoría pesa ⅓ o más, y `NPS = Σ signo × dirección × |log2FC| / Σ |log2FC|`. Escribe `codigo/data/fase3_scoring.xlsx` (hojas `Por_ruta`, `Por_par` y `Resumen`). Sin el fichero de log2FC de CIMUS, `|log2FC| = 1`. |
 | 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | En parte: funciona sobre el *gold set* (100 casos: 65 de genes *up* y 35 de genes *down*) con etiquetas provisionales de anotadores Claude. Gemini y gpt-oss están completos (100 de 100); faltan las etiquetas de CIMUS. |
 
 ## Flujo de principio a fin
 
-Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09.
+Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09 y, desde el paso 13, de las Fases 2 y 3 sobre ella (2026-11-11).
 
 1. **Entrada.** El componente 1 lee los dos Excels de CIMUS. La lista de rutas de genes *up* (activadas) tiene **314 rutas**, **2.489 pares** gen–ruta y **126 genes**; la de genes *down* (suprimidas), **78 rutas**, **683 pares** y **98 genes**. En total son **3.172 pares** de **224 genes**, y ningún gen está en las dos listas.
 2. **Grafo.** El componente 2 descarga el OBO y el GAF (solo la primera vez) y, para cada ruta, calcula todos sus descendientes con su profundidad y el signo del camino.
@@ -154,7 +154,8 @@ Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09.
 11. **Prompt y modelos.** El componente 11 construye el prompt (las preguntas de un gen van juntas) y el 12 lo envía a los dos modelos. Antes de cada llamada consulta el registro: si la pregunta ya se evaluó con ese mismo prompt, no la repite. Cada respuesta se escribe en el registro en cuanto llega, de modo que una ejecución interrumpida (por ejemplo, al agotar el límite diario gratuito) se reanuda donde se quedó.
 12. **Validación.** El componente 13 valida cada respuesta por separado. Fuerza `UNKNOWN` si ninguna cita aparece en su frase, si el JSON no es interpretable o si la confianza no llega al umbral. Manda a `revisar` un veredicto que llega al umbral pero trae una limitación, y traduce el efecto sobre el proceso al signo de cada ruta.
 13. **Contraste.** El componente 14 fija el signo final (el del modelo principal), acepta los veredictos que coinciden con GO, marca el caso como `revisar` si los modelos discrepan entre sí o con GO, calcula `confianza_final` y escribe `fase2_resultados.xlsx`. Lo que el principal no ha respondido por el límite diario queda `pendiente` y la siguiente ejecución lo completa.
-14. **Scoring.** El componente 15 agregará los casos de cada par gen–ruta y calculará el *Net Pathway Score* (pendiente).
+   En la ejecución completa (con `--solo-respaldo`), Gemini respondió 1.690 preguntas y gpt-oss 4 como respaldo, sin ninguna pendiente. De las **4.707 filas** de `Por_ruta`, 1.912 salen `resuelto` (1.399 `+1`, 483 `−1` y 30 neutras), 146 `revisar` y 2.649 `no_concluyente`, casi todas por `baja_confianza`.
+14. **Scoring.** El componente 15 agrega los casos de cada par gen–ruta y calcula el *Net Pathway Score*. De los **3.172 pares**, 1.535 quedan resueltos (1.109 `+1`, 307 `−1` y 119 neutros, 103 de ellos inmunoglobulinas), 177 en `revisar` (64 por `conflicto_entre_abstracts`) y 1.460 sin signo. De las **352 rutas**, 112 se leen `activada`, 32 `inhibida`, 38 `mixta` y 170 `insuficiente` (menos de 3 pares con signo o cobertura < 30 %). 16 rutas de la lista de genes *up* salen inhibidas y 2 de la de genes *down*, activadas.
 
 **Ejemplo, CD7 en *leukocyte mediated immunity* (GO:0002443):**
 1. **Componente 4:** encuentra que CD7 está anotado con evidencia `IDA` (PMID 10652336) al término descendiente GO:0002726, *positive regulation of T cell cytokine production*, por lo que `Polaridad_GO = +1`.

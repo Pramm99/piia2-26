@@ -78,12 +78,12 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Evaluación:** Benchmark de los modelos candidatos sobre un _gold set_ de 100 preguntas (65 de genes _up_ y 35 de genes _down_), con etiquetado a ciegas. Hoy las etiquetas son provisionales y faltan las del equipo clínico de CIMUS ([spec](specs/benchmark-gold-set.md)).
 
-- **Métrica de resolución:** Integración del signo inferido con la dirección y el _log2 Fold-Change_ de cada gen en el dataset scRNA-seq original (_Net Pathway Score_), especificada en la [spec de scoring](specs/scoring-net-pathway-score.md). El código está pendiente.
+- **Métrica de resolución:** Integración del signo inferido con la dirección y el _log2 Fold-Change_ de cada gen en el dataset scRNA-seq original (_Net Pathway Score_), implementada según la [spec de scoring](specs/scoring-net-pathway-score.md) (`python -m scoring`). Hasta que CIMUS entregue el log2FC por gen, todos los genes pesan igual.
 
 - **Reproducibilidad:**
   - registro de todas las respuestas de los modelos, que permite reanudar una ejecución y regenerar los resultados sin volver a llamar ([ADR-004](decisions/adr-004-persistencia-ficheros-locales.md));
   - un cliente simulado (`ClienteSimulado`) que permite probar el pipeline sin red ni cuotas;
-  - pruebas con `pytest` en `codigo/tests/` (limpieza, validación, contraste, ejecución reanudable e ingesta), sin red: las APIs y los modelos se simulan.
+  - pruebas con `pytest` en `codigo/tests/` (limpieza, validación, contraste, ejecución reanudable, ingesta y scoring), sin red: las APIs y los modelos se simulan.
 
 ### Qué queda explícitamente fuera
 
@@ -167,11 +167,12 @@ entregas/cu-01-reinterpretacion-biologica/
     │   │                              #   GeneRIF y Europe PMC, abstracts) y Excel de salida.
     │   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, UniProt y su caché.
     ├── consulta_gen/                  # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
+    ├── scoring/                       # Fase 3: signo de cada par (gen, ruta) y Net Pathway Score de cada ruta.
     ├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
     ├── tests/                         # Pruebas con pytest, sin red (python -m pytest desde codigo/).
     ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas y su script de análisis.
     ├── data/                          # Ficheros locales (ignorados por git): OBO, GAF, cachés, registro de
-    │                                  #   respuestas, fase2_resultados.xlsx y registros del benchmark.
+    │                                  #   respuestas, fase2_resultados.xlsx, fase3_scoring.xlsx y registros del benchmark.
     ├── .env.example                   # Plantilla de las claves de los modelos y de NCBI.
     └── requirements.txt               # Dependencias de Python (requests, pandas, openpyxl; pytest para las pruebas).
 ```
@@ -185,6 +186,7 @@ Desde esta carpeta (`entregas/cu-01-reinterpretacion-biologica/`), con Python 3 
 1. **Claves:** copiar `codigo/.env.example` como `codigo/.env` y rellenar `GEMINI_API_KEY`, `GROQ_API_KEY` y, para la Fase 1, `NCBI_EMAIL` y `NCBI_API_KEY` (opcional). `codigo/.env` no se sube al repositorio: está en el `.gitignore`. Las variables de entorno del sistema tienen prioridad sobre el fichero.
 2. **Fase 1:** `python codigo/extraer_info/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/extraer_info/fase1_dataset_abstracts.xlsx`. La primera ejecución descarga el OBO, el GAF y unos 33.000 _abstracts_ (casi una hora); con las cachés tarda unos minutos.
 3. **Fase 2:** desde `codigo/`, `python -m consulta_gen ejecutar`. Escribe `codigo/data/fase2_resultados.xlsx`. Si se agota el límite diario de un modelo, basta con volver a lanzar el mismo comando. Sin llamar a ningún modelo, `python -m consulta_gen CD7` muestra la primera llamada que se enviaría para un gen.
-4. **Benchmark:** `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
-5. **Pruebas:** desde `codigo/`, `python -m pytest`. No usan la red ni las claves de `.env`.
+4. **Fase 3:** desde `codigo/`, `python -m scoring`. Lee las salidas de las Fases 1 y 2 y escribe `codigo/data/fase3_scoring.xlsx` en unos segundos, sin red. Un tercer argumento opcional es el fichero de log2FC por gen (`Gen`, `log2FC`).
+5. **Benchmark:** `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
+6. **Pruebas:** desde `codigo/`, `python -m pytest`. No usan la red ni las claves de `.env`.
 
