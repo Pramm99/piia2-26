@@ -1,6 +1,6 @@
 ---
-description: Elección de los modelos de lenguaje con la restricción de coste cero, mediante un benchmark de candidatos gratuitos sobre un gold set; principal Gemini 3.5 Flash-Lite y secundario gpt-oss-120b en prueba.
-state: Aceptado (candidatos actualizados el 2026-11-08; modelo principal decidido el 2026-11-10; secundario medido en el benchmark, pendiente de confirmación del equipo)
+description: Elección de los modelos de lenguaje con la restricción de coste cero, mediante un benchmark de candidatos gratuitos sobre un gold set; principal Gemini 3.5 Flash-Lite y secundario gpt-oss-120b.
+state: Aceptado (candidatos actualizados el 2026-11-08; modelo principal decidido el 2026-11-10; secundario confirmado por el equipo el 2026-11-11)
 ---
 
 # ADR 005 - Elección del Modelo de Lenguaje con Coste Cero mediante Benchmark sobre Gold Set
@@ -11,7 +11,7 @@ El proyecto **solo usa modelos que no exijan pagar ninguna cantidad**. Los model
 | Papel | Modelo | Estado |
 |---|---|---|
 | **Principal** | **Gemini 3.5 Flash-Lite** (`gemini-3.5-flash-lite`, plan gratuito de la API de Gemini) | Decidido por el equipo el 2026-11-10 |
-| **Secundario** | **`gpt-oss-120b`** en el plan gratuito de **Groq** (`groq-gpt-oss-120b`, pesos abiertos, otra familia y otro proveedor) | En prueba: completó el benchmark (100 de 100, sin cortes); falta que el equipo lo confirme |
+| **Secundario** | **`gpt-oss-120b`** en el plan gratuito de **Groq** (`groq-gpt-oss-120b`, pesos abiertos, otra familia y otro proveedor) | Confirmado por el equipo el 2026-11-11, tras completar el benchmark (100 de 100, sin cortes) |
 | **Contingencia** | **`qwen3:8b`** en **Ollama**, en local y sin GPU | Solo si un plan gratuito cambia o deja de ofrecer los modelos elegidos |
 
 **Candidatos descartados o sin usar:**
@@ -30,7 +30,7 @@ El proyecto **solo usa modelos que no exijan pagar ninguna cantidad**. Los model
 * **Casos ambiguos:** incluye, por ejemplo, el de receptor frente a ligando (CD7 y K12, PMID 10652336).
 * **Etiquetas:** la mayoría son casos no concluyentes: 20 «+1», 12 «−1», 3 neutros y 65 `UNKNOWN`.
 
-Hoy las etiquetas son **provisionales**. Las pusieron anotadores Claude a ciegas, con doble etiquetado de todos los casos y un árbitro en los desacuerdos (acuerdo de 99 de 100 entre la etiqueta final y la segunda, kappa 0,98). Su acierto está inflado para cualquier modelo parecido, así que las etiquetas que valen son las del equipo clínico (a través de Luis Pérez, con CIMUS), que se pondrán **sin ver la salida de ningún modelo**, para evitar el sesgo de anclaje. Detalle en la [spec del benchmark](../specs/benchmark-gold-set.md).
+Las etiquetas del *gold set* son las de anotadores Claude a ciegas, con doble etiquetado de todos los casos y un árbitro en los desacuerdos (acuerdo de 99 de 100 entre la etiqueta final y la segunda, kappa 0,98). El equipo decidió el 2026-11-11 quedarse con ellas. Como los anotadores son modelos de lenguaje, parecidos a los evaluados, el acierto medido puede estar inflado frente al de un experto humano, y las cifras se leen con esa cautela. Detalle en la [spec del benchmark](../specs/benchmark-gold-set.md).
 
 **Métricas** (las del ADR-003 más las de formato y coste):
 * Exactitud, precisión de los veredictos dados (`+1`, `-1` o `neutro`), cobertura y recall de `UNKNOWN`, con intervalos de confianza por *bootstrap* y la matriz de confusión de 4 clases.
@@ -39,7 +39,7 @@ Hoy las etiquetas son **provisionales**. Las pusieron anotadores Claude a ciegas
 * Calibración de `confianza_modelo` y `confianza_final` (fiabilidad, ECE, AUROC y curva riesgo-cobertura).
 * Latencia, tiempo total, llamadas y tokens.
 
-**Resultados medidos** (2026-11-10, umbral 80; gold provisional, así que solo orientan):
+**Resultados medidos** (2026-11-10, umbral 80):
 
 | Modelo | Respondidas | JSON válido | Exactitud | Precisión de los signos | Cobertura | Recall de `UNKNOWN` | Tiempo |
 |---|---|---|---|---|---|---|---|
@@ -63,7 +63,7 @@ Hoy las etiquetas son **provisionales**. Las pusieron anotadores Claude a ciegas
   * el único caso de signos opuestos es G133 (CD6 soluble como bloqueante), que también dudaron los anotadores.
 * **Intervalos:** con 35 casos son amplios. La precisión de Gemini en los *down* va del 71 al 100 %, y en los *up*, del 41 al 82 %.
 
-gpt-oss es algo más preciso y más prudente (cobertura del 34 % frente al 40 %), pero tiene 4 JSON inválidos y tarda casi el triple. Las diferencias de exactitud y precisión caben dentro de los intervalos. El papel de cada modelo no cambia: Gemini principal, porque responde a todo y rápido, y gpt-oss secundario, cuya independencia de errores es lo que usa el ADR-003. Falta que el equipo confirme el secundario.
+gpt-oss es algo más preciso y más prudente (cobertura del 34 % frente al 40 %), pero tiene 4 JSON inválidos y tarda casi el triple. Las diferencias de exactitud y precisión caben dentro de los intervalos. El papel de cada modelo no cambia: Gemini principal, porque responde a todo y rápido, y gpt-oss secundario, cuya independencia de errores es lo que usa el ADR-003. El equipo confirmó el secundario el 2026-11-11.
 
 **Configuración común** (`codigo/fase2_inferencia/cliente.py`): un único conector compatible con la API de chat de OpenAI (`ClienteOpenAICompatible`) para Groq, Gemini (modo compatible), Cerebras y Ollama. Usa temperatura 0, `seed` y salida JSON estricta con el esquema del prompt cuando el proveedor lo admite. Gemini ignora la temperatura y su modo compatible rechaza `seed` (HTTP 400), así que no se le envía ninguno de los dos. gpt-oss usa `reasoning_effort = "low"`. El nombre exacto del modelo que devuelve el proveedor se guarda en cada llamada (ADR-004). Los mensajes se construyen una sola vez (`PromptLista.como_mensajes()`) y solo cambia la configuración de cada modelo (`MODELOS`). En producción las preguntas de un gen se trocean con el presupuesto por llamada más pequeño de los dos modelos (Groq, 7.500 tokens), para que los dos reciban la misma agrupación.
 
@@ -102,7 +102,7 @@ Aceptamos los compromisos asociados:
   * `codigo/fase2_inferencia/esquema.py` (`PromptLista.como_mensajes()`, formato de chat estándar `role`/`content`).
   * `codigo/fase2_inferencia/prompt.py` (el prompt: `SYSTEM`, `construir_prompt` y `construir_prompt_lista`).
   * `codigo/fase2_inferencia/__main__.py` (modelos por defecto de `python -m fase2_inferencia ejecutar`).
-  * `codigo/evaluacion/evaluar_gold.py` y el informe `codigo/evaluacion/informe_gold_provisional.txt`.
+  * `codigo/evaluacion/evaluar_gold.py` y el informe `codigo/evaluacion/informe_gold.txt`.
 * **Proveedores** (comprobar límites y catálogo en la consola de cada uno antes de ejecutar):
   * Gemini API, límites de uso: [https://ai.google.dev/gemini-api/docs/rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits)
   * Groq, modelos, límites y retiradas: [https://console.groq.com/docs/models](https://console.groq.com/docs/models), [https://console.groq.com/docs/rate-limits](https://console.groq.com/docs/rate-limits), [https://console.groq.com/docs/deprecations](https://console.groq.com/docs/deprecations)

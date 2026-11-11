@@ -73,9 +73,9 @@ codigo/
 │   ├── plantilla_etiquetado.*     #   (hecho) Plantilla a ciegas (.jsonl versionado; .xlsx, con las columnas de la
 │   │                              #   guía, incluidas confianza y nota, no se versiona).
 │   ├── guia_etiquetado.md         #   (hecho) Guía de etiquetado a 4 clases.
-│   ├── etiquetas_provisionales/   #   (hecho) Etiquetas del gold set (anotadores Claude a ciegas, doble etiqueta),
+│   ├── etiquetas/                 #   (hecho) Etiquetas del gold set (anotadores Claude a ciegas, doble etiqueta),
 │   │                              #   con su SHA-256 y LEEME.md.
-│   └── informe_gold_provisional.txt  # Informe del benchmark (Gemini y gpt-oss).
+│   └── informe_gold.txt           # Informe del benchmark (Gemini y gpt-oss).
 │
 ├── pytest.ini                     # Configuración de pytest (python -m pytest desde codigo/).
 ├── tests/                         # PRUEBAS (pytest, sin red ni claves)

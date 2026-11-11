@@ -38,7 +38,7 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 ```
 
 * **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta.
-* **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b` (en prueba). Si Gemini no responde o su JSON no vale, decide gpt-oss (`respaldo_secundario`). Con `--solo-respaldo`, gpt-oss solo recibe esas preguntas, para ahorrar su cupo diario. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
+* **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b`. Si Gemini no responde o su JSON no vale, decide gpt-oss (`respaldo_secundario`). Con `--solo-respaldo`, gpt-oss solo recibe esas preguntas, para ahorrar su cupo diario. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
 
 ## Reglas que no se negocian
 1. **Coste cero.** Solo planes gratuitos. No propongas ningún servicio, modelo ni API de pago.
@@ -79,7 +79,5 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 ## Estado y pendientes
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
-* confirmar gpt-oss como modelo secundario;
-* las etiquetas de CIMUS para el gold set;
 * el fichero de log2FC por gen de CIMUS y los umbrales definitivos del scoring;
 * el contraste entre modelos: relanzar la Fase 2 sin `--solo-respaldo` (varios días por el cupo de Groq).

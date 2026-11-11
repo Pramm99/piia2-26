@@ -5,7 +5,7 @@ Este documento describe las piezas del pipeline, de qué se responsabiliza cada 
 El código vive en `codigo/`, dentro de esta misma carpeta del equipo (`entregas/cu-01-reinterpretacion-biologica/codigo/`), y se organiza en tres fases:
 
 * **Fase 1, ingesta** (`codigo/fase1_ingesta/`, `python codigo/fase1_ingesta/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
-* **Fase 2, inferencia** (`codigo/fase2_inferencia/`, `python -m fase2_inferencia ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**; el modelo secundario está pendiente de confirmar con el benchmark (ADR-005).
+* **Fase 2, inferencia** (`codigo/fase2_inferencia/`, `python -m fase2_inferencia ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**, con Gemini 3.5 Flash-Lite como principal y gpt-oss-120b como secundario (ADR-005).
 * **Fase 3, scoring** (`codigo/fase3_scoring/`, `python -m fase3_scoring`, [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Implementada**; sus umbrales son provisionales.
 
 ## Diagrama
@@ -135,7 +135,7 @@ El orden de ejecución es el de `main.py`.
 | # | Componente | Responsabilidad | Estado |
 |---|---|---|---|
 | 15 | **Agregación y Net Pathway Score** (`fase3_scoring/nps.py`, `fase3_scoring/config.py`) | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con la dirección del gen y su log2 Fold-Change para obtener la contribución neta a la ruta. Sin red ni LLM, determinista. | Hecho según [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md): voto ponderado por `Confianza_final` y contexto, conflicto a `revisar` si la minoría pesa ⅓ o más, y `NPS = Σ signo × dirección × |log2FC| / Σ |log2FC|`. Escribe `codigo/data/fase3_scoring.xlsx` (hojas `Por_ruta`, `Por_par` y `Resumen`). Sin el fichero de log2FC de CIMUS, `|log2FC| = 1`. |
-| 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | En parte: funciona sobre el *gold set* (100 casos: 65 de genes *up* y 35 de genes *down*) con etiquetas provisionales de anotadores Claude. Gemini y gpt-oss están completos (100 de 100); faltan las etiquetas de CIMUS. |
+| 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | Hecho: *gold set* de 100 casos (65 de genes *up* y 35 de genes *down*) etiquetado a ciegas por anotadores Claude con doble etiqueta. Gemini y gpt-oss están completos (100 de 100). |
 
 ## Flujo de principio a fin
 
@@ -165,8 +165,7 @@ Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09 y, desde el
 5. **Componente 14:** como el veredicto (neutro) no coincide con la `Polaridad_GO` (+1), la fila de `Por_ruta` sale con `Signo_ruta = UNKNOWN`, `Estado = revisar` y los motivos `baja_confianza`, `contexto_ajeno` y `discrepancia_polaridad_GO`. El caso pasa al experto con la cita y las dos fuentes, en vez de aceptar el `+1` que habría dado un modelo complaciente.
 
 ## Pendiente de decidir
-* **Modelo secundario:** el principal es Gemini 3.5 Flash-Lite (decidido el 2026-11-10). El secundario previsto es gpt-oss-120b en Groq, ya medido en el benchmark y pendiente de que el equipo lo confirme (ADR-005).
-* **Regla de GO y umbral:** si la aceptación por `coincide_polaridad_GO` necesita una confianza mínima, y si el umbral debe aplicarse a `confianza_final` en lugar de a la confianza del modelo (ADR-003).
+* **Umbral:** si debe aplicarse a `confianza_final` en lugar de a la confianza del modelo (ADR-003). La aceptación por `coincide_polaridad_GO` no exige confianza mínima (decidido el 2026-11-11).
 * **Fase 3:** los valores provisionales de la spec de scoring (pesos de contexto, minoría de ⅓ y umbrales de lectura del NPS) y el fichero de log2FC por gen, que CIMUS aún no ha entregado.
 
 ## Decisiones de arquitectura
@@ -176,4 +175,4 @@ Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09 y, desde el
 | [ADR-002](decisions/adr-002-europe-pmc-api.md) | Evidencias desde el GAF de Gene Ontology y abstracts de Europe PMC con respaldo en NCBI. |
 | [ADR-003](decisions/adr-003-control-alucinaciones-unknown.md) | Control de alucinaciones: signo, estado y motivos, con verificación de citas, umbral de confianza y contraste con GO y entre modelos. |
 | [ADR-004](decisions/adr-004-persistencia-ficheros-locales.md) | Persistencia en ficheros locales: cachés desechables y registro JSONL de respuestas, sin bases de datos. |
-| [ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md) | Elección de modelos con coste cero mediante benchmark: principal Gemini 3.5 Flash-Lite y secundario gpt-oss-120b en prueba. |
+| [ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md) | Elección de modelos con coste cero mediante benchmark: principal Gemini 3.5 Flash-Lite y secundario gpt-oss-120b. |

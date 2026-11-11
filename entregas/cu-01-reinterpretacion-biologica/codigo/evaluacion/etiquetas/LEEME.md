@@ -1,7 +1,7 @@
-# Gold set provisional: genes up y down (2026-11-10)
+# Gold set: genes up y down (2026-11-10)
 
 ## Qué es
-100 preguntas (gen, PMID, proceso núcleo) de las dos listas de CIMUS, porque la Fase 2 procesa las dos (1.123 preguntas de genes up y 571 de genes down con la Fase 1 del 2026-11-09). Las etiquetas son de anotadores Claude a ciegas; siguen haciendo falta las de CIMUS.
+100 preguntas (gen, PMID, proceso núcleo) de las dos listas de CIMUS, porque la Fase 2 procesa las dos (1.123 preguntas de genes up y 571 de genes down con la Fase 1 del 2026-11-09). Las etiquetas son de anotadores Claude a ciegas, y el equipo decidió el 2026-11-11 quedarse con ellas. Como los anotadores son modelos de lenguaje, el acierto medido puede estar inflado frente al de un experto humano.
 
 ## Cómo se montó
 1. **100 casos: 65 up y 35 down.**
@@ -35,10 +35,10 @@
   - **Down:** 16 / 11 / 7 / 1.
 - **Más signos en los down:** la proporción de signos es mayor entre los down (18 de 35) que entre los up (14 de 65).
 - **Ficheros:**
-  - `gold_provisional.jsonl`, con las etiquetas finales, congelado con SHA-256 `59158a2d…` (`gold_provisional.sha256`);
+  - `gold.jsonl`, con las etiquetas finales, congelado con SHA-256 `59158a2d…` (`gold.sha256`);
   - `doble.jsonl`, con la segunda etiqueta de cada caso;
   - `../gold_casos.jsonl` (la selección, con la información para evaluar) y `../plantilla_etiquetado.jsonl` (a ciegas).
-- **Benchmark** (`codigo/data/benchmark/`, informe `../informe_gold_provisional.txt`), umbral 80:
+- **Benchmark** (`codigo/data/benchmark/`, informe `../informe_gold.txt`), umbral 80:
   - Gemini 3.5 Flash-Lite: 100 de 100; exactitud 84 %, precisión de los signos 72 %, cobertura 40 % y recall de UNKNOWN 85 %; por lista, up 83 % / 61 % / 35 % / 82 % y down 86 % / 88 % / 49 % / 94 %;
   - gpt-oss-120b (Groq): 100 de 100, JSON válido 96/100; exactitud 85 %, precisión 79 %, cobertura 34 % y recall de UNKNOWN 89 %; por lista, up 85 % / 65 % / 31 % / 86 % y down 86 % / 100 % / 40 % / 100 %;
   - los dos modelos dan la misma clase en 87 de 100 casos, y solo en G133 dan signos opuestos.

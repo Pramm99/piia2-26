@@ -25,7 +25,7 @@ from fase2_inferencia import preparar_prompts
 from fase2_inferencia._fase1 import DIR_FASE1, SALIDA
 from fase2_inferencia.prompt import trocear_por_gen
 
-PRINCIPAL, SECUNDARIO = "gemini-3.5-flash-lite", "groq-gpt-oss-120b"  # ADR-005 (secundario aún en prueba)
+PRINCIPAL, SECUNDARIO = "gemini-3.5-flash-lite", "groq-gpt-oss-120b"  # ADR-005
 
 
 def localizar_excel(ruta=None) -> Path:

@@ -10,8 +10,8 @@ confianza_final = confianza_modelo × factor_evidencia × factor_frase × factor
 
 Los factores son PROVISIONALES: salen de una prueba del 2026-11-09 con un prompt anterior (43 signos de tres
 modelos de API sobre 60 casos) como el cociente entre el acierto de cada grupo y el del mejor, y se acercan a 1
-la mitad del camino porque las muestras son pequeñas. Cuando haya etiquetas de CIMUS se sustituirán por una
-regresión logística ajustada en el gold set. Acierto observado en esa prueba:
+la mitad del camino porque las muestras son pequeñas. Se sustituirán por una regresión logística ajustada en el
+gold set. Acierto observado en esa prueba:
   - evidencia: ganancia 17/21 (81 %), pérdida 8/12 (67 %), medida directa 4/7 (57 %), contexto o correlación 1/3;
   - frase: [T], [S1] o [S2] 4/7 (57 %), [S3] o después 26/36 (72 %);
   - otro modelo: mismo signo 44/54 (81 %), UNKNOWN 15/30 (50 %), signo opuesto 1/2.

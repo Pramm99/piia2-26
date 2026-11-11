@@ -74,7 +74,7 @@ El control se organiza en tres capas:
 * **Frase citada:** 0,9 si es el título o las frases S1-S2 (suelen ser introducción); 1,0 si es una frase posterior.
 * **Otro modelo:** 1,0 si da el mismo signo; 0,8 si da `UNKNOWN`; 0,5 si da el signo opuesto; 0,9 si no hay respuesta suya.
 
-Los factores son provisionales: salen de una prueba del 2026-11-09 con un prompt anterior (43 signos de tres modelos de API sobre 60 casos) como el cociente entre el acierto de cada grupo y el del mejor, acercados a 1 la mitad del camino porque las muestras son pequeñas. Cuando haya etiquetas de CIMUS se sustituirán por una regresión logística ajustada en el *gold set*. Solo los signos tienen `confianza_final`: un `UNKNOWN` se explica con su motivo. En una fila aceptada por `coincide_polaridad_GO` cuya confianza no llegaba al umbral, `confianza_final` se calcula sobre el veredicto aceptado y por eso sale baja. Ese porcentaje es también el peso propuesto para cada respuesta en la agregación por par gen-ruta (spec de scoring).
+Los factores son provisionales: salen de una prueba del 2026-11-09 con un prompt anterior (43 signos de tres modelos de API sobre 60 casos) como el cociente entre el acierto de cada grupo y el del mejor, acercados a 1 la mitad del camino porque las muestras son pequeñas. Se sustituirán por una regresión logística ajustada en el *gold set*. Solo los signos tienen `confianza_final`: un `UNKNOWN` se explica con su motivo. En una fila aceptada por `coincide_polaridad_GO` cuya confianza no llegaba al umbral, `confianza_final` se calcula sobre el veredicto aceptado y por eso sale baja. Ese porcentaje es también el peso propuesto para cada respuesta en la agregación por par gen-ruta (spec de scoring).
 
 La normalización de comparación nunca se aplica al texto que lee el LLM: este recibe el abstract limpio pero con la nomenclatura intacta, como exige la spec de limpieza.
 
@@ -113,18 +113,19 @@ El sistema no da el `+1` que un modelo complaciente habría dado. Como el veredi
 | Gemini 3.5 Flash-Lite | 84 % | 72 % | 40 % | 85 % |
 | gpt-oss-120b (Groq) | 85 % | 79 % | 34 % | 89 % |
 
-Las etiquetas son de anotadores Claude a ciegas; las cifras valdrán cuando etiquete CIMUS. Los umbrales mínimos se acordarán con CIMUS.
+Las etiquetas son de anotadores Claude a ciegas (el equipo decidió quedarse con ellas el 2026-11-11), así que el acierto medido puede estar inflado frente al de un experto humano.
 
 Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga la ejecución en los planes gratuitos; el filtro previo puede descartar abstracts que nombran el gen de forma no recogida en los alias (un error en la dirección segura, que se medirá en el benchmark); y la cobertura bajará frente a un sistema que siempre responde.
 
+**Sin confianza mínima para `coincide_polaridad_GO`** (decidido por el equipo el 2026-11-11): si el veredicto coincide con GO y tiene una cita verificada, se acepta con cualquier confianza. En el benchmark, esta regla acepta 5 signos de Gemini por debajo del umbral y acierta 3 (los 2 errores tenían confianza 0 y 30 y la etiqueta era `UNKNOWN`); en gpt-oss acepta 3 y acierta 1.
+
 ### Pendiente de decidir
-* **Confianza mínima para `coincide_polaridad_GO`:** hoy se acepta cualquier confianza. En el benchmark, esta regla acepta 5 signos de Gemini por debajo del umbral y acierta 3; los 2 errores tenían confianza 0 y 30 y la etiqueta era `UNKNOWN`. En gpt-oss acepta 3 y acierta 1 (errores con confianza 30 y 70).
 * **Umbral sobre `confianza_final` en lugar de `confianza_modelo`:** en el benchmark el resultado es mixto:
   * para Gemini, `confianza_final` separa algo mejor (AUROC de 0,76 frente a 0,72) y está mejor calibrada (ECE de 7 puntos frente a 15);
   * para gpt-oss es al revés (AUROC de 0,66 frente a 0,74; ECE de 15 frente a 5);
   * con 40 y 34 signos, ninguna de las diferencias es concluyente.
 
-  Se decidirá con las etiquetas de CIMUS y con los factores de `confianza_final` reajustados sobre respuestas que no se usaron para fijarlos.
+  Se decidirá con los factores de `confianza_final` reajustados sobre respuestas que no se usaron para fijarlos.
 
 ## Alternativas
 * **`UNKNOWN` simple, sin motivo:**

@@ -46,7 +46,7 @@ Se evaluó en profundidad la siguiente alternativa principal:
     * disponer de GPUs dedicadas para evitar latencias prohibitivas en inferencia CPU;
     * mantener *fixtures* de tensores y tokens para el clasificador, además de los *mocks* de red que ambas opciones necesitan.
 
-    Se espera que la Opción A ofrezca una explicabilidad suficiente con menor coste operativo. Esta hipótesis se valida con el benchmark sobre el *gold set* ([spec del benchmark](../specs/benchmark-gold-set.md)), hoy con etiquetas provisionales y pendiente de las etiquetas de CIMUS.
+    Se espera que la Opción A ofrezca una explicabilidad suficiente con menor coste operativo. Esta hipótesis se valida con el benchmark sobre el *gold set* ([spec del benchmark](../specs/benchmark-gold-set.md)), etiquetado a ciegas con doble etiqueta.
 
 ## Referencias
 * **Documentación del proyecto:**
