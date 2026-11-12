@@ -77,7 +77,7 @@ El comentario no se borra: el issue guarda la historia del bloqueo, y el [DoD](D
 ### Ejemplos reales
 
 - **Etiquetado del gold set por CIMUS (#17).** Esperaba el etiquetado a mano de CIMUS para validar el benchmark. Plan B: quedarse con el etiquetado a ciegas con doble anotador y árbitro (κ 0,98), con la cautela de que el acierto puede estar algo inflado. El 11/11 el equipo aplicó el plan B y cerró la tarea.
-- **Cupo diario de Groq (Fase 2).** gpt-oss se paraba al agotar el cupo de tokens del día. Plan B: Gemini como modelo principal y gpt-oss solo como respaldo (`--solo-respaldo`), así que la ejecución completa no dependió del cupo de Groq.
+- **Cupo diario de Groq (Fase 2).** gpt-oss se paraba al agotar el cupo de tokens del día. Plan B: Gemini como modelo principal y gpt-oss solo como respaldo, así que la ejecución completa no dependió del cupo de Groq.
 
 ## Rutina de 10 minutos en cada reunión
 

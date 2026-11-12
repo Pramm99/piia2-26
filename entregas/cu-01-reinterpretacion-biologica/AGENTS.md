@@ -32,14 +32,14 @@ cp .env.example .env          # y rellena las claves que vayas a usar
 
 python fase1_ingesta/main.py   # Fase 1 (unos 58 min en frío, unos minutos con caché)
 python -m fase2_inferencia CD7    # Fase 2 en modo demo: imprime la primera llamada, sin llamar a nadie
-python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel] [--solo-respaldo]   # Fase 2 real, reanudable
+python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel] [--contraste]   # Fase 2 real, reanudable
 python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc|ninguno]   # Fase 3, sin red (segundos)
 python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
 ```
 
 * **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta.
-* **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b`. Si Gemini no responde o su JSON no vale, decide gpt-oss (`respaldo_secundario`). Con `--solo-respaldo`, gpt-oss solo recibe esas preguntas, para ahorrar su cupo diario. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
+* **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b`. **gpt-oss es solo el respaldo de Gemini:** solo recibe una pregunta si Gemini no responde o su JSON no vale, y entonces decide él (`respaldo_secundario`). Si Gemini responde, la pregunta no va a gpt-oss, y una respuesta suya que esté en el registro no se usa. `--contraste` (envía todo a los dos y los contrasta) es solo para experimentos. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
 
 ## Reglas que no se negocian
 1. **Coste cero.** Solo planes gratuitos. No propongas ningún servicio, modelo ni API de pago.
@@ -82,4 +82,3 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
 * los umbrales definitivos del scoring y la revisión de las rutas `Sensible_al_peso`;
-* el contraste entre modelos: relanzar la Fase 2 sin `--solo-respaldo` (varios días por el cupo de Groq).
