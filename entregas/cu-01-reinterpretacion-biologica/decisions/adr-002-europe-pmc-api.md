@@ -66,7 +66,7 @@ Aceptamos los compromisos asociados:
 * **GeneCards:**
   * *Motivo de descarte:* sus condiciones de uso prohíben el acceso automatizado.
 * **OmniPath y otras bases:**
-  * *Aplazadas.* Para los 668 pares que siguen sin abstract, el documento de la limitación propone, por orden, un diccionario fijo de palabras clave por ruta para Europe PMC, que revisa Miguel, y gene2pubmed + MeSH, que se descarta si rinde menos (#31).
+  * *Aplazadas.* Para los 668 pares que siguen sin abstract, se probó gene2pubmed + MeSH (#31): con el MeSH buscado de forma automática solo gana abstract el 3,9 % de los pares, con una precisión de alrededor del 40 % (documento de la limitación).
 
 ## Referencias
 * **Código del proyecto** (`codigo/fase1_ingesta/`):

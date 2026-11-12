@@ -81,38 +81,12 @@ Opciones descartadas:
 ## 3. Posible resolución para reducir los 668
 
 La investigación «Bases gratuitas para pares sin PMID» se probó con los 12 genes que no tenían ningún PMID en la
-ejecución del 2026-11-08. Su conclusión es que **falta sobre todo vocabulario, no bases**.
-Con los nombres GO, Europe PMC devolvía 0 resultados para esos genes. Con palabras clave de autor sí aparecían
-los artículos buenos.
+ejecución del 2026-11-08: juntando todas las fuentes, hubo evidencia humana aceptable para 6 de ellos (unos 8 de
+sus 33 pares). El equipo decidió probar sobre los 668 pares la fuente más precisa de esa prueba, gene2pubmed +
+MeSH (#31). Sería una etapa más de `pmid_externos.py`, gratuita, sobre abstracts de PubMed y compatible con una
+Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
 
-Juntando todas las fuentes, hubo evidencia humana aceptable para 6 de los 12 genes (unos 8 de sus 33 pares).
-Propone dos pasos, gratuitos, sobre abstracts de PubMed y compatibles con una Fase 1 determinista.
-Cada uno sería una etapa más de `pmid_externos.py`, y solo actuaría sobre los pares que siguen vacíos.
-
-**Orden decidido por el equipo (#31):** paso a paso y midiendo tras cada uno. Primero el diccionario de palabras clave, que revisa Miguel; gene2pubmed + MeSH se descarta si rinde menos que el diccionario.
-
-### Paso 1. Diccionario ruta → palabras clave para la búsqueda de Europe PMC
-
-- **Qué:** la búsqueda dirigida que ya existe se amplía con las palabras que usan los autores para cada ruta.
-  Por ejemplo:
-
-  | Ruta | Palabras clave |
-  |---|---|
-  | *extrinsic apoptotic signaling pathway* | Fas, CD95, TRAIL, death receptor, caspase-8 |
-  | *response to lipopolysaccharide* | LPS, endotoxin, TLR4 |
-  | *peptide hormone processing* | bradykinin, angiotensin |
-
-  No añade ninguna base.
-- **Cómo:** un TSV `ruta → palabras clave`, versionado. Esas palabras se suman a las frases GO de la consulta
-  y a la comprobación local de la misma frase.
-- **Para que la Fase 1 siga siendo determinista:** el diccionario se genera una sola vez, a mano o con un LLM
-  y revisado por una persona, y después no cambia. Nunca se genera en tiempo de ejecución.
-- **Alcance en la prueba:** fue **lo que más rindió**, 5 de los 12 genes (ACP5, BCL2A1, CTSZ, MAP2K3 y SEC11A).
-- **Riesgo:** las palabras clave cortas son ambiguas (TRAP, LIGHT, A1…). Se mantienen los filtros actuales:
-  el gen en la misma frase, los alias en minúsculas no cuentan y las siglas de una sola palabra se excluyen.
-  Además hay que marcar los resultados de **dirección inversa** (*NF-κB induce LTB* no dice que LTB active NF-κB).
-
-### Paso 2. NCBI gene2pubmed + MeSH de la ruta + «Humans»
+### NCBI gene2pubmed + MeSH de la ruta + «Humans»
 
 - **Qué:** se buscan los artículos que NCBI ya liga al gen humano y que tienen asignado el MeSH del proceso.
   Así lo hace NCBI dos veces: liga el gen al artículo y el indexador de MeSH juzga el tema. Fue la fuente
@@ -129,6 +103,15 @@ Cada uno sería una etapa más de `pmid_externos.py`, y solo actuaría sobre los
 - **Alcance en la prueba:** 3 de los 12 genes (ACP5, BCL2A1, MAP2K3).
 - **Coste:** unas 2 peticiones por gen y ruta, con caché. Sin clave de NCBI, el límite es de 3 por segundo;
   con `NCBI_API_KEY`, de 10 por segundo.
+- **Piloto sobre los 668 pares (2026-11-13), con el MeSH buscado de forma automática** (nombre de la ruta, sus
+  sinónimos, el proceso núcleo y, si no, el primer resultado de una búsqueda libre):
+  - Solo 81 de las 261 rutas tienen MeSH, y 72 de ellas por la búsqueda libre, que suele fallar
+    («T cell differentiation» → *Interleukin-5*, «B cell proliferation» → *Antigens, CD19*).
+  - 35 pares tienen algún artículo ligado al gen con ese MeSH y «Humans»; en 26 (3,9 %) el abstract nombra el gen
+    (55 PMIDs).
+  - En una primera lectura de esos 26, solo unos 10 tratan del gen en el proceso (alrededor del 40 %, frente a
+    unos 8 de cada 10 de GeneRIF y Europe PMC). Falta confirmarlo con una lectura a mano.
+  - Para que rinda haría falta la tabla GO → MeSH hecha a mano para las 261 rutas.
 
 ### Qué no se resolverá
 
@@ -153,6 +136,5 @@ Una etapa solo se queda si su precisión es comparable a la de GeneRIF y Europe 
 de 2026-11-08, unos 8 de cada 10 abstracts trataban del gen en el proceso). Si no la alcanza, sus PMIDs pasan
 a revisión humana en vez de ir directamente al LLM.
 
-Orden:
-1. El diccionario de palabras clave, porque es lo que más rinde.
-2. gene2pubmed + MeSH, porque exige la tabla de MeSH.
+Para gene2pubmed + MeSH, el piloto del § 3 da una cobertura del 3,9 % y una precisión por debajo de ese
+listón.
