@@ -17,7 +17,7 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 | `codigo/fase3_scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m fase3_scoring` desde `codigo/`; los umbrales están en `fase3_scoring/config.py`. |
 | `codigo/evaluacion/` | Benchmark: gold set, guía de etiquetado, `evaluar_gold.py`, `seleccionar_gold.py` y `buscar_neutros.py`. |
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
-| `codigo/tools_cimus/` | Entrada original de CIMUS (únicos Excels versionados). |
+| `codigo/tools_cimus/` | Entrada original de CIMUS: rutas enriquecidas (únicos Excels versionados) y tabla de log2FC (`NK_cells_DESeq2_results.xlsx`, se reparte dentro del equipo y no se sube). |
 | `codigo/data/` | Cachés, registro de respuestas del LLM y salidas. **No se versiona.** |
 | `decisions/`, `specs/`, `docs/` | ADRs, specs funcionales, limitaciones conocidas y plantillas de issue. |
 | `DOR.md`, `DOD.md`, `TABLERO.md` | Cuándo empieza y cuándo termina una tarea, y cómo se gestionan el tablero y los bloqueos. |
@@ -32,7 +32,7 @@ cp .env.example .env          # y rellena las claves que vayas a usar
 
 python fase1_ingesta/main.py   # Fase 1 (unos 58 min en frío, unos minutos con caché)
 python -m fase2_inferencia CD7    # Fase 2 en modo demo: imprime la primera llamada, sin llamar a nadie
-python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel]   # Fase 2 real, reanudable
+python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel] [--solo-respaldo]   # Fase 2 real, reanudable
 python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc|ninguno]   # Fase 3, sin red (segundos)
 python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
@@ -68,7 +68,7 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 
 ## Cómo trabajar en este repositorio
 * **Idioma:** el código, los comentarios, la documentación y los commits van en español. Solo el prompt al LLM va en inglés.
-* **Estilo:** imita el código que lo rodea: nombres en español, docstrings cortas que dicen el *porqué*, sin capas de abstracción innecesarias. Los parámetros ajustables van en `config.py` (Fase 1) o `esquema.py` (Fase 2), no repartidos por el código.
+* **Estilo:** imita el código que lo rodea: nombres en español, docstrings cortas que dicen el *porqué*, sin capas de abstracción innecesarias. Los parámetros ajustables van en `fase1_ingesta/config.py`, `fase2_inferencia/esquema.py` (los modelos y sus límites, en `cliente.py:MODELOS`) o `fase3_scoring/config.py`, no repartidos por el código.
 * **Pruebas:** todo cambio de comportamiento lleva su prueba en `codigo/tests/`, sin red: las APIs se simulan con `monkeypatch` y los modelos con `ClienteSimulado`. `python -m pytest` tiene que pasar antes de cualquier commit.
 * **Specs:** los criterios de aceptación son verificables y llevan `[x] ✅` y la prueba que los cubre cuando se cumplen. Si cambias el comportamiento, actualiza la spec, el ADR y `ARCHITECTURE.md` en el mismo commit.
 * **Documentación:** describe solo el estado actual, sin versiones antiguas ni históricos. Las cifras de la Fase 1 son las de la ejecución de referencia del 2026-11-09, indicando la fecha.

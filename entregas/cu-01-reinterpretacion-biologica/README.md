@@ -22,7 +22,7 @@ Este proyecto desarrolla un pipeline asistido por **Inteligencia Artificial** qu
 
 El signo puede venir de dos sitios:
 - **De Gene Ontology**, cuando su polaridad curada basta (triaje `aceptar_GO`). En ese caso no se consulta ningún modelo.
-- **De dos modelos de lenguaje que leen los _abstracts_.** Su veredicto solo se acepta con una **cita literal verificada** del artículo y la confianza suficiente, y se contrasta con la polaridad de Gene Ontology y entre los dos modelos. Los casos con evidencia en conflicto se marcan para revisión experta.
+- **De dos modelos de lenguaje que leen los _abstracts_.** Su veredicto solo se acepta con una **cita literal verificada** del artículo y con la confianza suficiente, o, si no la alcanza, cuando coincide con la polaridad curada de Gene Ontology. Además, se contrasta con la polaridad de Gene Ontology y entre los dos modelos. Los casos con evidencia en conflicto se marcan para revisión experta.
 
 A partir de esos signos se calcula un **Net Pathway Score**, integrado con la dirección de expresión de cada gen y contrastado con su _log2 Fold-Change_, que transforma las discrepancias en una conclusión biológica cuantitativa y explicable.
 
@@ -74,7 +74,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Limpieza:** Limpieza de los formatos HTML de los _abstracts_ sin alterar la nomenclatura biomédica ni recortar el texto, y una normalización aparte usada solo para verificar citas. Cada fila conserva su lista de origen (`Estado_Original`), de la que sale la dirección del gen (_up_ o _down_) que usará el scoring.
 
-- **Inferencia estructurada:** Extracción del signo funcional con **dos modelos de lenguaje gratuitos** ([ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md)): Gemini 3.5 Flash-Lite como principal y gpt-oss-120b (Groq) como secundario. La salida es JSON estricto y el modelo siempre da un veredicto y su confianza. El código pone `UNKNOWN` cuando la cita no se verifica o la confianza no llega al umbral, y marca para revisión los casos en conflicto ([ADR-003](decisions/adr-003-control-alucinaciones-unknown.md)).
+- **Inferencia estructurada:** Extracción del signo funcional con **dos modelos de lenguaje gratuitos** ([ADR-005](decisions/adr-005-eleccion-modelo-coste-cero.md)): Gemini 3.5 Flash-Lite como principal y gpt-oss-120b (Groq) como secundario. La salida es JSON estricto y el modelo siempre da un veredicto y su confianza. El código pone `UNKNOWN` cuando la cita no se verifica o la confianza no llega al umbral (salvo que el veredicto coincida con la polaridad de GO), y marca para revisión los casos en conflicto ([ADR-003](decisions/adr-003-control-alucinaciones-unknown.md)).
 
 - **Evaluación:** Benchmark de los modelos candidatos sobre un _gold set_ de 100 preguntas (65 de genes _up_ y 35 de genes _down_), con etiquetado a ciegas y doble etiqueta de cada caso ([spec](specs/benchmark-gold-set.md)).
 
@@ -174,14 +174,14 @@ entregas/cu-01-reinterpretacion-biologica/
     ├── fase3_scoring/                 # Fase 3: signo de cada par (gen, ruta) y Net Pathway Score de cada ruta.
     ├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
     ├── tests/                         # Pruebas con pytest, sin red (python -m pytest desde codigo/).
-    ├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas y su script de análisis.
+    ├── tools_cimus/                   # Material de CIMUS: rutas enriquecidas (entrada de la Fase 1) y tabla de log2FC (sensibilidad de la Fase 3).
     ├── data/                          # Ficheros locales (ignorados por git): OBO, GAF, cachés, registro de
     │                                  #   respuestas, fase2_resultados.xlsx, fase3_scoring.xlsx y registros del benchmark.
     ├── .env.example                   # Plantilla de las claves de los modelos y de NCBI.
-    └── requirements.txt               # Dependencias de Python (requests, pandas, openpyxl; pytest para las pruebas).
+    └── requirements.txt               # Dependencias de Python (requests, pandas, openpyxl; pytest y pytest-cov para las pruebas).
 ```
 
-El fichero `.gitignore` está en esta carpeta y excluye el entorno virtual, `codigo/data/`, los `.env` y todos los `.xlsx` y `.csv`. Por eso los Excels de entrada y salida de la Fase 1, que están en `codigo/fase1_ingesta/`, no se versionan. Los únicos Excels versionados son los de `codigo/tools_cimus/`.
+El fichero `.gitignore` está en esta carpeta y excluye el entorno virtual, `codigo/data/`, los `.env` y todos los `.xlsx` y `.csv`. Por eso el Excel de salida de la Fase 1 (`codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx`) no se versiona. Los únicos Excels versionados son las rutas enriquecidas de CIMUS de `codigo/tools_cimus/`; su tabla de log2FC (`NK_cells_DESeq2_results.xlsx`) se reparte dentro del equipo y no se sube.
 
 ## 7. Cómo se ejecuta
 
@@ -191,6 +191,6 @@ Desde esta carpeta (`entregas/cu-01-reinterpretacion-biologica/`), con Python 3 
 2. **Fase 1:** `python codigo/fase1_ingesta/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx`. La primera ejecución descarga el OBO, el GAF y unos 33.000 _abstracts_ (casi una hora); con las cachés tarda unos minutos.
 3. **Fase 2:** desde `codigo/`, `python -m fase2_inferencia ejecutar`. Escribe `codigo/data/fase2_resultados.xlsx`. Si se agota el límite diario de un modelo, basta con volver a lanzar el mismo comando. Sin llamar a ningún modelo, `python -m fase2_inferencia CD7` muestra la primera llamada que se enviaría para un gen.
 4. **Fase 3:** desde `codigo/`, `python -m fase3_scoring`. Lee las salidas de las Fases 1 y 2 y escribe `codigo/data/fase3_scoring.xlsx` en unos segundos, sin red. Si existe `codigo/tools_cimus/NK_cells_DESeq2_results.xlsx`, lo usa solo para la sensibilidad (`NPS_log2FC`); un tercer argumento cambia ese fichero, o `ninguno` lo omite.
-5. **Benchmark:** `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
+5. **Benchmark:** desde `codigo/`, `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
 6. **Pruebas:** desde `codigo/`, `python -m pytest`. No usan la red ni las claves de `.env`.
 

@@ -1,6 +1,6 @@
 ---
 description: Control de alucinaciones mediante un esquema de salida con signo, estado y motivos, reglas automáticas de verificación y contraste con Gene Ontology y entre dos modelos.
-state: Aceptado (validación implementada el 2026-11-08; contraste entre modelos y con GO, el 2026-11-10; veredicto obligado con UNKNOWN decidido por el código, el 2026-11-10)
+state: Aceptado (validación implementada el 2026-11-08; contraste entre modelos y con GO, el 2026-11-10; veredicto obligado con UNKNOWN decidido por el código, el 2026-11-10; sin confianza mínima para `coincide_polaridad_GO` y umbral sobre `confianza_modelo`, el 2026-11-11)
 ---
 
 # ADR 003 - Control de Alucinaciones: Signo, Estado y Motivos en Lugar de Predicciones Forzadas
@@ -27,7 +27,7 @@ El sistema **nunca da por bueno un signo** cuando la evidencia no lo sostiene. S
 | `json_invalido` | Regla automática | `no_concluyente` | `UNKNOWN` |
 | `baja_confianza` | Regla automática: confianza por debajo de `UMBRAL_VEREDICTO` (80) y sin coincidencia con GO | `no_concluyente` | `UNKNOWN` |
 | `incoherencia_respuesta` | Regla automática: veredicto que llega al umbral pero trae una limitación | `revisar` | Se mantiene |
-| `coincide_polaridad_GO` | Contraste con GO: el veredicto sobre la ruta coincide con la `Polaridad_GO` de la anotación | `resuelto` | El de GO y el LLM, aunque la confianza no llegue al umbral |
+| `coincide_polaridad_GO` | Contraste con GO: el veredicto sobre la ruta coincide con la `Polaridad_GO` de la anotación | `resuelto` (o `revisar` si además hay `discrepancia_entre_modelos` o `incoherencia_respuesta`) | El de GO y el LLM, aunque la confianza no llegue al umbral |
 | `discrepancia_polaridad_GO` | Contraste con GO | `revisar` | Se mantiene (`UNKNOWN` si la confianza no llega al umbral) |
 | `discrepancia_entre_modelos` | Contraste entre modelos | `revisar` | El del modelo principal |
 | `respaldo_secundario` | El principal no respondió (cupo agotado, red) o su JSON no vale, y decide la respuesta válida del secundario | El que resulte de esa respuesta (no añade revisión) | El del modelo secundario |
@@ -47,7 +47,7 @@ El LLM **no puede abstenerse**: para cada pregunta devuelve siempre un veredicto
 | No hay `Polaridad_GO` y la confianza llega al umbral (`UMBRAL_VEREDICTO = 80`, configurable en `esquema.py`; fijado con la curva riesgo-cobertura del benchmark) | El veredicto del LLM: `+1`, `-1` o `neutro` (`resuelto`). Si además trae una limitación, `revisar` con `incoherencia_respuesta` |
 | No hay `Polaridad_GO` y la confianza no llega al umbral | `UNKNOWN`, `baja_confianza` más la limitación que dio el modelo (`no_concluyente`) |
 
-`neutro` significa que el abstract muestra que el gen **no cambia** el proceso («no afectó», «fue prescindible»). Es el mismo valor que la Fase 1 da a las inmunoglobulinas y cuenta como respuesta resuelta (suma 0 en el score). Un abstract que no trata el efecto del gen no es neutro: el modelo da una confianza baja y el código lo deja en `UNKNOWN`. **El prompt no menciona ningún umbral** (decisión del 2026-11-10): decirle al modelo dónde se corta sería una fuga de información que predispone su confianza. El umbral lo fija el código según la calidad medida en el benchmark. Como el registro guarda la respuesta cruda, cambiar el umbral solo exige volver a validar, sin llamar de nuevo a los modelos.
+`neutro` significa que el abstract muestra que el gen **no cambia** el proceso («no afectó», «fue prescindible»). Es el mismo valor que la Fase 1 da a las inmunoglobulinas y cuenta como respuesta resuelta: entra en la cobertura de la ruta, pero no en el NPS, que promedia solo los pares con signo ±1, y se informa como `Fraccion_neutros` (spec de scoring). Un abstract que no trata el efecto del gen no es neutro: el modelo da una confianza baja y el código lo deja en `UNKNOWN`. **El prompt no menciona ningún umbral** (decisión del 2026-11-10): decirle al modelo dónde se corta sería una fuga de información que predispone su confianza. El umbral lo fija el código según la calidad medida en el benchmark. Como el registro guarda la respuesta cruda, cambiar el umbral solo exige volver a validar, sin llamar de nuevo a los modelos.
 
 `UNKNOWN` queda reservado para los casos **sin evidencia utilizable**, o sin la confianza suficiente para darla por buena. Cuando hay evidencia pero otra fuente la contradice (Gene Ontology o el modelo secundario), se conserva el signo y el caso se marca para revisión experta.
 
@@ -74,7 +74,7 @@ El control se organiza en tres capas:
 * **Frase citada:** 0,9 si es el título o las frases S1-S2 (suelen ser introducción); 1,0 si es una frase posterior.
 * **Otro modelo:** 1,0 si da el mismo signo; 0,8 si da `UNKNOWN`; 0,5 si da el signo opuesto; 0,9 si no hay respuesta suya.
 
-Los factores son provisionales: salen de una prueba del 2026-11-09 con un prompt anterior (43 signos de tres modelos de API sobre 60 casos) como el cociente entre el acierto de cada grupo y el del mejor, acercados a 1 la mitad del camino porque las muestras son pequeñas. Se sustituirán por una regresión logística ajustada en el *gold set*. Solo los signos tienen `confianza_final`: un `UNKNOWN` se explica con su motivo. En una fila aceptada por `coincide_polaridad_GO` cuya confianza no llegaba al umbral, `confianza_final` se calcula sobre el veredicto aceptado y por eso sale baja. Ese porcentaje es también el peso propuesto para cada respuesta en la agregación por par gen-ruta (spec de scoring).
+Los factores son provisionales: salen de una prueba del 2026-11-09 con un prompt anterior (43 signos de tres modelos de API sobre 60 casos) como el cociente entre el acierto de cada grupo y el del mejor, acercados a 1 la mitad del camino porque las muestras son pequeñas. Se sustituirán por una regresión logística ajustada en el *gold set*. Solo los signos tienen `confianza_final`: un `UNKNOWN` se explica con su motivo. En una fila aceptada por `coincide_polaridad_GO` cuya confianza no llegaba al umbral, `confianza_final` se calcula sobre el veredicto aceptado y por eso sale baja. Ese porcentaje, multiplicado por un factor de contexto (especie y tipo celular), es el peso de cada respuesta en la agregación por par gen-ruta (spec de scoring).
 
 La normalización de comparación nunca se aplica al texto que lee el LLM: este recibe el abstract limpio pero con la nomenclatura intacta, como exige la spec de limpieza.
 
@@ -106,7 +106,7 @@ El sistema no da el `+1` que un modelo complaciente habría dado. Como el veredi
 5. **Las discrepancias son información, no ruido:** la polaridad de GO es curada por expertos y el segundo modelo es independiente del primero. Convertir sus desacuerdos en `UNKNOWN` descartaría justo los casos que más interesa que revise el experto. Cuando discrepan los dos modelos, se conserva el signo del principal, se registran ambas respuestas y el caso queda marcado para que el experto lo resuelva con toda la información.
 6. **La conclusión es del experto:** el sistema extrae y verifica evidencia; los casos `revisar` se entregan al profesional biomédico con las citas y los motivos.
 
-**Validación:** sobre el *gold set* se miden la **precisión de las respuestas dadas** (cuando el sistema da `+1`, `-1` o `neutro`, cuántas acierta), la **cobertura** (porcentaje de casos con estado `resuelto`) y el **recall de `UNKNOWN`** (cuántos casos no concluyentes según el experto detecta el sistema), además de la calibración de `confianza_modelo` y `confianza_final` (spec del benchmark). Medición provisional del 2026-11-10 sobre el *gold set* (100 casos: 65 de genes *up* y 35 de genes *down*), con umbral 80:
+**Validación:** sobre el *gold set* se miden la **precisión de las respuestas dadas** (cuando el sistema da `+1`, `-1` o `neutro`, cuántas acierta), la **cobertura** (porcentaje de casos en que el sistema no da `UNKNOWN`, incluidos los que quedan en `revisar`) y el **recall de `UNKNOWN`** (cuántos casos no concluyentes según el experto detecta el sistema), además de la calibración de `confianza_modelo` y `confianza_final` (spec del benchmark). Medición provisional del 2026-11-10 sobre el *gold set* (100 casos: 65 de genes *up* y 35 de genes *down*), con umbral 80:
 
 | Modelo | Exactitud | Precisión de los signos | Cobertura | Recall de `UNKNOWN` |
 |---|---|---|---|---|

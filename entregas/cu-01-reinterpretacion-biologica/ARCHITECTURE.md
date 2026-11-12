@@ -5,8 +5,8 @@ Este documento describe las piezas del pipeline, de qué se responsabiliza cada 
 El código vive en `codigo/`, dentro de esta misma carpeta del equipo (`entregas/cu-01-reinterpretacion-biologica/codigo/`), y se organiza en tres fases:
 
 * **Fase 1, ingesta** (`codigo/fase1_ingesta/`, `python codigo/fase1_ingesta/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
-* **Fase 2, inferencia** (`codigo/fase2_inferencia/`, `python -m fase2_inferencia ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**, con Gemini 3.5 Flash-Lite como principal y gpt-oss-120b como secundario (ADR-005).
-* **Fase 3, scoring** (`codigo/fase3_scoring/`, `python -m fase3_scoring`, [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Implementada**; sus umbrales son provisionales.
+* **Fase 2, inferencia** (`codigo/fase2_inferencia/`; desde `codigo/`, `python -m fase2_inferencia ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**, con Gemini 3.5 Flash-Lite como principal y gpt-oss-120b como secundario (ADR-005).
+* **Fase 3, scoring** (`codigo/fase3_scoring/`; desde `codigo/`, `python -m fase3_scoring`; [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Implementada**; sus umbrales son provisionales.
 
 ## Diagrama
 
@@ -19,6 +19,7 @@ flowchart TD
         EXTB["MyGene.info (GeneRIF)<br/>Europe PMC búsqueda dirigida"]
         EPMC["Europe PMC · NCBI E-utilities<br/>(abstracts)"]
         LLMS["Modelos gratuitos<br/>Gemini · Groq · Ollama"]
+        DEG[("Tabla de log2FC de CIMUS<br/>NK_cells_DESeq2_results.xlsx")]
     end
 
     subgraph F1["Fase 1 · Ingesta · codigo/fase1_ingesta"]
@@ -37,6 +38,7 @@ flowchart TD
         XLSX[("codigo/fase1_ingesta/<br/>fase1_dataset_abstracts.xlsx")]
         REG[("codigo/data: respuestas_llm.jsonl<br/>llamadas_llm.jsonl")]
         RES[("codigo/data: fase2_resultados.xlsx")]
+        SCO[("codigo/data: fase3_scoring.xlsx")]
     end
 
     subgraph F2["Fase 2 · Inferencia · codigo/fase2_inferencia"]
@@ -86,7 +88,10 @@ flowchart TD
     L4 -->|"respuestas de dos modelos"| L5
     L5 -->|"veredicto, citas, motivos"| L6
     L6 --> RES
-    RES -->|"hoja Por_ruta: Signo_ruta · Estado · Motivos · Confianza_final"| S1
+    RES -->|"hojas Por_ruta · Preguntas: signo, estado, confianza y contexto"| S1
+    XLSX -->|"hojas Triaje_polaridad · Inmunoglobulinas"| S1
+    DEG -.->|"log2FC (solo sensibilidad)"| S1
+    S1 --> SCO
 
     B1 -.->|"evalúa con el gold set"| L3
     B1 -.->|"calibra la confianza"| L5
@@ -95,7 +100,7 @@ flowchart TD
     classDef parcial fill:#fff1c7,stroke:#a77b00,color:#111
     classDef pendiente fill:#f9dada,stroke:#b3261e,color:#111,stroke-dasharray:5 5
     class E1,E2,E3,E4,E5,E6,E7,E8 hecho
-    class L1,L2,L3,L4,L5,L6,REG,RES hecho
+    class L1,L2,L3,L4,L5,L6,REG,RES,SCO hecho
     class S1,B1 hecho
 ```
 
@@ -122,12 +127,12 @@ El orden de ejecución es el de `main.py`.
 
 | # | Componente | Responsabilidad | Recibe | Produce | Estado |
 |---|---|---|---|---|---|
-| 9 | **Lectura y limpieza** (`lectura.py`, `limpieza.py`) | Leer la hoja `Con_abstract` de las dos listas, quedarse con los pares que van al LLM (no `aceptar_GO` ni `sin_evidencia`), limpiar el abstract sin recortarlo, partirlo en frases y ofrecer la forma de comparación que usan 10 y 13. | Hoja `Con_abstract`. | Filas limpias. | Hecho. |
+| 9 | **Lectura y limpieza** (`lectura.py`, `limpieza.py`) | Leer la hoja `Con_abstract` de las dos listas, quedarse con los pares que van al LLM (no `aceptar_GO` ni `sin_evidencia`), limpiar el abstract sin recortarlo, partirlo en frases y ofrecer la forma de comparación que usa 13 para verificar las citas. | Hoja `Con_abstract`. | Filas limpias. | Hecho. |
 | 10 | **Casos y filtro de mención del gen** (`casos.py`, `proceso.py`) | Agrupar las filas en preguntas (gen, PMID, proceso núcleo), guardar el factor que traduce el efecto en el signo de cada ruta y cerrar sin LLM las preguntas cuyo texto no nombra al gen por su símbolo, sus alias o su nombre completo. | Filas limpias y datos de MyGene. | `CasoProceso`, o pregunta cerrada con `no_menciona_gen`. | Hecho. |
 | 11 | **Construcción del prompt** (`prompt.py`, `esquema.py`) | Generar el mismo prompt para todos los modelos: abstract completo en frases numeradas, sin dirección de scRNA-seq, sin polaridad de GO y sin contexto HNSC, con 14 reglas y la lista de campos del JSON. El modelo siempre da un veredicto (+1, −1 o neutro), su confianza y de 1 a 3 frases con su cita; el prompt no menciona ningún umbral. Las preguntas de un gen van juntas, troceadas según el presupuesto por llamada. | `CasoProceso`. | `PromptLLM` por pregunta y `PromptLista` por llamada. | Hecho. |
 | 12 | **Cliente LLM y ejecución** (`cliente.py`, `ejecucion.py`, `registro.py`) | Enviar cada lista a los dos modelos (principal y secundario) con un único conector compatible con la API de chat de OpenAI, reintentar ante `408`, `429` y `5xx`, y no repetir preguntas ya registradas. | `PromptLista` y registro. | Una línea por pregunta en `respuestas_llm.jsonl` y una por llamada en `llamadas_llm.jsonl`. Un modelo que agota su límite diario deja sus preguntas pendientes. Con `--solo-respaldo`, el secundario solo recibe las preguntas que el principal no ha podido responder. | Hecho y probado con llamadas reales a Gemini, Groq y Ollama. |
 | 13 | **Validación y confianza** (`respuesta.py`, `confianza.py`) | Extraer el JSON, comprobar el esquema, verificar las citas (≥6 palabras, en la frase indicada), decidir el `UNKNOWN` (sin cita verificada o con confianza por debajo de `UMBRAL_VEREDICTO = 80`), componer el signo de cada ruta y calcular `confianza_final`. | Texto de respuesta y `CasoProceso`. | Por modelo: veredicto, signo, estado, motivos, citas, `confianza_modelo` y signo por ruta. | Hecho. |
-| 14 | **Contraste y salida** (`resultados.py`, `pipeline.ejecutar_fase2`) | Combinar los dos modelos (`discrepancia_entre_modelos`; si el principal no responde o su JSON no vale, decide el secundario con `respaldo_secundario`) y comparar el veredicto de cada ruta con `Polaridad_GO`: si coincide se acepta aunque la confianza no llegue al umbral (`coincide_polaridad_GO`); si no, `discrepancia_polaridad_GO`. Escribir la salida. | Resultados validados de ambos modelos y `Polaridad_GO`. | `codigo/data/fase2_resultados.xlsx`: hojas `Por_ruta` (entrada del scoring), `Preguntas` y `Resumen`, con el signo del principal, `Estado` (`resuelto` / `revisar` / `no_concluyente` / `pendiente`), `Motivos` y `Confianza_final`. | Hecho. |
+| 14 | **Contraste y salida** (`resultados.py`, `pipeline.ejecutar_fase2`) | Combinar los dos modelos (`discrepancia_entre_modelos`; si el principal no responde o su JSON no vale, decide el secundario con `respaldo_secundario`) y comparar el veredicto de cada ruta con `Polaridad_GO`: si coincide y hay alguna cita verificada, se acepta aunque la confianza no llegue al umbral (`coincide_polaridad_GO`); si no, `discrepancia_polaridad_GO`. Escribir la salida. | Resultados validados de ambos modelos y `Polaridad_GO`. | `codigo/data/fase2_resultados.xlsx`: hojas `Por_ruta` y `Preguntas` (entradas del scoring: signo y contexto) y `Resumen`, con el signo del modelo que decide (el principal, o el secundario con `respaldo_secundario`), `Estado` (`resuelto` / `revisar` / `no_concluyente` / `pendiente`), `Motivos` y `Confianza_final`. | Hecho. |
 
 ### Fase 3 y evaluación
 
@@ -138,7 +143,7 @@ El orden de ejecución es el de `main.py`.
 
 ## Flujo de principio a fin
 
-Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09 y, desde el paso 13, de las Fases 2 y 3 sobre ella (2026-11-11).
+Las cifras de los pasos 1 a 9 son de la ejecución de referencia de la Fase 1 (2026-11-09); las de los pasos 10 a 13, de la Fase 2 sobre ella (2026-11-11), y las del paso 14, de la Fase 3 (2026-11-12).
 
 1. **Entrada.** El componente 1 lee los dos Excels de CIMUS. La lista de rutas de genes *up* (activadas) tiene **314 rutas**, **2.489 pares** gen–ruta y **126 genes**; la de genes *down* (suprimidas), **78 rutas**, **683 pares** y **98 genes**. En total son **3.172 pares** de **224 genes**, y ningún gen está en las dos listas.
 2. **Grafo.** El componente 2 descarga el OBO y el GAF (solo la primera vez) y, para cada ruta, calcula todos sus descendientes con su profundidad y el signo del camino.

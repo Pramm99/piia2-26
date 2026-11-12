@@ -1,6 +1,6 @@
 # Limitación: pares (gen, ruta) sin ningún abstract
 
-> Estado: **vigente** (2026-11-08; cifras actualizadas con la ejecución completa del 2026-11-09). Afecta a la Fase 1 (ingesta) y a cómo la Fase 2 y el Net Pathway Score
+> Estado: **vigente**. Cifras de la ejecución de referencia de la Fase 1 del 2026-11-09. Afecta a la Fase 1 (ingesta) y a cómo la Fase 2 y el Net Pathway Score
 > tratan estos pares. Código: `codigo/fase1_ingesta/polaridad.py` (`cerrar_sin_evidencia`).
 
 ## 1. El problema
@@ -14,7 +14,7 @@ La Fase 1 busca abstracts en tres fuentes, en cascada:
 2. **NCBI GeneRIF:** frases curadas sobre el gen, a través de MyGene.info.
 3. **Europe PMC dirigida:** el gen y un término de la ruta en la misma frase.
 
-Aun así, en la ejecución completa sobre los Excels de CIMUS (`fase1_ejecucion_completa/`, 2026-11-09)
+Aun así, en la ejecución completa sobre los Excels de CIMUS (ejecución de referencia de la Fase 1, 2026-11-09)
 quedan sin evidencia **668 de 3.069 pares** (22 %, sin contar las inmunoglobulinas), que afectan a 124 genes y
 261 rutas. Las columnas son las dos listas de CIMUS: rutas de genes *up* («activadas») y de genes *down*
 («suprimidas»).
@@ -43,7 +43,7 @@ Un par puede tener varias de estas anotaciones.
 - **Anotación sin artículo detrás.** Es una consecuencia de cómo se construyen las anotaciones. Una IEA, una ISS o
   una IBA trasladan una función desde otra especie o desde un árbol filogenético, sin ningún artículo humano detrás.
 - **Anotación que ya no está en el GAF.** Probablemente vienen de una versión antigua de `org.Hs.eg.db`, que es la que
-  usó CIMUS en `enrichGO`. En ella había anotaciones que el GAF vigente ya no tiene. Es un artefacto de versión,
+  usó CIMUS en su análisis de enriquecimiento. En ella había anotaciones que el GAF vigente ya no tiene. Es un artefacto de versión,
   no una relación biológica.
 - **El artículo existe, pero no se encuentra.** Los autores describen el proceso con otras palabras: *Fas/CD95/TRAIL*
   en vez de *extrinsic apoptotic signaling pathway*, *LPS* en vez de *response to molecule of bacterial origin*.
@@ -81,7 +81,7 @@ Opciones descartadas:
 ## 3. Posible resolución para reducir los 668
 
 La investigación «Bases gratuitas para pares sin PMID» se probó con los 12 genes que no tenían ningún PMID en la
-ejecución del 2026-11-08 (está en `PIA2/reports/`, fuera del repo). Su conclusión es que **falta sobre todo vocabulario, no bases**.
+ejecución del 2026-11-08. Su conclusión es que **falta sobre todo vocabulario, no bases**.
 Con los nombres GO, Europe PMC devolvía 0 resultados para esos genes. Con palabras clave de autor sí aparecían
 los artículos buenos.
 

@@ -15,7 +15,7 @@ El proyecto **solo usa modelos que no exijan pagar ninguna cantidad**. Los model
 | **Contingencia** | **`qwen3:8b`** en **Ollama**, en local y sin GPU | Solo si un plan gratuito cambia o deja de ofrecer los modelos elegidos |
 
 **Candidatos descartados o sin usar:**
-* **`qwen3.8-27b` en Groq:** descartado el 2026-11-10 por su tasa de JSON inválido (solo 34 de 50 respuestas válidas en una prueba). No se vuelve a usar ni en el benchmark ni en producción.
+* **`qwen3.8-27b` en Groq:** descartado el 2026-11-10 por su tasa de JSON inválido (solo 34 de 50 respuestas válidas en una prueba). No se vuelve a usar ni en el benchmark ni en producción (su configuración se conserva en `MODELOS`, sin uso).
 * **`gpt-oss-120b` en Cerebras:** está configurado (1 M tokens/día en el plan gratuito), pero no se ha probado, porque Cerebras pide datos bancarios para mostrar la clave.
 * Ya no están disponibles los Llama del plan gratuito de Groq (`llama3-8b-8192` se retiró el 2025-08-30, y `llama-3.1-8b-instant` y `llama-3.3-70b-versatile` el 2026-08-16) ni GitHub Models (retirado el 2026-07-30). OpenRouter (50 peticiones/día) y Mistral (límites sin verificar) quedan descartados.
 

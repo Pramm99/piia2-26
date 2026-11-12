@@ -15,8 +15,8 @@ La ingesta de evidencias (Fase 1, `codigo/fase1_ingesta/`) se resuelve en tres e
      * de cada anotación se extraen los identificadores `PMID:` de la columna de referencias, el código de evidencia, el calificador y la extensión;
      * los genes se resuelven por símbolo oficial y, solo si no hay ambigüedad, por sinónimo.
 2. **Fuentes externas para los pares sin abstract utilizable en el GAF** (sin PMID, o con PMIDs que no tienen abstract en PubMed):
-   * **NCBI GeneRIF**, vía MyGene.info: frases curadas por NCBI, cada una con su PMID. Solo se acepta si el texto del GeneRIF nombra al gen.
-   * **Búsqueda dirigida en Europe PMC**, para los pares que siguen vacíos: se buscan el gen y los nombres del subárbol de la ruta, y solo se acepta un abstract si el gen y un término del subárbol aparecen **en la misma frase**. Los alias en minúsculas no cuentan como mención del gen.
+   * **NCBI GeneRIF**, vía MyGene.info: frases curadas por NCBI, cada una con su PMID. Solo se acepta si la frase del GeneRIF o el abstract nombran al gen y a la ruta (o a un término de su subárbol).
+   * **Búsqueda dirigida en Europe PMC**, para los pares que siguen vacíos: se buscan el gen (con sus alias) y los nombres de la ruta y de su subárbol hasta 2 niveles, y solo se acepta un abstract si el gen y un término del subárbol aparecen **en la misma frase**. Los alias en minúsculas no cuentan como mención del gen.
    * Como máximo 10 PMIDs por par, y cada fila guarda su `Fuente` y la frase que la justifica.
 3. **Descarga de título y abstract de cada PMID** con peticiones HTTP **síncronas y por lotes**:
    * **Europe PMC** (servicio REST `search`, formato JSON) en lotes de **40 PMIDs** por petición.
@@ -29,14 +29,14 @@ Los genes de inmunoglobulina (lista de HGNC) se apartan antes del cruce y no sig
 ## Motivación
 1. **Un solo fichero frente a miles de llamadas:** el GAF humano (~15 MB comprimido) contiene todas las anotaciones de todos los genes. Leerlo localmente sustituye a una consulta por gen y término a una API, elimina los *rate limits* en esta etapa y permite trabajar sin conexión una vez descargado.
 2. **Reproducibilidad:** el GAF y el OBO son instantáneas fechadas (la versión actual del GAF se generó el 2026-05-21). Una ejecución puede repetirse sobre exactamente los mismos datos, algo que una API viva no garantiza.
-3. **La polaridad sale del grafo, no del texto:** al propagar por `positively_regulates` y `negatively_regulates`, la Fase 1 obtiene ya un signo curado por GO para muchos pares. En la ejecución del 2026-11-09, el 26 % de las 5.014 filas con abstract tiene `Polaridad_GO` +1 o −1. Ese signo sirve después para contrastar la salida del LLM, y en 332 pares basta para aceptarlo sin LLM (triaje `aceptar_GO`, [ADR-003](adr-003-control-alucinaciones-unknown.md)).
+3. **La polaridad sale del grafo, no del texto:** al propagar por `positively_regulates` y `negatively_regulates`, la Fase 1 obtiene ya un signo curado por GO para muchos pares. En la ejecución del 2026-11-09, el 26 % de las 5.014 filas con abstract tiene `Polaridad_GO` +1 o −1. Ese signo sirve después para contrastar la salida del LLM, y en 332 pares basta para aceptarlo sin LLM (triaje `aceptar_GO`, [spec de ingesta](../specs/descarga-evidencias-go-pmc.md)).
 4. **El GAF no basta para muchos pares:**
    * De los 3.069 pares (sin inmunoglobulinas) de las dos listas de CIMUS, solo 1.547 tienen algún PMID en el GAF. Sin otra fuente, la mitad de los pares no tendría ningún artículo que leer.
    * Para elegir las fuentes externas se siguió el criterio de usar el menor número posible de bases, gratuitas y con los abstracts más fiables y claros. GeneRIF es curado y da el PMID directamente. La búsqueda dirigida en Europe PMC cubre lo que GeneRIF no tiene, con un filtro (gen y proceso en la misma frase) que limita el ruido de una búsqueda libre.
    * En la ejecución del 2026-11-09, de los 1.523 pares sin abstract del GAF, **855** consiguen PMID con estas fuentes. Los **668** que siguen sin ninguno se cierran como `UNKNOWN` ([limitación documentada](../docs/limitacion-pares-sin-abstract.md)).
 5. **Europe PMC primero por su formato:** devuelve el abstract como un campo JSON (`abstractText`), más sencillo de procesar que el XML de PubMed. NCBI se mantiene como respaldo porque cubre PMIDs cuyo abstract no está en Europe PMC.
 6. **Síncrono es suficiente:**
-   * El GAF da 383 PMIDs únicos (ejecución del 2026-11-09). Las fuentes externas, en cambio, descargan unos 32.700 abstracts candidatos para comprobar si nombran al gen y al proceso, y al final quedan 1.420 PMIDs.
+   * El GAF da 383 PMIDs únicos (ejecución del 2026-11-09). Las fuentes externas, en cambio, descargan unos 32.700 abstracts candidatos para comprobar si nombran al gen y al proceso, y al final quedan 1.420 PMIDs en total (GAF y fuentes externas).
    * La primera ejecución completa tarda casi una hora, sobre todo por esa comprobación. Las siguientes reutilizan la caché y tardan unos minutos.
    * El cuello de botella son los límites de las APIs, no la concurrencia: lanzar peticiones en paralelo aumentaría el riesgo de `429` sin acelerar la descarga.
 7. **Filtrado implícito de evidencia no informativa:** al exigir un `PMID`, las referencias `GO_REF`, `Reactome` u otras quedan fuera. Las anotaciones automáticas `IEA` nunca llevan PMID en el GAF actual (0 de 194.927), así que tampoco llegan al LLM. El resto de códigos se conservan y se marcan con la columna `Experimental`; el filtro estricto (`SOLO_EXPERIMENTAL`) queda como opción configurable en `config.py`.

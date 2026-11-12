@@ -33,7 +33,7 @@ codigo/
 │   │   └── cache.py               #     Escritura atómica de las cachés JSON.
 │   ├── abstracts.py               #   (hecho) [7] Europe PMC + NCBI con caché de abstracts en crudo y limpiar_texto.
 │   ├── salida.py                  #   (hecho) [8] Embudo por consola y Excel de la Fase 1 (7 hojas).
-│   └── fase1_dataset_abstracts.xlsx  # Salida de la Fase 1 y entrada de la Fase 2 (no se versiona).
+│   └── fase1_dataset_abstracts.xlsx  # Salida de la Fase 1 y entrada de las Fases 2 y 3 (no se versiona).
 │
 ├── fase2_inferencia/              # FASE 2 · Inferencia (specs limpieza e inferencia-llm, ADR-003/004/005)
 │   │                              #   Se ejecuta desde codigo/ con: python -m fase2_inferencia ejecutar
@@ -59,10 +59,11 @@ codigo/
 │
 ├── fase3_scoring/                 # FASE 3 · Scoring (spec scoring-net-pathway-score) [15]
 │   │                              #   Se ejecuta desde codigo/ con: python -m fase3_scoring
-│   ├── nps.py                     #   (hecho) Votos ponderados por artículo -> signo del par -> NPS de cada ruta;
-│   │                              #   fase3_scoring.xlsx (Por_ruta, Por_par, Resumen).
-│   ├── config.py                  #   (hecho) Pesos de contexto, minoría de conflicto y umbrales de lectura
-│   │                              #   (provisionales).
+│   ├── nps.py                     #   (hecho) Votos ponderados por artículo -> signo del par -> NPS de cada ruta
+│   │                              #   (todos los genes pesan igual) y NPS_log2FC de sensibilidad
+│   │                              #   (Sensible_al_peso); fase3_scoring.xlsx (Por_ruta, Por_par, Resumen).
+│   ├── config.py                  #   (hecho) Rutas de entrada (incluida la tabla de log2FC), pesos de contexto,
+│   │                              #   minoría de conflicto y umbrales de lectura (provisionales).
 │   └── __init__.py / __main__.py  #   (hecho) API del paquete y línea de comandos.
 │
 ├── evaluacion/                    # BENCHMARK [16] (spec benchmark-gold-set, ADR-005)
@@ -94,18 +95,14 @@ codigo/
 │   └── fixtures/                  #   OBO y GAF mínimos, listas de CIMUS y respuestas HTTP grabadas (texto, sin
 │                                  #   Excels: los .xlsx de entrada se escriben en una carpeta temporal).
 │
-├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas (los únicos .xlsx versionados)
-│                                  #   y su script de análisis.
+├── tools_cimus/                   # Material de CIMUS: rutas enriquecidas (los únicos .xlsx versionados)
+│                                  #   y tabla de log2FC (NK_cells_DESeq2_results.xlsx, no se sube).
 ├── data/                          # Ficheros locales, ignorados por git (ADR-004):
 │                                  #   go-basic.obo, goa_human.gaf.gz, cachés (cache_abstracts.json,
 │                                  #   cache_mygene.json, cache_epmc_busquedas.json, cache_uniprot.json,
 │                                  #   hgnc_inmunoglobulinas.json), respuestas_llm.jsonl, llamadas_llm.jsonl,
 │                                  #   fase2_resultados.xlsx, fase3_scoring.xlsx y los registros del benchmark.
-├── requirements.txt               # Dependencias de Python: requests, pandas, openpyxl (y pytest para las pruebas).
+├── requirements.txt               # Dependencias de Python: requests, pandas, openpyxl (y pytest y pytest-cov para las pruebas).
 ├── .env.example                   # Nombres de las claves (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY,
 │                                  #   NCBI_EMAIL, NCBI_API_KEY), vacíos.
 └── .env                           # Las claves reales. Solo en local: está en .gitignore y NUNCA se sube.
-
-Eliminados (siguen en el historial de git):
-  - ApiREST_OFICIAL.py             # Prototipo inicial contra AmiGO/GOlr (descartado en el ADR-002).
-  - consultar_gen.py               # Primera versión de la Fase 2 con Groq y llama3-8b-8192; sustituida por cliente.py.

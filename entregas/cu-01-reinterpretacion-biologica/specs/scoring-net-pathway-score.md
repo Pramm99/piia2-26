@@ -15,7 +15,7 @@ El módulo **no llama a ningún modelo ni a la red**: solo lee ficheros locales 
 | `codigo/data/fase2_resultados.xlsx` | `Preguntas` | `Organismo` y `Tipo_celular` de cada pregunta (gen, PMID, proceso), unidos a `Por_ruta` por (`Gen`, `PMID`, `Proceso_ID`). |
 | `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` | `Triaje_polaridad` | Todos los pares (gen, ruta) que no son inmunoglobulinas, con `Destino`, `Signo_GO` y `Estado_Original`. |
 | `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` | `Inmunoglobulinas` | Pares de inmunoglobulinas, ya con signo `neutro`. |
-| `codigo/tools_cimus/NK_cells_DESeq2_results.xlsx` (opcional) | primera | Tabla de expresión diferencial de CIMUS: el gen en la primera columna, sin nombre, y `log2FoldChange` (log2 Fold-Change de NK en HNSC). También vale un `.xlsx` o `.csv` con columnas `Gen` y `log2FC`. El CLI la usa sola si existe; `ninguno` calcula sin ella. Solo cambia la sensibilidad (`NPS_log2FC`), nunca el `NPS`. |
+| `codigo/tools_cimus/NK_cells_DESeq2_results.xlsx` (opcional; no se versiona: se reparte dentro del equipo) | primera | Tabla de expresión diferencial de CIMUS: el gen en la primera columna, sin nombre, y `log2FoldChange` (log2 Fold-Change de NK en HNSC). También vale un `.xlsx` o `.csv` con columnas `Gen` y `log2FC`. El CLI la usa sola si existe; `ninguno` calcula sin ella. Sin la tabla, `NPS_log2FC`, `Lectura_log2FC` y `Sensible_al_peso` quedan vacías. Solo cambia la sensibilidad (`NPS_log2FC`), nunca el `NPS`. |
 
 `Estado_Original` da la **dirección del gen**: `Activada` (lista de genes *up*) → `d = +1`; `Suprimida` (lista de genes *down*) → `d = −1`. «Activada» y «suprimida» son solo los nombres de las listas de CIMUS, no una conclusión sobre la ruta.
 
@@ -24,7 +24,7 @@ Cada fila de `Por_ruta` es un caso. Su signo sobre la ruta (`Signo_ruta`) ya vie
 
 * **Quién vota:** solo los casos con `Estado = resuelto` y `Signo_ruta` ∈ {`+1`, `−1`, `neutro`}. Los `UNKNOWN`, `revisar` y `pendiente` no votan, pero se cuentan.
 * **Peso del voto:** `w = Confianza_final / 100 × f_contexto`.
-  * `f_contexto` = 1,0 si el experimento es en humano (`Organismo` = `human` o `not_stated`) y en células inmunes (`Tipo_celular` ∈ {`NK`, `T`, `other_immune`, `not_stated`}).
+  * `f_contexto` = 1,0 si el experimento es en humano (`Organismo` = `human`, `not_stated` o vacío) y en células inmunes (`Tipo_celular` ∈ {`NK`, `T`, `other_immune`, `not_stated`} o vacío).
   * Vale 0,5 por cada condición que no se cumpla: ratón u otro organismo, o tumor u otro tipo celular. Si fallan las dos, 0,25.
   * El tipo de evidencia (afirmación de fondo, correlación…), la posición de la frase y el acuerdo entre modelos **ya están dentro de `Confianza_final`** (`fase2_inferencia/confianza.py`), así que no se vuelven a penalizar aquí.
   * Si `Confianza_final` falta en una fila resuelta, se toma 0,5 y la fila lleva la marca `peso_por_defecto`.
@@ -47,10 +47,10 @@ Para cada par se suman los pesos por clase: `W(+1)`, `W(−1)` y `W(neutro)`. Se
 Además:
 
 * **Conflicto sin anulación:** en la regla 5 se guardan los dos recuentos (`W(+1)`, `W(−1)`, `W(neutro)` y el número de PMIDs de cada clase, `n_PMIDs_pos`, `n_PMIDs_neg` y `n_PMIDs_neutro`). El conflicto se expresa con el estado y el motivo, nunca con un signo nuevo.
-* **Evidencia débil:** un par resuelto por las reglas 4 con `W_total < 1` lleva además `evidencia_debil`. Es el caso, por ejemplo, de un único artículo en ratón.
+* **Evidencia débil:** un par resuelto por la regla 4 (o que pasa a `revisar` por `LLM_y_revision`) con `W_total < 1` lleva además `evidencia_debil`. Es el caso, por ejemplo, de un único artículo en ratón.
 * **Contradicción dentro de un abstract:** va a `revisar` (regla 7) y no a `no_concluyente`, porque un abstract que da las dos direcciones suele describir una función dual real (p. ej. KIR2DL4 o la galectina-9). Eso es información para el experto, no una ausencia de evidencia.
 * **Votos sin peso:** si todos los votos pesan 0 (`Confianza_final = 0`), el par se trata como si no tuviera votos y lleva `votos_sin_peso`.
-* **Trazabilidad:** cada par guarda la lista de votos en el formato `signo:PMID(peso)`, p. ej. `+1:10652336(0.86); −1:29988376(0.45)`.
+* **Trazabilidad:** cada par guarda la lista de votos en el formato `signo:PMID(peso)`, p. ej. `+1:10652336(0.86); -1:29988376(0.45)`.
 
 ### Paso 3 · Contribución del par y Net Pathway Score
 * **Contribución:** `c = s × d`, donde:
@@ -123,8 +123,8 @@ Las pruebas están en `codigo/tests/test_scoring.py`, con tablas sintéticas y s
 * [x] ✅ **Evidencia débil** (`tests/test_scoring.py::test_evidencia_debil`): un único voto `−1` con `w = 0,4` da `−1`, `resuelto`, con `evidencia_debil`.
 * [x] ✅ **Solo UNKNOWN** (`tests/test_scoring.py::test_solo_unknown_no_entra_en_el_nps`): un par cuyos casos son todos `UNKNOWN` sale `no_concluyente`, con `Contribucion = 0`, y no entra en el cociente del NPS.
 * [x] ✅ **Contradicción** (`tests/test_scoring.py::test_contradiccion_va_a_revisar`): un par sin votos con un caso `contradictorio` sale `revisar`, no `no_concluyente`.
-* [x] ✅ **Pendiente** (`tests/test_scoring.py::test_pendiente`): un par sin votos con algún caso `pendiente` sale `pendiente`, y su ruta suma 1 en `n_pendiente`. Un par del LLM sin ningún caso en la Fase 2 sale `pendiente` con `sin_fase2`.
-* [x] ✅ **GO y dirección** (`tests/test_scoring.py::test_go_y_direccion`): un par `aceptar_GO` con `Signo_GO = −1` de un gen *down* tiene `Contribucion = (−1) × (−1) × 1 = +1`.
+* [x] ✅ **Pendiente** (`tests/test_scoring.py::test_pendiente`): un par sin votos con algún caso `pendiente` sale `pendiente`. Un par del LLM sin ningún caso en la Fase 2 sale `pendiente` con `sin_fase2`, y la ruta cuenta los dos en `n_pendiente` (2).
+* [x] ✅ **GO y dirección** (`tests/test_scoring.py::test_go_y_direccion`): un par `aceptar_GO` con `Signo_GO = −1` de un gen *down* tiene `Contribucion = (−1) × (−1) = +1`.
 * [x] ✅ **Freno** (`tests/test_scoring.py::test_freno`): un par `−1` de un gen *up* tiene `Contribucion = −1` y `Freno_retroalimentacion = True`.
 * [x] ✅ **Inmunoglobulinas** (`tests/test_scoring.py::test_inmunoglobulinas_no_cambian_el_nps`): un par de la hoja `Inmunoglobulinas` sale `neutro` y `resuelto`, suma en `n_neutros` y `n_total`, y no cambia el NPS.
 * [x] ✅ **NPS** (`tests/test_scoring.py::test_nps_y_lectura`): una ruta con cuatro pares resueltos con contribuciones +1, +1, −1 y `neutro`, y otro `sin_evidencia`, da `NPS = (1 + 1 − 1) / 3 = 0,33`, `Fraccion_neutros = 1/4`, `Cobertura = 4/5 = 0,8` y `Lectura = activada`. Con solo dos pares con signo, `Lectura = insuficiente`.
@@ -134,5 +134,5 @@ Las pruebas están en `codigo/tests/test_scoring.py`, con tablas sintéticas y s
 * [x] ✅ **Sensibilidad al peso** (`tests/test_scoring.py::test_log2fc_solo_cambia_la_sensibilidad`): con la tabla de expresión diferencial tal cual, dos genes *up* que activan con |log2FC| = 1 y uno *down* que activa con |log2FC| = 4 dan `NPS = 0,333` (`activada`) y `NPS_log2FC = −0,333` (`inhibida`), y la ruta sale `Sensible_al_peso = sí`. Sin log2FC, esas tres columnas quedan vacías.
 * [x] ✅ **Tabla de CIMUS** (`tests/test_scoring.py::test_tabla_de_log2fc_de_cimus`, que se salta si falta el fichero): los 224 genes de las dos listas tienen log2FC y ninguno contradice su lista.
 * [x] ✅ **Entrada incompleta** (`tests/test_scoring.py::test_entrada_incompleta`): sin la hoja `Por_ruta` (o sin la columna `Confianza_final`), `ValueError` que nombra lo que falta.
-* [x] ✅ **Determinismo y ausencia de red** (`tests/test_scoring.py::test_determinista_y_sin_red`): dos ejecuciones con las mismas entradas dan las mismas hojas celda a celda; la prueba bloquea `requests` y `socket` y no falla.
-* [x] ✅ **Recuento completo** (`tests/test_scoring.py::test_recuento_completo_con_las_salidas_reales`, que se salta si faltan las salidas): con las salidas reales de las Fases 1 y 2, `Por_par` tiene una fila por cada par de entrada (3.172 con la Fase 1 de referencia, incluidas las 103 inmunoglobulinas) y `Por_ruta` una por cada término GO distinto (352).
+* [x] ✅ **Determinismo y ausencia de red** (`tests/test_scoring.py::test_determinista_y_sin_red`): dos ejecuciones con las mismas entradas dan las mismas hojas celda a celda; la prueba bloquea `socket.socket` y `socket.create_connection` y no falla.
+* [x] ✅ **Recuento completo** (`tests/test_scoring.py::test_recuento_completo_con_las_salidas_reales`, que se salta si faltan las salidas): con las salidas de las Fases 1 y 2 de `config.py`, `Por_par` tiene una fila por cada par del Excel de la Fase 1 y `Por_ruta` una por cada término GO distinto. Con la Fase 1 completa del 2026-11-09 son 3.172 pares (103 de inmunoglobulinas) y 352 rutas (`codigo/data/fase3_scoring.xlsx`); la prueba no fija esas cifras.
