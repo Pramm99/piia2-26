@@ -65,8 +65,8 @@ Aceptamos los compromisos asociados:
   * *Motivo de descarte:* se probó el 2026-11-08 y aportaba pocos pares. UniProt se sigue usando solo para describir la función de las inmunoglobulinas.
 * **GeneCards:**
   * *Motivo de descarte:* sus condiciones de uso prohíben el acceso automatizado.
-* **Reactome y OmniPath:**
-  * *Aplazadas.* Para los 668 pares que siguen sin abstract, el documento de la limitación propone, por orden: las anotaciones TAS de Reactome resueltas a su referencia, un diccionario fijo de palabras clave por ruta para Europe PMC, y gene2pubmed + MeSH. Están pendientes de decidir.
+* **OmniPath y otras bases:**
+  * *Aplazadas.* Para los 668 pares que siguen sin abstract, el documento de la limitación propone, por orden, un diccionario fijo de palabras clave por ruta para Europe PMC, que revisa Miguel, y gene2pubmed + MeSH, que se descarta si rinde menos (#31).
 
 ## Referencias
 * **Código del proyecto** (`codigo/fase1_ingesta/`):
