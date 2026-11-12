@@ -43,6 +43,13 @@ Se evaluó en profundidad la siguiente alternativa principal:
 
     Se espera que la Opción A ofrezca una explicabilidad suficiente con menor coste operativo. Esta hipótesis se valida con el benchmark sobre el *gold set* ([spec del benchmark](../specs/benchmark-gold-set.md)), etiquetado a ciegas con doble etiqueta.
 
+Durante el avance del proyecto el equipo descartó también dos piezas, porque no son compatibles con la solución adoptada:
+
+* **Reranker de abstracts (#7):**
+  * *Motivo de descarte:* los abstracts no salen de una búsqueda abierta que haya que ordenar, sino de los PMIDs curados del GAF y de fuentes ya filtradas por gen y ruta, y todos se envían al LLM, que decide con una cita verificada. Un filtro previo de relevancia, medido el 2026-11-12, perdía el 34 % de los signos ([spec de inferencia](../specs/inferencia-llm.md)).
+* **Harness para el LLM (#11):**
+  * *Motivo de descarte:* cada pregunta es una llamada sin estado, con un prompt y un esquema JSON fijos, y la validación, el contraste con GO y el registro los hace el código ([ADR-003](adr-003-control-alucinaciones-unknown.md), [ADR-004](adr-004-persistencia-ficheros-locales.md)).
+
 ## Referencias
 * **Documentación del proyecto:**
   * `PlanesViables/OpcionA.md` y `PlanesViables/OpcionB.md` (análisis comparativo detallado de arquitecturas).
