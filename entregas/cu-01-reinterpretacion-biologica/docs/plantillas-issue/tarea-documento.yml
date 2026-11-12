@@ -1,0 +1,70 @@
+name: Tarea de documento
+description: Escribir o revisar documentación, specs, ADR, guion o diapositivas
+title: '[Documento] '
+body:
+- type: markdown
+  attributes:
+    value: 'Rellena el objetivo y el «Hecho cuando». Marca del DoR lo que ya se cumpla: la tarea solo pasa de Backlog a TODO con todo el DoR marcado. El DoD se marca al terminarla y lo comprueba el revisor. Definiciones: DOR.md, DOD.md y TABLERO.md en la carpeta del CU-01.'
+- type: textarea
+  id: objetivo
+  attributes:
+    label: Objetivo
+    description: 'Una frase: qué se quiere conseguir y para qué.'
+    placeholder: Dejar los ADR alineados con el código para la Entrega 2.
+  validations:
+    required: true
+- type: textarea
+  id: hecho_cuando
+  attributes:
+    label: Hecho cuando (criterios propios de esta tarea)
+    description: |-
+      Una casilla por criterio, por ejemplo:
+      - [ ] Cada ADR coincide con el código
+      - [ ] Cambios listados en el pull request
+    value: '- [ ] '
+  validations:
+    required: true
+- type: input
+  id: revisor
+  attributes:
+    label: Revisor
+    description: Otra persona del equipo, distinta del responsable, que comprobará el DoD.
+    placeholder: '@usuario'
+  validations:
+    required: true
+- type: checkboxes
+  id: dor
+  attributes:
+    label: 'DoR: lista para empezar'
+    description: Marca las que se cumplan. Si falta alguna, la tarea se queda en Backlog.
+    options:
+    - label: Objetivo y «Hecho cuando» escritos arriba, con criterios que se comprueban con un sí o un no
+    - label: Tipo de tarea elegido (esta plantilla)
+    - label: Responsable en Assignees y revisor (otra persona) nombrado arriba
+    - label: Fecha límite en el campo Target date del tablero
+    - label: Prioridad (P0/P1/P2) y tamaño (XS/S/M/L/XL) en los campos del tablero
+    - label: La entrada necesaria existe (fichero, clave, dato o decisión previa)
+    - label: Dependencias externas ya pedidas, con fecha de respuesta; dependencias internas enlazadas (#N)
+- type: checkboxes
+  id: dod
+  attributes:
+    label: 'DoD: terminada'
+    description: Se dejan sin marcar al crear la tarea y las marca el revisor al cerrarla.
+    options:
+    - label: Todos los criterios del «Hecho cuando» cumplidos
+    - label: Resultado enlazado (commit, fichero o documento)
+    - label: Revisada por otra persona del equipo (comentario «Revisado contra el DoD»)
+    - label: 'Tablero al día: columna correcta, sin la etiqueta Bloqueada y con los bloqueos cerrados en el issue'
+    - label: Lo que salió y no se hizo ya es un issue nuevo enlazado
+    - label: Coherente con el código y sin contradicciones con ARCHITECTURE.md, los ADR y los specs
+    - label: Enlaces y cifras comprobados contra la fuente
+- type: textarea
+  id: bloqueos
+  attributes:
+    label: Bloqueos y dependencias
+    description: Dependencias conocidas al crear la tarea. Los bloqueos que aparezcan después van en un comentario con la línea de bloqueo (TABLERO.md).
+    value: |-
+      Ninguno.
+
+      Si se bloquea: etiqueta Bloqueada y un comentario con
+      🔒 Bloqueo · espera a: ___ · lo desbloquea: ___ · lo persigue: @___ · fecha de desbloqueo: DD/MM · plan B: ___

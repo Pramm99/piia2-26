@@ -19,7 +19,8 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
 | `codigo/tools_cimus/` | Entrada original de CIMUS (únicos Excels versionados). |
 | `codigo/data/` | Cachés, registro de respuestas del LLM y salidas. **No se versiona.** |
-| `decisions/`, `specs/`, `docs/` | ADRs, specs funcionales y limitaciones conocidas. |
+| `decisions/`, `specs/`, `docs/` | ADRs, specs funcionales, limitaciones conocidas y plantillas de issue. |
+| `DOR.md`, `DOD.md`, `TABLERO.md` | Cuándo empieza y cuándo termina una tarea, y cómo se gestionan el tablero y los bloqueos. |
 | `PlanesViables/` | Análisis previo de alternativas (opciones A y B). Es histórico: no se toca. |
 
 ## Cómo se ejecuta
@@ -74,6 +75,7 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 * **No toques una fase que no te han pedido:** un cambio en la Fase 1 altera el Excel del que dependen la Fase 2, el gold set y el benchmark.
 * **No afirmes decisiones** que solo aparecen en un comentario del código: compruébalas en los ADR o pregunta.
 * **Commits:** el título lleva la fase que cambia, p. ej. `Fase 1 (INGESTA): …`, `Fase 2: …` o `Fase 3 (SCORING): …`. Si toca varias, nómbralas todas. Añade los ficheros con rutas explícitas, nunca con `git add -A`. El push va a `main` del fork `Pramm99/piia2-26`, que alimenta el PR #19 (Entrega 2) de `usc-gria/piia2-26`.
+* **Tareas del tablero:** al abrir un issue usa la plantilla de [`docs/plantillas-issue/tarea.md`](docs/plantillas-issue/tarea.md). Al cerrar trabajo, comenta el issue con el commit y déjalo en REVISION: lo cierra otra persona contra el [DoD](DOD.md). Si algo te bloquea, sigue [`TABLERO.md`](TABLERO.md#bloqueos).
 * **Varios asistentes a la vez:** si otra sesión tiene cambios sin commit en la misma carpeta, no los incluyas en tu commit ni edites sus ficheros hasta que termine.
 
 ## Estado y pendientes

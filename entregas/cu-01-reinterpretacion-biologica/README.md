@@ -131,6 +131,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
   | [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md) | Agregación de los artículos de cada par y *Net Pathway Score* de cada ruta (Fase 3). |
 
 - **Limitaciones conocidas:** [`docs/limitacion-pares-sin-abstract.md`](docs/limitacion-pares-sin-abstract.md) (pares gen–ruta sin ningún _abstract_).
+- **Gestión de tareas:** [`DOR.md`](DOR.md) (cuándo una tarea puede empezar), [`DOD.md`](DOD.md) (cuándo está terminada) y [`TABLERO.md`](TABLERO.md) (ciclo del tablero, sistema de bloqueos y revisión en cada reunión). Plantillas de issue en [`docs/plantillas-issue/`](docs/plantillas-issue/).
 
 ## 6. Estructura del repositorio
 
@@ -142,6 +143,9 @@ entregas/cu-01-reinterpretacion-biologica/
 ├── .gitignore                     # Excluye el entorno virtual, codigo/data/, los .env, los .xlsx y los .csv.
 ├── ARCHITECTURE.md                # Diagrama de componentes y recorrido del dato.
 ├── AGENTS.md                      # Instrucciones operativas para asistentes de IA y colaboradores: estructura, comandos y reglas.
+├── DOR.md                         # Definition of Ready: lo que necesita una tarea para empezar.
+├── DOD.md                         # Definition of Done: lo que cumple una tarea para cerrarse.
+├── TABLERO.md                     # Ciclo del tablero, sistema de bloqueos y rutina de cada reunión.
 │
 ├── decisions/                     # Architecture Decision Records (ADRs):
 │   ├── adr-001-rag-stateless.md                  # Pipeline RAG con LLM externo.
@@ -157,7 +161,7 @@ entregas/cu-01-reinterpretacion-biologica/
 │   ├── benchmark-gold-set.md
 │   └── scoring-net-pathway-score.md
 │
-├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md).
+├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md) y plantillas de issue (plantillas-issue/).
 ├── PlanesViables/                 # Análisis de las dos arquitecturas candidatas (OpcionA.md, OpcionB.md; ADR-001).
 ├── src/                           # Esquema del código fuente (definicion-src.txt).
 ├── tests/                         # Vacío (test_pipeline.py): las pruebas están en codigo/tests/.
