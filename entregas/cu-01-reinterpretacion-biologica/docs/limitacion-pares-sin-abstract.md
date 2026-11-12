@@ -89,6 +89,8 @@ Juntando todas las fuentes, hubo evidencia humana aceptable para 6 de los 12 gen
 Propone tres pasos, todos gratuitos, sobre abstracts de PubMed y compatibles con una Fase 1 determinista.
 Cada uno sería una etapa más de `pmid_externos.py`, y solo actuaría sobre los pares que siguen vacíos.
 
+**Orden decidido por el equipo (2026-11-11, #31):** paso a paso y midiendo tras cada uno. Primero Reactome, por si basta; después el diccionario de palabras clave (paso 3), que revisa Miguel; gene2pubmed + MeSH (paso 2) se descarta si rinde menos que el diccionario.
+
 ### Paso 1. Reactome: convertir las anotaciones TAS en PMIDs
 
 - **Qué:** algunas anotaciones del GAF no citan un PMID sino una reacción o vía de Reactome (`Reactome:R-HSA-…`
@@ -101,6 +103,7 @@ Cada uno sería una etapa más de `pmid_externos.py`, y solo actuaría sobre los
 - **Alcance:** 14 pares de los 668, pocos pero muy limpios. En la prueba resolvió CTSZ → procesamiento de hormonas
   peptídicas (PMID 19800993).
 - **Coste:** una petición por ID de Reactome distinto, con caché. Es el paso más barato.
+- **Resultado del piloto (2026-11-12): no basta y no se integra.** Los 14 pares son de 4 genes y remiten a solo 3 IDs de Reactome (11 PMIDs). Dos son vías generales («MHC class II antigen presentation» y la replicación del virus respiratorio sincitial), con revisiones que no nombran CTSD, DNM2 ni SEC11A. El tercero es la reacción de CTSZ (PMID 19800993), que lo nombra como «cathepsin X», un nombre que no está entre sus alias: aun aceptándolo, serían 2 de los 668 pares. Se pasa al diccionario.
 
 ### Paso 2. NCBI gene2pubmed + MeSH de la ruta + «Humans»
 

@@ -70,6 +70,8 @@ Por qué la unidad de pregunta es el proceso núcleo del término estrecho:
 * **Sin doble negación:** el 56 % de las filas tienen rutas «(positive/negative) regulation of X», y preguntar si un gen «activa *negative regulation of X*» confunde a los modelos. La inversión la hace el código.
 * **La pregunta está más cerca del abstract:** es lo que leyó y anotó el curador de GO.
 
+**Sin filtro léxico de relevancia antes de preguntar** (medido el 2026-11-12 sobre las 1.828 preguntas). Saltarse los abstracts que no nombran el proceso ni su subárbol ahorraría el 27 % de las preguntas, pero perdería el 34 % de los 563 signos: esos abstracts dan signo más a menudo (39 %) que los que sí lo nombran (28 %), porque el modelo reconoce las paráfrasis que el vocabulario de GO no recoge. Exigir el gen y el proceso en la misma frase ahorraría el 46 % y perdería el 47 %. El modelo ya se abstiene cuando el abstract no trata el proceso (`process_not_addressed`), así que el filtro no compensa.
+
 Por qué una llamada por gen: el mensaje de sistema y el esquema son un prefijo fijo de unos 1.000 tokens; enviarlos una vez por gen y no una vez por pregunta reduce mucho los tokens (informe «Coste de una llamada por gen en la Fase 2») y los proveedores pueden servir ese prefijo de su caché. La huella de cada pregunta es la de su parte del prompt, así que si la Fase 1 añade un abstract a un gen solo se pregunta lo nuevo.
 
 Por qué el veredicto es obligado: si el modelo pudiera abstenerse, el `UNKNOWN` dependería de su criterio. Así el modelo siempre declara qué cree y con qué confianza, y el `UNKNOWN` lo decide el código con reglas fijas (cita, umbral y GO) que se ajustan con el benchmark sin tocar el prompt.
