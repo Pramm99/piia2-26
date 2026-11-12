@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from fase3_scoring import config
-from fase3_scoring.nps import calcular, escribir, peso
+from fase3_scoring.nps import calcular, escribir, leer_log2fc, peso
 
 HUMANO, RATON = ("human", "NK"), ("mouse", "NK")
 
@@ -155,12 +155,41 @@ def test_log2fc(tmp_path):
     pd.DataFrame({"Gen": ["D"], "log2FC": [-2.0]}).to_csv(fc, index=False)
     p, r, _ = puntuar(tmp_path, [par("D", "GO:A", lista="Suprimida"), par("E", "GO:A")],
                       [caso("D", "GO:A", "1", "+1"), caso("E", "GO:A", "2", "+1")], log2fc=fc)
-    assert fila(p, "D").Contribucion == -2.0 and fila(p, "D").Log2FC == -2.0
-    assert "sin_log2FC" in fila(p, "E").Motivos and r.iloc[0].Con_log2FC == "sí"
-    assert r.iloc[0].NPS == pytest.approx(round((-2 + 1) / 3, 3))
+    assert fila(p, "D").Contribucion == -1.0 and fila(p, "D").Log2FC == -2.0  # el NPS no pesa por log2FC
+    assert "sin_log2FC" in fila(p, "E").Motivos
+    assert r.iloc[0].NPS == 0.0 and r.iloc[0].NPS_log2FC == pytest.approx(round((-2 + 1) / 3, 3))
     pd.DataFrame({"Gen": ["D"], "log2FC": [1.5]}).to_csv(fc, index=False)
     with pytest.raises(ValueError, match="D"):
         puntuar(tmp_path, [par("D", "GO:A", lista="Suprimida")], [], log2fc=fc)
+
+
+def test_log2fc_solo_cambia_la_sensibilidad(tmp_path):
+    """Tabla de expresión diferencial tal cual (gen en la primera columna, log2FoldChange). Dos genes up que
+    activan con |log2FC| 1 y uno down que activa con |log2FC| 4: el NPS (peso igual) lee activada y el
+    NPS_log2FC, inhibida, así que la ruta sale Sensible_al_peso."""
+    fc = tmp_path / "deseq2.xlsx"
+    pd.DataFrame({"baseMean": [50.0, 40.0, 3.0], "log2FoldChange": [1.0, 1.0, -4.0], "padj": [0.01] * 3},
+                 index=["A", "B", "C"]).to_excel(fc)
+    pares = [par("A", "GO:A"), par("B", "GO:A"), par("C", "GO:A", lista="Suprimida")]
+    votos = [caso(g, "GO:A", str(i), "+1") for i, g in enumerate("ABC", 1)]
+    _, r, res = puntuar(tmp_path, pares, votos, log2fc=fc)
+    f = r.iloc[0]
+    assert (f.NPS, f.Lectura) == (0.333, "activada")
+    assert (f.NPS_log2FC, f.Lectura_log2FC, f.Sensible_al_peso) == (-0.333, "inhibida", "sí")
+    assert res[res.Apartado == "Sensibilidad"].Valor.iloc[0] == 1
+    _, r, _ = puntuar(tmp_path, pares, votos)
+    assert (r.iloc[0].Lectura_log2FC, r.iloc[0].Sensible_al_peso) == ("", "") and pd.isna(r.iloc[0].NPS_log2FC)
+
+
+@pytest.mark.skipif(not config.FICHERO_LOG2FC.exists(), reason="hace falta la tabla de log2FC de CIMUS")
+def test_tabla_de_log2fc_de_cimus():
+    """Los 224 genes de las dos listas tienen log2FC y ninguno contradice su lista (si no, ValueError)."""
+    direcciones = {}
+    for fichero, d in (("NK_rutas_activadas_GO.xlsx", 1), ("NK_rutas_suprimidas_GO.xlsx", -1)):
+        for genes in pd.read_excel(config.DIR_CODIGO / "tools_cimus" / fichero)["geneID"].dropna():
+            direcciones.update({g.upper(): d for g in str(genes).split("/")})
+    fc = leer_log2fc(config.FICHERO_LOG2FC, direcciones)
+    assert not set(direcciones) - set(fc)
 
 
 @pytest.mark.parametrize("hoja, columna", [("Por_ruta", None), ("Por_ruta", "Confianza_final")])

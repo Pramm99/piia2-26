@@ -24,7 +24,7 @@ Un componente de procesamiento y sanitización de texto que ejecute tres respons
    * **Qué formas cuentan:** el símbolo oficial y hasta 8 alias de MyGene, de al menos 3 caracteres y no numéricos, buscados como **palabra completa** (`CD7` no cuenta dentro de `CD70`). Los guiones se ignoran (`CD-7` equivale a `CD7`) y las griegas se reducen a su letra (`IL-4Rα` equivale a `IL4Ra`). También cuenta el nombre completo del gen de MyGene.
    * **Mayúsculas:** una coincidencia escrita toda en minúsculas no cuenta como mención, porque muchos alias son también palabras corrientes.
 
-**Dirección de expresión (Up / Down).** Un gen está en una sola de las dos listas de CIMUS: la de rutas enriquecidas con genes *up* («rutas activadas») o la de genes *down* («rutas suprimidas»). Cada fila conserva su lista de origen en la columna `Estado_Original` («Activada» o «Suprimida») en todas las hojas de la Fase 1. La salida de la Fase 2 (`fase2_resultados.xlsx`) no la copia: el scoring la recuperará por el par (gen, ruta). De ella se deduce la dirección del gen (*up* o *down*), que usará el scoring junto con el *log2 Fold-Change* (Fase 3). No hay una estructura `up_genes` / `down_genes` aparte, porque la Fase 2 no usa la dirección: el signo del gen sobre la ruta no depende de ella.
+**Dirección de expresión (Up / Down).** Un gen está en una sola de las dos listas de CIMUS: la de rutas enriquecidas con genes *up* («rutas activadas») o la de genes *down* («rutas suprimidas»). Cada fila conserva su lista de origen en la columna `Estado_Original` («Activada» o «Suprimida») en todas las hojas de la Fase 1. La salida de la Fase 2 (`fase2_resultados.xlsx`) no la copia: el scoring la recuperará por el par (gen, ruta). De ella se deduce la dirección del gen (*up* o *down*), que usa el scoring (Fase 3). No hay una estructura `up_genes` / `down_genes` aparte, porque la Fase 2 no usa la dirección: el signo del gen sobre la ruta no depende de ella.
 
 Este componente se sitúa como paso previo obligatorio a la inferencia, garantizando que se reciban abstracts limpios, que las comprobaciones de la salida del LLM toleren diferencias tipográficas mínimas y que se conozca la lista de origen de cada gen.
 
@@ -33,7 +33,7 @@ Los abstracts biomédicos extraídos de APIs como Europe PMC contienen marcado H
 
 Por otro lado, el control de alucinaciones (ADR-003) compara la cita que devuelve el LLM con el abstract. Una comparación exacta fallaría por diferencias sin significado (un guion largo en lugar de uno corto, `NF-kappaB` en lugar de `NF-κB`, una coma omitida) y convertiría en `UNKNOWN` respuestas correctas. Por eso hacen falta **dos niveles**: uno conservador, que preserva la nomenclatura para el LLM, y otro fuerte, usado solo para comparar.
 
-La dirección del gen se conserva porque el scoring la necesita: el efecto real del gen sobre la ruta es su dirección de expresión por su signo sobre la ruta, ponderado por el *log2 Fold-Change*. No se envía al LLM para no sesgar su respuesta.
+La dirección del gen se conserva porque el scoring la necesita: el efecto real del gen sobre la ruta es su dirección de expresión por su signo sobre la ruta. No se envía al LLM para no sesgar su respuesta.
 
 ## Restricciones
 * **Integridad de nomenclatura biomédica en el texto para el LLM:** La sanitización conservadora no debe alterar subcadenas que correspondan a identificadores de genes o familias proteicas. No se aplica *lowercasing* ni eliminación de guiones o barras que forman parte de nombres reconocidos (ej. `HLA-A`, `IL-2R`, `miR-155`).

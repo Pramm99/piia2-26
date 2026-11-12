@@ -33,7 +33,7 @@ cp .env.example .env          # y rellena las claves que vayas a usar
 python fase1_ingesta/main.py   # Fase 1 (unos 58 min en frío, unos minutos con caché)
 python -m fase2_inferencia CD7    # Fase 2 en modo demo: imprime la primera llamada, sin llamar a nadie
 python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel]   # Fase 2 real, reanudable
-python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc]   # Fase 3, sin red (segundos)
+python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc|ninguno]   # Fase 3, sin red (segundos)
 python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
 ```
@@ -81,5 +81,5 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 ## Estado y pendientes
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
-* el fichero de log2FC por gen de CIMUS y los umbrales definitivos del scoring;
+* los umbrales definitivos del scoring y la revisión de las rutas `Sensible_al_peso`;
 * el contraste entre modelos: relanzar la Fase 2 sin `--solo-respaldo` (varios días por el cupo de Groq).

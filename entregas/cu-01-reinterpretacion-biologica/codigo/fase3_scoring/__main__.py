@@ -1,8 +1,9 @@
 """Fase 3 desde la línea de comandos (sin red ni LLM; se puede repetir cuantas veces se quiera):
-  python -m fase3_scoring [excel_fase1|-] [excel_fase2|-] [log2fc.xlsx|.csv]
+  python -m fase3_scoring [excel_fase1|-] [excel_fase2|-] [log2fc.xlsx|.csv|-|ninguno]
 Escribe codigo/data/fase3_scoring.xlsx (hojas Por_ruta, Por_par y Resumen). Por defecto lee
-codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx y codigo/data/fase2_resultados.xlsx. Un «-» deja ese
-argumento por defecto.
+codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx, codigo/data/fase2_resultados.xlsx y, si existe, la tabla de
+log2FC de CIMUS (config.FICHERO_LOG2FC), que solo cambia la sensibilidad (NPS_log2FC), no el NPS. Un «-» deja ese
+argumento por defecto; «ninguno» calcula sin log2FC.
 """
 import sys
 from pathlib import Path
@@ -19,9 +20,14 @@ from fase3_scoring.nps import calcular, escribir
 
 def main(argv) -> None:
     arg = lambda i: argv[i] if len(argv) > i and argv[i] != "-" else None
-    pares, rutas, res = calcular(arg(1) or config.FICHERO_FASE1, arg(2) or config.FICHERO_FASE2, arg(3))
+    log2fc = arg(3) or (config.FICHERO_LOG2FC if config.FICHERO_LOG2FC.exists() else None)
+    pares, rutas, res = calcular(arg(1) or config.FICHERO_FASE1, arg(2) or config.FICHERO_FASE2,
+                                 None if log2fc == "ninguno" else log2fc)
     print(pares.groupby(["Estado_par", "Signo_par"]).size().to_string())
     print(rutas["Lectura"].value_counts().to_string())
+    sensibles = int((rutas["Sensible_al_peso"] == "sí").sum())
+    if sensibles:
+        print(f"⚖️ {sensibles} rutas cambian de lectura si cada gen pesa su |log2FC| (Sensible_al_peso).")
     afectadas = int((rutas["n_pendiente"] > 0).sum())
     if afectadas:
         print(f"⏸️ {int(rutas['n_pendiente'].sum())} pares pendientes de la Fase 2 en {afectadas} rutas: "

@@ -8,8 +8,10 @@ fases anteriores.
      w = Confianza_final / 100 × f_contexto (especie y tipo celular de la pregunta).
   2. Par: reglas 1-9 de la spec, en orden (Ig, GO, sin_evidencia, mayoría, conflicto, revisar, contradictorio,
      pendiente, UNKNOWN). Un conflicto no se promedia a 0: va a revisar con los recuentos visibles.
-  3. Ruta (término GO, juntando las dos listas de CIMUS): c = s × d × m y NPS = Σc / Σm sobre los pares
-     resueltos con signo ±1. Los neutros no entran en el cociente (se informan como Fraccion_neutros).
+  3. Ruta (término GO, juntando las dos listas de CIMUS): c = s × d y NPS = media de c sobre los pares
+     resueltos con signo ±1; todos los genes pesan igual. Los neutros no entran (se informan como Fraccion_neutros).
+     Con el log2FC de CIMUS se calcula además NPS_log2FC = Σ c·|log2FC| / Σ |log2FC| como sensibilidad: las rutas
+     cuya lectura cambia llevan Sensible_al_peso.
 """
 from datetime import datetime
 from pathlib import Path
@@ -52,13 +54,17 @@ def leer_hojas(ruta, columnas: Dict[str, Tuple[str, ...]]) -> Dict[str, pd.DataF
 
 
 def leer_log2fc(ruta, direcciones: Dict[str, int]) -> Dict[str, float]:
-    """Fichero opcional de CIMUS (.xlsx o .csv) con Gen y log2FC. Un log2FC cuyo signo contradice la lista del
-    gen (negativo en la de genes up, positivo en la de down) es un error de entrada, no un dato."""
+    """Fichero de CIMUS (.xlsx o .csv) con Gen y log2FC, o su tabla de expresión diferencial tal cual (el gen en
+    la primera columna, sin nombre, y log2FoldChange). Un log2FC cuyo signo contradice la lista del gen
+    (negativo en la de genes up, positivo en la de down) es un error de entrada, no un dato."""
     ruta = Path(ruta)
     if ruta.suffix.lower() == ".csv":
         df = pd.read_csv(ruta, sep=None, engine="python", encoding="utf-8-sig")
     else:
         df = pd.read_excel(ruta)
+    if "Gen" not in df.columns and str(df.columns[0]).startswith("Unnamed"):
+        df = df.rename(columns={df.columns[0]: "Gen"})
+    df = df.rename(columns={"log2FoldChange": "log2FC"})
     faltan = [c for c in ("Gen", "log2FC") if c not in df.columns]
     if faltan:
         raise ValueError(f"{ruta.name}: faltan las columnas {', '.join(faltan)}")
@@ -205,16 +211,16 @@ def tabla_pares(triaje: pd.DataFrame, igs: pd.DataFrame, casos: pd.DataFrame,
         df["Log2FC"] = df["Gen"].str.upper().map(log2fc)
         sin = df["Log2FC"].isna()
         df.loc[sin, "Motivos"] = df.loc[sin, "Motivos"].map(lambda m: "|".join(filter(None, [m, "sin_log2FC"])))
-        df["m"] = df["Log2FC"].abs().fillna(1.0)
     else:
-        df["Log2FC"], df["m"] = float("nan"), 1.0
+        df["Log2FC"] = float("nan")
+    # Peso del gen solo en la sensibilidad (NPS_log2FC): |log2FC|, o 1 si el gen no lo tiene.
+    df["m_log2FC"] = df["Log2FC"].abs().fillna(1.0)
     s = df["Signo_par"].map(VALOR).fillna(0)
     resuelto = df["Estado_par"] == ESTADO_RESUELTO
-    df["Contribucion"] = (s * d * df["m"]).where(resuelto, 0.0).astype(float) + 0.0  # sin -0.0
+    df["Contribucion"] = (s * d).where(resuelto, 0.0).astype(float) + 0.0  # sin -0.0
     df["Freno_retroalimentacion"] = df["Contribucion"] < 0
     # Lo que aportaría el par si se confirmara su clase de mayor peso (NPS_con_revisar)
-    df["c_revisar"] = (df["Signo_revisar"].map(VALOR).fillna(0) * d * df["m"]).where(
-        df["Estado_par"] == ESTADO_REVISAR, 0.0)
+    df["c_revisar"] = (df["Signo_revisar"].map(VALOR).fillna(0) * d).where(df["Estado_par"] == ESTADO_REVISAR, 0.0)
     df = df.sort_values(["GO_ID", "Gen"], kind="mergesort").reset_index(drop=True)
     return df
 
@@ -240,18 +246,23 @@ def tabla_rutas(pares: pd.DataFrame, con_log2fc: bool) -> pd.DataFrame:
         neutros = g[resuelto & (g["Signo_par"] == SIGNO_NEUTRO)]
         revisar = g[g["Estado_par"] == ESTADO_REVISAR]
         sin_ev = g["Motivos"].str.split("|").map(lambda m: "sin_evidencia" in m)
-        nps = con_signo["Contribucion"].sum() / con_signo["m"].sum() if len(con_signo) else float("nan")
+        nps = con_signo["Contribucion"].mean() if len(con_signo) else float("nan")
         rev = revisar[revisar["c_revisar"] != 0]
-        den = con_signo["m"].sum() + rev["m"].sum()
+        den = len(con_signo) + len(rev)
         nps_rev = (con_signo["Contribucion"].sum() + rev["c_revisar"].sum()) / den if den else float("nan")
+        m = con_signo["m_log2FC"]
+        nps_fc = (con_signo["Contribucion"] * m).sum() / m.sum() if con_log2fc and len(con_signo) else float("nan")
         cobertura = (len(con_signo) + len(neutros)) / len(g)
+        lectura = _lectura(nps, len(con_signo), cobertura)
+        lectura_fc = _lectura(nps_fc, len(con_signo), cobertura) if con_log2fc else ""
         listas = set(g["Estado_Original"])
         filas.append({
             "GO_ID": go, "Ruta_Nombre": g["Ruta_Nombre"].iloc[0],
             "Listas": "ambas" if len(listas) > 1 else {"Activada": "activadas", "Suprimida": "suprimidas"}
             .get(next(iter(listas)), ""),
-            "NPS": round(nps, 3), "NPS_con_revisar": round(nps_rev, 3),
-            "Lectura": _lectura(nps, len(con_signo), cobertura),
+            "NPS": round(nps, 3), "NPS_con_revisar": round(nps_rev, 3), "Lectura": lectura,
+            "NPS_log2FC": round(nps_fc, 3), "Lectura_log2FC": lectura_fc,
+            "Sensible_al_peso": ("sí" if lectura_fc != lectura else "no") if con_log2fc else "",
             "n_total": len(g), "n_activan": int((g["Contribucion"] > 0).sum()),
             "n_inhiben": int((g["Contribucion"] < 0).sum()), "n_neutros": len(neutros), "n_revisar": len(revisar),
             "n_no_concluyente": int(((g["Estado_par"] == ESTADO_NO_CONCLUYENTE) & ~sin_ev).sum()),
@@ -260,7 +271,7 @@ def tabla_rutas(pares: pd.DataFrame, con_log2fc: bool) -> pd.DataFrame:
             "Fraccion_neutros": round(len(neutros) / (len(con_signo) + len(neutros)), 3)
             if len(con_signo) + len(neutros) else float("nan"),
             "Genes_activan": _genes(g[g["Contribucion"] > 0]), "Genes_inhiben": _genes(g[g["Contribucion"] < 0]),
-            "Genes_revisar": _genes(revisar), "Con_log2FC": "sí" if con_log2fc else "no"})
+            "Genes_revisar": _genes(revisar)})
     df = pd.DataFrame(filas)
     orden = df["NPS"].abs().fillna(-1)
     return df.assign(_o=orden).sort_values(["_o", "GO_ID"], ascending=[False, True], kind="mergesort") \
@@ -275,6 +286,9 @@ def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Option
     filas = [("Estado_par", f"{e} {s}", int(n)) for (e, s), n in
              pares.groupby(["Estado_par", "Signo_par"]).size().items()]
     filas += [("Lectura", k, int(n)) for k, n in rutas["Lectura"].value_counts().sort_index().items()]
+    if (rutas["Lectura_log2FC"] != "").any():
+        filas += [("Lectura_log2FC", k, int(n)) for k, n in rutas["Lectura_log2FC"].value_counts().sort_index().items()]
+        filas.append(("Sensibilidad", "rutas Sensible_al_peso", int((rutas["Sensible_al_peso"] == "sí").sum())))
     filas += [("Entrada", k, f"{v} ({_fecha(v)})" if v else "no") for k, v in entradas.items()]
     filas += [("Parametro", k, str(getattr(config, k))) for k in
               ("ORGANISMOS_VALIDOS", "TIPOS_CELULARES_VALIDOS", "FACTOR_CONTEXTO", "CONFIANZA_POR_DEFECTO",

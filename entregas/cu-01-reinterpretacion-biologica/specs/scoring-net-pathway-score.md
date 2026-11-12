@@ -1,7 +1,7 @@
 # Spec: Agregación de Evidencias y Net Pathway Score (Fase 3)
 
 ## Qué hay que construir
-Un módulo de scoring (Fase 3, `codigo/fase3_scoring/`, `python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc]` desde `codigo/`) que, a partir de las salidas de las Fases 1 y 2, haga dos cosas:
+Un módulo de scoring (Fase 3, `codigo/fase3_scoring/`, `python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc|ninguno]` desde `codigo/`) que, a partir de las salidas de las Fases 1 y 2, haga dos cosas:
 
 1. **Agregar** los signos de todos los artículos de cada par (gen, ruta) en un único signo del par, con su estado.
 2. **Calcular** para cada ruta GO un *Net Pathway Score* (NPS) que combine el signo de cada gen sobre la ruta con la dirección de expresión del gen en las células NK.
@@ -15,7 +15,7 @@ El módulo **no llama a ningún modelo ni a la red**: solo lee ficheros locales 
 | `codigo/data/fase2_resultados.xlsx` | `Preguntas` | `Organismo` y `Tipo_celular` de cada pregunta (gen, PMID, proceso), unidos a `Por_ruta` por (`Gen`, `PMID`, `Proceso_ID`). |
 | `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` | `Triaje_polaridad` | Todos los pares (gen, ruta) que no son inmunoglobulinas, con `Destino`, `Signo_GO` y `Estado_Original`. |
 | `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` | `Inmunoglobulinas` | Pares de inmunoglobulinas, ya con signo `neutro`. |
-| Fichero opcional de CIMUS (`.xlsx` o `.csv`) | — | Columnas `Gen` y `log2FC` (log2 Fold-Change de NK en HNSC). Hoy no existe: los Excels de enriquecimiento no traen el log2FC por gen. |
+| `codigo/tools_cimus/NK_cells_DESeq2_results.xlsx` (opcional) | primera | Tabla de expresión diferencial de CIMUS: el gen en la primera columna, sin nombre, y `log2FoldChange` (log2 Fold-Change de NK en HNSC). También vale un `.xlsx` o `.csv` con columnas `Gen` y `log2FC`. El CLI la usa sola si existe; `ninguno` calcula sin ella. Solo cambia la sensibilidad (`NPS_log2FC`), nunca el `NPS`. |
 
 `Estado_Original` da la **dirección del gen**: `Activada` (lista de genes *up*) → `d = +1`; `Suprimida` (lista de genes *down*) → `d = −1`. «Activada» y «suprimida» son solo los nombres de las listas de CIMUS, no una conclusión sobre la ruta.
 
@@ -53,20 +53,22 @@ Además:
 * **Trazabilidad:** cada par guarda la lista de votos en el formato `signo:PMID(peso)`, p. ej. `+1:10652336(0.86); −1:29988376(0.45)`.
 
 ### Paso 3 · Contribución del par y Net Pathway Score
-* **Contribución:** `c = s × d × m`, donde:
+* **Contribución:** `c = s × d`, donde:
   * `s` es el signo del par (`+1`, `−1` o 0 si es `neutro`);
-  * `d` es la dirección del gen (+1 *up*, −1 *down*);
-  * `m` es `|log2FC|` si hay fichero de log2FC, o 1 si no lo hay.
+  * `d` es la dirección del gen (+1 *up*, −1 *down*).
+
+  Todos los genes pesan igual: el log2FC no entra en `c` (ver «Por qué»).
 * **Lectura de `c`:** `c > 0` significa que el gen empuja la ruta hacia la activación; `c < 0`, hacia la inhibición. Un `c < 0` en un gen *up*, por ejemplo un regulador negativo que sube, es un **freno o retroalimentación**, no un error. Se marca `Freno_retroalimentacion` en todo par con `c < 0`, igual que en el triaje de la Fase 1.
 * **Unidad de la ruta: el término GO.** Si un término aparece en las dos listas de CIMUS, sus pares de genes *up* y *down* se juntan en la misma ruta. Precisamente ahí está la contradicción de enriquecimiento que el proyecto resuelve.
 * **Score:**
 
-  `NPS = Σ c / Σ m`, sumando solo sobre los pares `resuelto` con signo `+1` o `−1`.
+  `NPS = Σ c / n`, sumando solo sobre los `n` pares `resuelto` con signo `+1` o `−1`.
 
   * El NPS va de −1 (todos los genes que empujan lo hacen hacia la inhibición) a +1 (todos hacia la activación).
   * Los pares `neutro` no entran en el cociente, porque no empujan la ruta en ningún sentido. Se informan como `Fraccion_neutros`.
   * Los pares `revisar`, `no_concluyente`, `pendiente` y `sin_evidencia` aportan 0 y se cuentan aparte.
 * **Sensibilidad:** se calcula también `NPS_con_revisar`, que incluye los pares en `revisar` con la clase de mayor peso, para que el experto vea cuánto cambiaría el score si se confirmaran. Esa clase va en `Signo_revisar`: la de los votos resueltos o, si no hay, la de los casos `revisar` de la Fase 2; con empate o sin signo, el par no cuenta.
+* **Sensibilidad al peso del gen:** si hay log2FC, se calcula también `NPS_log2FC = Σ c·|log2FC| / Σ |log2FC|` sobre los mismos pares (un gen sin log2FC pesa 1 y lleva `sin_log2FC`), con su `Lectura_log2FC`. Si las dos lecturas difieren, la ruta lleva `Sensible_al_peso = sí`: su conclusión depende de cuánto cambie cada gen y conviene revisarla a mano.
 * **Conclusión de la ruta** (`Lectura`), con umbrales en `fase3_scoring/config.py`:
   * `insuficiente` si `n_con_signo < MIN_PARES_CON_SIGNO` (3) o `Cobertura < MIN_COBERTURA` (0,30);
   * si no: `activada` si `NPS ≥ UMBRAL_NPS` (+0,33), `inhibida` si `NPS ≤ −UMBRAL_NPS` y `mixta` en el resto.
@@ -78,9 +80,9 @@ Además:
 
 | Hoja | Una fila por | Columnas |
 |---|---|---|
-| `Por_ruta` | término GO | `GO_ID`, `Ruta_Nombre`, `Listas` (activadas / suprimidas / ambas), `NPS`, `NPS_con_revisar`, `Lectura`, `n_total`, `n_activan` (c > 0), `n_inhiben` (c < 0), `n_neutros`, `n_revisar`, `n_no_concluyente`, `n_sin_evidencia`, `n_pendiente`, `Cobertura`, `Fraccion_neutros`, `Genes_activan`, `Genes_inhiben`, `Genes_revisar`, `Con_log2FC` (sí/no). |
+| `Por_ruta` | término GO | `GO_ID`, `Ruta_Nombre`, `Listas` (activadas / suprimidas / ambas), `NPS`, `NPS_con_revisar`, `Lectura`, `NPS_log2FC`, `Lectura_log2FC`, `Sensible_al_peso` (sí/no; vacías sin log2FC), `n_total`, `n_activan` (c > 0), `n_inhiben` (c < 0), `n_neutros`, `n_revisar`, `n_no_concluyente`, `n_sin_evidencia`, `n_pendiente`, `Cobertura`, `Fraccion_neutros`, `Genes_activan`, `Genes_inhiben`, `Genes_revisar`. |
 | `Por_par` | par (gen, ruta) | `Gen`, `GO_ID`, `Ruta_Nombre`, `Direccion` (up/down), `Log2FC`, `Signo_par`, `Estado_par`, `Motivos`, `Origen` (`GO`, `LLM`, `Ig`, `ninguno`), `W_pos`, `W_neg`, `W_neutro`, `n_PMIDs`, `n_PMIDs_pos`, `n_PMIDs_neg`, `n_PMIDs_neutro`, `Votos`, `Signo_revisar`, `Contribucion`, `Freno_retroalimentacion`. |
-| `Resumen` | — | Recuentos por estado y por lectura, ficheros de entrada con su fecha de modificación y valores de los parámetros usados. |
+| `Resumen` | — | Recuentos por estado, por lectura y por `Lectura_log2FC`, número de rutas `Sensible_al_peso`, ficheros de entrada con su fecha de modificación y valores de los parámetros usados. |
 
 Las rutas se ordenan por `|NPS|` descendente y, a igualdad, por `GO_ID`; los pares, por `GO_ID` y `Gen`.
 
@@ -90,6 +92,15 @@ Las rutas se ordenan por `|NPS|` descendente y, a igualdad, por `GO_ID`; los par
 * **Un conflicto no es necesariamente un error:** muchos genes de NK tienen funciones duales reales. Por eso el conflicto no se promedia a 0, sino que se manda a revisión con los dos recuentos visibles.
 * **`Confianza_final` como peso:** es el porcentaje que ya se muestra junto a cada signo. Usarlo como peso evita tener dos sistemas de pesos distintos. Solo se añade el contexto biológico (especie y tipo celular), que `Confianza_final` no recoge porque no habla de lo bien que se lee el abstract, sino de si vale para células NK humanas.
 * **Dirección × signo:** que un gen suba no basta para que la ruta se active. Un inhibidor que sube frena la ruta. Por eso el score multiplica el signo funcional (Fases 1 y 2) por la dirección de expresión.
+* **Todos los genes pesan igual; el log2FC es solo sensibilidad** (#30). Con la tabla de expresión diferencial de CIMUS:
+  * los 224 genes de las dos listas están en ella, ninguno contradice su lista y todos tienen `padj` < 0,05 y |log2FC| ≥ 1. Es decir, todos ya pasaron el corte de CIMUS: estar en la lista ya dice que el cambio es real;
+  * el |log2FC| va de 1 a 7,7 (mediana 1,85), y los más grandes son los menos precisos. Entre los 153 genes con algún par resuelto con signo, la correlación de Spearman entre |log2FC| y su error estándar (`lfcSE`) es 0,56. El gen que más pesaría, CX3CR1 (−7,7), tiene un `baseMean` de 3,3 y un `lfcSE` de 2,6;
+  * pesar por |log2FC| cambia la lectura de 16 de 352 rutas (Fase 1 del 09/11 y Fase 2 completa): 10 pasan de activada o inhibida a mixta y 6 de mixta a activada o inhibida. Ninguna pasa de activada a inhibida ni al revés. Esas 16 son justo las que marca `Sensible_al_peso`.
+
+  **Alternativas descartadas:**
+  * **Peso `|log2FC|`:** da más voto a los genes poco expresados, cuyo log2FC se infla, y no cambia ninguna conclusión de signo.
+  * **`|log2FC|` con tope o en escala logarítmica** (`min(|log2FC|, 3)`, `log2(1 + |log2FC|)`): cambian 14 y 11 rutas, pero el tope es arbitrario y la conclusión es la misma.
+  * **`|log2FC| − 1,96 · lfcSE`:** penaliza la imprecisión, pero cambia 34 rutas y le da la vuelta a una de activada a inhibida. Depende demasiado del error estándar, que es grande justo en los genes poco expresados.
 
 ## Restricciones
 * **Sin red, sin LLM y sin bases de datos:** solo lee ficheros locales ([ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md)), así que se puede repetir cuantas veces se quiera sin gastar cupo.
@@ -99,7 +110,7 @@ Las rutas se ordenan por `|NPS|` descendente y, a igualdad, por `GO_ID`; los par
 * **Validación de la entrada:**
   * si falta `fase2_resultados.xlsx` o alguna de las hojas o columnas usadas, `ValueError` con el nombre de lo que falta;
   * si el fichero de log2FC trae un gen cuyo signo de log2FC contradice su lista (log2FC < 0 en la lista de genes *up*, o > 0 en la de *down*), `ValueError` con el gen;
-  * un gen sin log2FC en el fichero usa `m = 1` y lleva la marca `sin_log2FC`.
+  * un gen sin log2FC en el fichero pesa 1 en `NPS_log2FC` y lleva la marca `sin_log2FC`.
 * **Parámetros en un único sitio:** los pesos de contexto, el umbral de minoría (⅓) y los umbrales de lectura viven en `fase3_scoring/config.py`, para que el equipo los ajuste sin tocar la lógica.
 * **Sin modelado no lineal:** el score es una suma ponderada y explicable. No modela interacciones entre genes ni epistasia (fuera de alcance, ver README).
 
@@ -119,7 +130,9 @@ Las pruebas están en `codigo/tests/test_scoring.py`, con tablas sintéticas y s
 * [x] ✅ **NPS** (`tests/test_scoring.py::test_nps_y_lectura`): una ruta con cuatro pares resueltos con contribuciones +1, +1, −1 y `neutro`, y otro `sin_evidencia`, da `NPS = (1 + 1 − 1) / 3 = 0,33`, `Fraccion_neutros = 1/4`, `Cobertura = 4/5 = 0,8` y `Lectura = activada`. Con solo dos pares con signo, `Lectura = insuficiente`.
 * [x] ✅ **Sensibilidad** (`tests/test_scoring.py::test_revisar_cuenta_solo_en_nps_con_revisar`): un par `LLM_y_revision` con un único voto `−1` de un gen *up* sale `−1` en `revisar`, con `Signo_revisar = −1` y `Contribucion = 0`. No cambia el `NPS` (0,33) y sí `NPS_con_revisar`, que pasa a (1 + 1 − 1 − 1) / 4 = 0.
 * [x] ✅ **Rutas en las dos listas** (`tests/test_scoring.py::test_ruta_en_las_dos_listas_es_una_fila`): un término GO con pares de genes *up* y *down* sale en **una sola fila** de `Por_ruta`, con `Listas = ambas` y todos sus pares.
-* [x] ✅ **log2FC** (`tests/test_scoring.py::test_log2fc`): con un fichero de log2FC donde el gen tiene −2,0 y está en la lista *down*, su contribución con signo `+1` es −2,0. Con log2FC = +1,5 en la lista *down*, el módulo lanza `ValueError` nombrando el gen.
+* [x] ✅ **log2FC** (`tests/test_scoring.py::test_log2fc`): con un fichero de log2FC donde el gen tiene −2,0 y está en la lista *down*, su contribución con signo `+1` es −1 (el NPS no pesa por log2FC) y entra en `NPS_log2FC` con peso 2. Con log2FC = +1,5 en la lista *down*, el módulo lanza `ValueError` nombrando el gen.
+* [x] ✅ **Sensibilidad al peso** (`tests/test_scoring.py::test_log2fc_solo_cambia_la_sensibilidad`): con la tabla de expresión diferencial tal cual, dos genes *up* que activan con |log2FC| = 1 y uno *down* que activa con |log2FC| = 4 dan `NPS = 0,333` (`activada`) y `NPS_log2FC = −0,333` (`inhibida`), y la ruta sale `Sensible_al_peso = sí`. Sin log2FC, esas tres columnas quedan vacías.
+* [x] ✅ **Tabla de CIMUS** (`tests/test_scoring.py::test_tabla_de_log2fc_de_cimus`, que se salta si falta el fichero): los 224 genes de las dos listas tienen log2FC y ninguno contradice su lista.
 * [x] ✅ **Entrada incompleta** (`tests/test_scoring.py::test_entrada_incompleta`): sin la hoja `Por_ruta` (o sin la columna `Confianza_final`), `ValueError` que nombra lo que falta.
 * [x] ✅ **Determinismo y ausencia de red** (`tests/test_scoring.py::test_determinista_y_sin_red`): dos ejecuciones con las mismas entradas dan las mismas hojas celda a celda; la prueba bloquea `requests` y `socket` y no falla.
 * [x] ✅ **Recuento completo** (`tests/test_scoring.py::test_recuento_completo_con_las_salidas_reales`, que se salta si faltan las salidas): con las salidas reales de las Fases 1 y 2, `Por_par` tiene una fila por cada par de entrada (3.172 con la Fase 1 de referencia, incluidas las 103 inmunoglobulinas) y `Por_ruta` una por cada término GO distinto (352).

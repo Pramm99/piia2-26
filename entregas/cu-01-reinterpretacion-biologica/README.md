@@ -24,7 +24,7 @@ El signo puede venir de dos sitios:
 - **De Gene Ontology**, cuando su polaridad curada basta (triaje `aceptar_GO`). En ese caso no se consulta ningún modelo.
 - **De dos modelos de lenguaje que leen los _abstracts_.** Su veredicto solo se acepta con una **cita literal verificada** del artículo y la confianza suficiente, y se contrasta con la polaridad de Gene Ontology y entre los dos modelos. Los casos con evidencia en conflicto se marcan para revisión experta.
 
-A partir de esos signos se calcula un **Net Pathway Score**, integrado con la dirección y el _log2 Fold-Change_ de cada gen en scRNA-seq, que transforma las discrepancias en una conclusión biológica cuantitativa y explicable.
+A partir de esos signos se calcula un **Net Pathway Score**, integrado con la dirección de expresión de cada gen y contrastado con su _log2 Fold-Change_, que transforma las discrepancias en una conclusión biológica cuantitativa y explicable.
 
 La arquitectura completa está descrita en [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
@@ -78,7 +78,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Evaluación:** Benchmark de los modelos candidatos sobre un _gold set_ de 100 preguntas (65 de genes _up_ y 35 de genes _down_), con etiquetado a ciegas y doble etiqueta de cada caso ([spec](specs/benchmark-gold-set.md)).
 
-- **Métrica de resolución:** Integración del signo inferido con la dirección y el _log2 Fold-Change_ de cada gen en el dataset scRNA-seq original (_Net Pathway Score_), implementada según la [spec de scoring](specs/scoring-net-pathway-score.md) (`python -m fase3_scoring`). Hasta que CIMUS entregue el log2FC por gen, todos los genes pesan igual.
+- **Métrica de resolución:** Integración del signo inferido con la dirección de expresión de cada gen en el dataset original (_Net Pathway Score_), implementada según la [spec de scoring](specs/scoring-net-pathway-score.md) (`python -m fase3_scoring`). Todos los genes pesan igual; el _log2 Fold-Change_ de CIMUS da un segundo score de sensibilidad que señala las rutas cuya conclusión depende de cuánto cambia cada gen.
 
 - **Reproducibilidad:**
   - registro de todas las respuestas de los modelos, que permite reanudar una ejecución y regenerar los resultados sin volver a llamar ([ADR-004](decisions/adr-004-persistencia-ficheros-locales.md));
@@ -190,7 +190,7 @@ Desde esta carpeta (`entregas/cu-01-reinterpretacion-biologica/`), con Python 3 
 1. **Claves:** copiar `codigo/.env.example` como `codigo/.env` y rellenar `GEMINI_API_KEY`, `GROQ_API_KEY` y, para la Fase 1, `NCBI_EMAIL` y `NCBI_API_KEY` (opcional). `codigo/.env` no se sube al repositorio: está en el `.gitignore`. Las variables de entorno del sistema tienen prioridad sobre el fichero.
 2. **Fase 1:** `python codigo/fase1_ingesta/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx`. La primera ejecución descarga el OBO, el GAF y unos 33.000 _abstracts_ (casi una hora); con las cachés tarda unos minutos.
 3. **Fase 2:** desde `codigo/`, `python -m fase2_inferencia ejecutar`. Escribe `codigo/data/fase2_resultados.xlsx`. Si se agota el límite diario de un modelo, basta con volver a lanzar el mismo comando. Sin llamar a ningún modelo, `python -m fase2_inferencia CD7` muestra la primera llamada que se enviaría para un gen.
-4. **Fase 3:** desde `codigo/`, `python -m fase3_scoring`. Lee las salidas de las Fases 1 y 2 y escribe `codigo/data/fase3_scoring.xlsx` en unos segundos, sin red. Un tercer argumento opcional es el fichero de log2FC por gen (`Gen`, `log2FC`).
+4. **Fase 3:** desde `codigo/`, `python -m fase3_scoring`. Lee las salidas de las Fases 1 y 2 y escribe `codigo/data/fase3_scoring.xlsx` en unos segundos, sin red. Si existe `codigo/tools_cimus/NK_cells_DESeq2_results.xlsx`, lo usa solo para la sensibilidad (`NPS_log2FC`); un tercer argumento cambia ese fichero, o `ninguno` lo omite.
 5. **Benchmark:** `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
 6. **Pruebas:** desde `codigo/`, `python -m pytest`. No usan la red ni las claves de `.env`.
 

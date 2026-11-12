@@ -133,7 +133,7 @@ El orden de ejecución es el de `main.py`.
 
 | # | Componente | Responsabilidad | Estado |
 |---|---|---|---|
-| 15 | **Agregación y Net Pathway Score** (`fase3_scoring/nps.py`, `fase3_scoring/config.py`) | Combinar los signos de todos los PMIDs de cada par gen–ruta y ponderarlos con la dirección del gen y su log2 Fold-Change para obtener la contribución neta a la ruta. Sin red ni LLM, determinista. | Hecho según [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md): voto ponderado por `Confianza_final` y contexto, conflicto a `revisar` si la minoría pesa ⅓ o más, y `NPS = Σ signo × dirección × |log2FC| / Σ |log2FC|`. Escribe `codigo/data/fase3_scoring.xlsx` (hojas `Por_ruta`, `Por_par` y `Resumen`). Sin el fichero de log2FC de CIMUS, `|log2FC| = 1`. |
+| 15 | **Agregación y Net Pathway Score** (`fase3_scoring/nps.py`, `fase3_scoring/config.py`) | Agregar los signos de todos los PMIDs de cada par gen–ruta y combinarlos con la dirección del gen para obtener la contribución neta a la ruta, con el log2 Fold-Change como análisis de sensibilidad. Sin red ni LLM, determinista. | Hecho según [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md): voto ponderado por `Confianza_final` y contexto, conflicto a `revisar` si la minoría pesa ⅓ o más, y `NPS` = media de signo × dirección, con todos los genes con el mismo peso. Con la tabla de log2FC de CIMUS (`tools_cimus/NK_cells_DESeq2_results.xlsx`) calcula además `NPS_log2FC` y marca `Sensible_al_peso` en las 16 rutas cuya lectura cambia. Escribe `codigo/data/fase3_scoring.xlsx` (hojas `Por_ruta`, `Por_par` y `Resumen`). |
 | 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | Hecho: *gold set* de 100 casos (65 de genes *up* y 35 de genes *down*) etiquetado a ciegas por anotadores Claude con doble etiqueta. Gemini y gpt-oss están completos (100 de 100). |
 
 ## Flujo de principio a fin
@@ -164,7 +164,7 @@ Las cifras son de la ejecución completa de la Fase 1 del 2026-11-09 y, desde el
 5. **Componente 14:** como el veredicto (neutro) no coincide con la `Polaridad_GO` (+1), la fila de `Por_ruta` sale con `Signo_ruta = UNKNOWN`, `Estado = revisar` y los motivos `baja_confianza`, `contexto_ajeno` y `discrepancia_polaridad_GO`. El caso pasa al experto con la cita y las dos fuentes, en vez de aceptar el `+1` que habría dado un modelo complaciente.
 
 ## Pendiente de decidir
-* **Fase 3:** los valores provisionales de la spec de scoring (pesos de contexto, minoría de ⅓ y umbrales de lectura del NPS) y el fichero de log2FC por gen, que CIMUS aún no ha entregado.
+* **Fase 3:** los valores provisionales de la spec de scoring (pesos de contexto, minoría de ⅓ y umbrales de lectura del NPS) y la revisión a mano de las 16 rutas `Sensible_al_peso`.
 
 ## Decisiones de arquitectura
 | ADR | Decisión |
