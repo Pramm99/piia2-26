@@ -112,6 +112,9 @@ def test_mencion_con_griegas():
     assert menciona_gen("IkappaBzeta augments IFN-γ", patron_gen("NFKBIZ", alias=("IKBZ",)))
     assert menciona_gen("PKCθ is recruited to the synapse", patron_gen("PRKCQ", alias=("PKCQ",)))
     assert menciona_gen("CD3ε chain", patron_gen("CD3E"))
+    # Variantes tipográficas y mayúsculas griegas: no rompen el filtro y valen como la letra normal
+    assert menciona_gen("CD3ϵ chain and PKCϑ, ϰB, ϐ", patron_gen("CD3E"))
+    assert menciona_gen("IΚBΖ levels", patron_gen("NFKBIZ", alias=("IKBZ",)))
 
 
 def test_mencion_por_alias_y_nombre_completo():

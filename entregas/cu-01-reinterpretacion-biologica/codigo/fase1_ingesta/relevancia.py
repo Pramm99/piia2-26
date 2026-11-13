@@ -10,6 +10,7 @@ gen a una palabra corriente no lo esconde («CXCR3-mediated», «anti-CD7»). Un
 minúsculas no cuenta: muchos alias son palabras corrientes (ACP5 = TRAP, «trap»; TNFSF14 = LIGHT).
 """
 import re
+import unicodedata
 from collections import defaultdict
 
 _NO_ALFANUM = re.compile(r"[^a-z0-9]+")
@@ -72,7 +73,9 @@ _LETRA = dict(_GRIEGAS)
 
 def _forma_gen(palabra):
     """'IL-4Rα' -> 'IL4Ra': griegas como letra y sin guiones, conservando mayúsculas."""
-    return _GRIEGA.sub(lambda m: _LETRA[m.group().lower()], palabra).replace("-", "")
+    # Sin distinguir mayúsculas, la búsqueda también casa variantes tipográficas (ϵ, ϑ, ϰ, ϐ) y mayúsculas griegas:
+    # NFKC + casefold las lleva a la letra de la tabla.
+    return _GRIEGA.sub(lambda m: _LETRA[unicodedata.normalize("NFKC", m.group()).casefold()], palabra).replace("-", "")
 
 
 def _plano(texto):
