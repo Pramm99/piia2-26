@@ -132,7 +132,8 @@ Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
   serían los mismos para todas sus rutas (mediana de 2 rutas por gen, hasta 24). Con el MeSH de la ruta y
   «Humans», la mediana baja a 1 artículo por par (p90 21) y el 41 % de los pares no tiene ninguno: el MeSH es lo
   que convierte «artículos del gen» en «artículos del gen en este proceso».
-- **Coste medido (Fase 1 y Fase 2 del 2026-11-13):** esta fuente aporta 725 preguntas al LLM, de las que 177 (24 %)
+- **Coste medido (Fase 1 y Fase 2 del 2026-11-13, Excel completo de CIMUS: 352 rutas; para una ruta, ver
+  [`kpis.md`](kpis.md)):** esta fuente aporta 725 preguntas al LLM, de las que 177 (24 %)
   dan signo; 129 pares pasan a tener signo. Una ejecución completa de la Fase 2 hace 920 llamadas a Gemini con
   2,63 M tokens, de los que unas 275 llamadas y 0,71 M tokens corresponden a estas preguntas. A NCBI le hace una
   petición por par (gen, consulta MeSH), con caché.

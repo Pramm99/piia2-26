@@ -133,6 +133,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
   | [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md) | Agregación de los artículos de cada par y *Net Pathway Score* de cada ruta (Fase 3). |
 
 - **Limitaciones conocidas:** [`docs/limitacion-pares-sin-abstract.md`](docs/limitacion-pares-sin-abstract.md) (pares gen–ruta sin ningún _abstract_).
+- **KPIs:** [`docs/kpis.md`](docs/kpis.md) (tiempo, tokens, recursos y resultado para una ruta, para el Excel completo y a mano).
 - **Gestión de tareas:** [`DOR.md`](DOR.md) (cuándo una tarea puede empezar), [`DOD.md`](DOD.md) (cuándo está terminada) y [`TABLERO.md`](TABLERO.md) (ciclo del tablero, sistema de bloqueos y revisión en cada reunión). Plantillas de issue en [`docs/plantillas-issue/`](docs/plantillas-issue/).
 
 ## 6. Estructura del repositorio
@@ -163,7 +164,7 @@ entregas/cu-01-reinterpretacion-biologica/
 │   ├── benchmark-gold-set.md
 │   └── scoring-net-pathway-score.md
 │
-├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md) y plantillas de issue (plantillas-issue/).
+├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md), KPIs (kpis.md) y plantillas de issue (plantillas-issue/).
 ├── PlanesViables/                 # Análisis de las dos arquitecturas candidatas (OpcionA.md, OpcionB.md; ADR-001).
 ├── src/                           # Esquema del código fuente (definicion-src.txt).
 ├── tests/                         # Vacío (test_pipeline.py): las pruebas están en codigo/tests/.
@@ -190,7 +191,7 @@ El fichero `.gitignore` está en esta carpeta y excluye el entorno virtual, `cod
 Desde esta carpeta (`entregas/cu-01-reinterpretacion-biologica/`), con Python 3 y las dependencias de `codigo/requirements.txt`:
 
 1. **Claves:** copiar `codigo/.env.example` como `codigo/.env` y rellenar `GEMINI_API_KEY`, `GROQ_API_KEY` y, para la Fase 1, `NCBI_EMAIL` y `NCBI_API_KEY` (opcional). `codigo/.env` no se sube al repositorio: está en el `.gitignore`. Las variables de entorno del sistema tienen prioridad sobre el fichero.
-2. **Fase 1:** `python codigo/fase1_ingesta/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx`. La primera ejecución descarga el OBO, el GAF y unos 33.000 _abstracts_ (casi una hora); con las cachés tarda unos minutos.
+2. **Fase 1:** `python codigo/fase1_ingesta/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx`. Con el Excel completo, la primera ejecución descarga el OBO, el GAF y unos 33.900 _abstracts_ (casi una hora); con las cachés tarda unos minutos. Con una sola ruta, el recorrido completo de las tres fases tarda unos 2,4 min ([`docs/kpis.md`](docs/kpis.md)).
 3. **Fase 2:** desde `codigo/`, `python -m fase2_inferencia ejecutar`. Escribe `codigo/data/fase2_resultados.xlsx`. Si se agota el límite diario de un modelo, basta con volver a lanzar el mismo comando. Sin llamar a ningún modelo, `python -m fase2_inferencia CD7` muestra la primera llamada que se enviaría para un gen.
 4. **Fase 3:** desde `codigo/`, `python -m fase3_scoring`. Lee las salidas de las Fases 1 y 2 y escribe `codigo/data/fase3_scoring.xlsx` en unos segundos, sin red. Si existe `codigo/tools_cimus/NK_cells_DESeq2_results.xlsx`, lo usa solo para la sensibilidad (`NPS_log2FC`); un tercer argumento cambia ese fichero, o `ninguno` lo omite.
 5. **Benchmark:** desde `codigo/`, `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).

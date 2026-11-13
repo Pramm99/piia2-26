@@ -38,7 +38,7 @@ Los genes de inmunoglobulina (lista de HGNC) se apartan antes del cruce y no sig
 5. **Europe PMC primero por su formato:** devuelve el abstract como un campo JSON (`abstractText`), más sencillo de procesar que el XML de PubMed. NCBI se mantiene como respaldo porque cubre PMIDs cuyo abstract no está en Europe PMC.
 6. **Síncrono es suficiente:**
    * El GAF da 383 PMIDs únicos (ejecución del 2026-11-13). Las fuentes externas, en cambio, descargan unos 33.200 abstracts candidatos para comprobar si nombran al gen y al proceso, y al final quedan 1.842 PMIDs en total (GAF y fuentes externas).
-   * La primera ejecución completa tarda casi una hora, sobre todo por esa comprobación. Las siguientes reutilizan la caché y tardan unos minutos.
+   * Con el Excel completo de CIMUS, la primera ejecución tarda casi una hora (con una ruta, unos 90 s; `docs/kpis.md`), sobre todo por esa comprobación. Las siguientes reutilizan la caché y tardan unos minutos.
    * El cuello de botella son los límites de las APIs, no la concurrencia: lanzar peticiones en paralelo aumentaría el riesgo de `429` sin acelerar la descarga.
 7. **Filtrado implícito de evidencia no informativa:** al exigir un `PMID`, las referencias `GO_REF`, `Reactome` u otras quedan fuera. Las anotaciones automáticas `IEA` nunca llevan PMID en el GAF actual (0 de 194.927), así que tampoco llegan al LLM. El resto de códigos se conservan y se marcan con la columna `Experimental`; el filtro estricto (`SOLO_EXPERIMENTAL`) queda como opción configurable en `config.py`.
 8. **Tolerancia a fallos:** un PMID que no existe o no tiene abstract no interrumpe el lote; los confirmados sin abstract se registran como cadena vacía y los que fallan por red se reintentan en la siguiente ejecución.
