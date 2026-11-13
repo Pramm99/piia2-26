@@ -85,7 +85,9 @@ def leer_log2fc(ruta, direcciones: Dict[str, int]) -> Dict[str, float]:
 def leer_abstracts(ruta) -> pd.DataFrame:
     """Título y abstract de cada PMID (hoja Con_abstract de la Fase 1). Es opcional: sin la hoja, tabla vacía."""
     vacio = pd.DataFrame(columns=["PMID", "Titulo", "Abstract"])
-    if "Con_abstract" not in pd.ExcelFile(ruta).sheet_names:
+    with pd.ExcelFile(ruta) as libro:  # cerrado al salir: en Windows, abierto bloquea el fichero
+        hojas = libro.sheet_names
+    if "Con_abstract" not in hojas:
         return vacio
     df = pd.read_excel(ruta, sheet_name="Con_abstract")
     if not {"PMID", "Titulo", "Abstract"} <= set(df.columns):

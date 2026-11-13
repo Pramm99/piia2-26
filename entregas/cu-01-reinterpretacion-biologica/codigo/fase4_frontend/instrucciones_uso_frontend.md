@@ -1,110 +1,65 @@
-# Instrucciones de Uso · CU-01 Reinterpretación de Rutas Biológicas (scRNA-seq HNSC)
+# Instrucciones de uso · Fase 4 (frontend)
 
-Guía rápida para arrancar el entorno, configurar el motor local y probar tanto la interfaz gráfica interactiva (con el flujo completo de extremo a extremo o por fases) como la ejecución directa mediante comandos de terminal.
+Interfaz web para ejecutar **una ruta** de principio a fin: se elige la ruta, se confirma y se ejecutan seguidas las
+Fases 1, 2 y 3. Al terminar muestra la lectura de la ruta (NPS), la aportación de cada gen y el Excel de la Fase 3.
+No se pueden lanzar las fases por separado: para eso está la línea de comandos (`AGENTS.md`).
 
----
+## 1. Requisitos
 
-## 1. Requisitos Previos y Entorno
+1. **Python** con las dependencias de `codigo/requirements.txt` (el entorno `codigo/pia_venv/` sirve).
+2. **Node.js y npm**, para la interfaz (React + Vite).
+3. **Claves** en `codigo/.env` (copia de `codigo/.env.example`): `GEMINI_API_KEY`, `GROQ_API_KEY` y `NCBI_EMAIL`.
+   El `.env` está en el `.gitignore` y nunca se sube a GitHub.
 
-1. **Python 3.14** (probado y compatible).
-2. **Node.js y npm** (para levantar la interfaz web de React + Vite).
-3. **Claves de API gratuitas:** Copia el fichero de ejemplo `codigo/.env.example` como `codigo/.env` y añade tus credenciales (`GEMINI_API_KEY`, `GROQ_API_KEY`, `NCBI_EMAIL`). El archivo `.env` está protegido por el `.gitignore` y nunca se sube a GitHub.
-
----
-
-## 2. Instalación de Dependencias
-
-### Backend (Python)
-Desde la carpeta `codigo/`:
-```bash
-pip install -r requirements.txt
-
-```
-
-### Frontend (Node.js)
-
-Desde la carpeta `codigo/fase4_frontend/`:
+Dependencias de la interfaz, una sola vez, desde `codigo/fase4_frontend/`:
 
 ```bash
 npm install
-npm install lucide-react
-
 ```
 
----
+## 2. Arranque
 
-## 3. Cómo Probar el Frontend Interactivo (Paso a Paso)
+Hacen falta dos terminales.
 
-El frontend incluye dos modos de trabajo:
-
-* **Ejecución Completa (Fases 1 → 3)** *(Modo por defecto)*: Te permite subir un Excel crudo de CIMUS (`ID`, `Description`, `geneID`), marcar interactivamente las filas de interés (evitando cuellos de botella masivos de descargas de abstracts), pulsar un botón para encadenar automáticamente las tres fases y visualizar de inmediato el **Net Pathway Score (NPS)** de cada ruta junto con la **aportación individual de cada gen** ($c = s \times d$).
-* **Control por Fases Separadas**: Permite probar de forma aislada la Fase 1 (Ingesta), la Fase 2 (Inferencia LLM) o la Fase 3 (Scoring), con guías detalladas de qué ficheros subir y la descarga directa de los resultados en `.xlsx`.
-
-### Paso A: Arrancar el Puente HTTP local de Python
-
-Para que la interfaz web pueda comunicarse con el pipeline en Python de manera local (sin bases de datos y guardando los resultados en ficheros locales dentro de `codigo/data/`, cumpliendo el ADR-001 y el ADR-004), abre una terminal en la carpeta `codigo/` y ejecuta:
+**Puente con las fases** (desde `codigo/`):
 
 ```bash
 python fase4_frontend/api_puente.py
-
 ```
 
-*(El servidor HTTP local se activará en `http://127.0.0.1:8000`, recordar que esto todavia no funciona realmente, es solo un "simulacro")*.
+Escucha en `http://127.0.0.1:8000` y carga las 352 rutas de los Excels de CIMUS (`codigo/tools_cimus/`).
 
-### Paso B: Arrancar el Servidor Web (Frontend)
-
-Abre una **segunda terminal** situada en la carpeta `codigo/fase4_frontend/` y ejecuta:
+**Interfaz** (desde `codigo/fase4_frontend/`):
 
 ```bash
 npm run dev
-
 ```
 
-### Paso C: Abrir la Aplicación en el Navegador
+Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado** cuando el puente responde.
 
-Abre tu navegador (Edge, Chrome, etc.) y entra en:
-**`http://localhost:5173/`**
+## 3. Uso
 
-En la esquina superior izquierda verás un indicador en verde con el texto **`● Motor Python conectado`**, confirmando que el frontend puede invocar las funciones del proyecto en tiempo real.
+1. Busca la ruta por GO_ID, nombre o gen y márcala. Se ve con sus genes *up* y *down*: una ruta que está en las dos
+   listas de CIMUS se ejecuta con todos sus genes.
+2. Pulsa **Ejecutar GO:…** y confirma. La barra muestra la fase en curso.
+3. Al terminar aparecen la lectura (activada, inhibida, mixta o insuficiente), el NPS, el NPS con log2FC, la tabla gen a
+   gen y el botón **Descargar Excel** (salida de la Fase 3).
 
----
+También se puede **subir otro Excel** con las columnas `ID`, `Description` y `geneID`. La lista (genes *up* o *down*)
+sale del nombre del fichero si contiene «suprimid» y, si no, del selector; **+ Añadir 2ª Lista** suma la otra lista.
 
-## 4. Ejecución Alternativa por Terminal (CLI)
+## 4. Qué hace el puente
 
-Si prefieres probar el pipeline directamente desde la línea de comandos (desde la carpeta `codigo/`):
+* **Fase 1** con los dos Excels de CIMUS reducidos a la ruta elegida.
+* **Fase 2** con Gemini como principal y gpt-oss solo como respaldo (ADR-005). Usa el registro de siempre
+  (`codigo/data/respuestas_llm.jsonl`): lo que ya se preguntó no se vuelve a pedir. Si el cupo se agota, las preguntas
+  quedan `pendiente` y la interfaz lo avisa; basta con volver a ejecutar la ruta más tarde.
+* **Fase 3** con la tabla de log2FC de CIMUS si existe.
 
-1. **Fase 1 (Ingesta y Triaje GO):**
-```bash
-python fase1_ingesta/main.py
+Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md`). Solo se ejecuta una ruta a la vez.
 
-```
+## 5. Ficheros
 
-
-2. **Fase 2 (Inferencia LLM reanudable):**
-```bash
-python -m fase2_inferencia ejecutar --solo-respaldo
-
-```
-
-
-3. **Fase 3 (Net Pathway Score determinista):**
-```bash
-python -m fase3_scoring
-
-```
-
-
-
----
-
-## 5. Ficheros Generados y Cachés
-
-Todas las salidas y cachés se almacenan de forma local en `codigo/data/` (ignoradas por git):
-
-* `fase1_dataset_abstracts.xlsx`: Resultado de la Ingesta y Triaje GO (Fase 1).
-* `fase2_resultados.xlsx` y `respuestas_llm.jsonl`: Registro de inferencias y validación de citas de los LLM (Fase 2).
-* `fase3_scoring.xlsx`: Fichero final con las hojas `Por_ruta` (NPS y lecturas de ruta) y `Por_par` (aportaciones gen a gen y frenos de retroalimentación).
-
-```
-
-```
+Cada ruta escribe en `codigo/data/frontend/<GO_ID>/` (ignorado por git): los dos Excels de entrada reducidos,
+`fase1_dataset_abstracts.xlsx`, `fase2_resultados.xlsx` y `fase3_scoring.xlsx`. No pisa las salidas del Excel completo.
+Las cachés de la Fase 1 (`codigo/data/`) son compartidas.

@@ -7,7 +7,7 @@ El código vive en `codigo/`, dentro de esta misma carpeta del equipo (`entregas
 * **Fase 1, ingesta** (`codigo/fase1_ingesta/`, `python codigo/fase1_ingesta/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
 * **Fase 2, inferencia** (`codigo/fase2_inferencia/`; desde `codigo/`, `python -m fase2_inferencia ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**, con Gemini 3.5 Flash-Lite como principal y gpt-oss-120b como secundario (ADR-005).
 * **Fase 3, scoring** (`codigo/fase3_scoring/`; desde `codigo/`, `python -m fase3_scoring`; [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Implementada**; sus umbrales son provisionales.
-* **Fase 4, frontend** (`codigo/fase4_frontend/`; [instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)): interfaz web para subir el Excel de CIMUS, elegir las rutas y lanzar las Fases 1 a 3, juntas o por separado, a través de un puente HTTP local (`api_puente.py`). **En desarrollo**: el puente todavía no está conectado con las fases.
+* **Fase 4, frontend** (`codigo/fase4_frontend/`; [instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)): interfaz web para elegir **una ruta** de CIMUS y, tras confirmarlo, ejecutar seguidas las Fases 1, 2 y 3 a través de un puente HTTP local (`api_puente.py`). Muestra la lectura y el NPS de la ruta, la aportación de cada gen y el Excel de la Fase 3; cada ruta escribe en `codigo/data/frontend/<GO_ID>/` y reutiliza las cachés y el registro del LLM. **Implementada.**
 
 ## Diagrama
 

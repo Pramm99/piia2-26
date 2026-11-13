@@ -15,6 +15,7 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 | `codigo/fase1_ingesta/` | **Fase 1 · Ingesta.** Excels de CIMUS → pares → GAF de GO → PMIDs → abstracts → `fase1_dataset_abstracts.xlsx`. Usa imports planos (`import config`). |
 | `codigo/fase2_inferencia/` | **Fase 2 · Inferencia.** Preguntas (gen, PMID, proceso núcleo) → dos LLM → validación → contraste → `codigo/data/fase2_resultados.xlsx`. Es un paquete: se ejecuta con `python -m fase2_inferencia` desde `codigo/`. Lee la Fase 1 a través del puente `_fase1.py`. |
 | `codigo/fase3_scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m fase3_scoring` desde `codigo/`; los umbrales están en `fase3_scoring/config.py`. |
+| `codigo/fase4_frontend/` | **Fase 4 · Frontend.** Interfaz web (React + Vite) y `api_puente.py`, que ejecuta una ruta entera (Fases 1 → 2 → 3) y escribe en `codigo/data/frontend/<GO_ID>/` ([instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)). |
 | `codigo/evaluacion/` | Benchmark: gold set, guía de etiquetado, `evaluar_gold.py`, `seleccionar_gold.py` y `buscar_neutros.py`. |
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
 | `codigo/tools_cimus/` | Entrada original de CIMUS: rutas enriquecidas (únicos Excels versionados) y tabla de log2FC (`NK_cells_DESeq2_results.xlsx`, se reparte dentro del equipo y no se sube). |
