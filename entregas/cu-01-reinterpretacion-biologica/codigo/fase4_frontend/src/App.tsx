@@ -290,9 +290,11 @@ const PASOS = [
 ];
 
 const tarjeta: React.CSSProperties = { backgroundColor: 'var(--c-020617)', border: '1px solid var(--c-1e293b)', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '6px' };
-// Las tres tarjetas de fase usan el mismo tipo de letra: un estilo para el título y otro para todas las líneas
+// Las tres tarjetas de fase tienen los mismos tres niveles, con el mismo estilo en todas:
+// título, líneas del resultado y notas aparte (en gris)
 const tituloTarjeta: React.CSSProperties = { fontSize: '13px', fontWeight: 'bold', color: 'var(--c-5eead4)' };
 const lineaTarjeta: React.CSSProperties = { fontSize: '13px', color: 'var(--c-cbd5e1)', lineHeight: 1.5 };
+const notaTarjeta: React.CSSProperties = { ...lineaTarjeta, color: 'var(--c-64748b)' };
 
 // Cuántos genes a favor tendrían que dejar de contar para que la ruta perdiera su lectura (activada o inhibida)
 const genesParaCambiar = (aFavor: number, enContra: number) => {
@@ -862,6 +864,7 @@ export default function App() {
                     {resultado.resumen.fase1.articulos} artículos de PubMed para {resultado.resumen.fase1.genes_con_articulos} genes
                     {resultado.resumen.fase1.sin_articulos > 0 && <>; {resultado.resumen.fase1.sin_articulos} sin ningún artículo</>}.
                   </span>
+                  <span style={notaTarjeta}>Tiempo de la fase: {resultado.tiempos.fase1} s.</span>
                 </div>
 
                 <div style={tarjeta}>
@@ -871,9 +874,13 @@ export default function App() {
                     {resultado.resumen.fase2.sin_conclusion > 0 && <> y {resultado.resumen.fase2.sin_conclusion} no permiten concluir</>}.
                   </span>
                   {resultado.resumen.fase2.no_mencionan_gen > 0 && (
-                    <span style={lineaTarjeta}>{resultado.resumen.fase2.no_mencionan_gen} artículos no nombraban el gen y no se le preguntaron.</span>
+                    <span style={lineaTarjeta}>
+                      {resultado.resumen.fase2.no_mencionan_gen === 1
+                        ? '1 artículo no nombraba el gen y no se le preguntó.'
+                        : `${resultado.resumen.fase2.no_mencionan_gen} artículos no nombraban el gen y no se les preguntaron.`}
+                    </span>
                   )}
-                  <span style={lineaTarjeta}>
+                  <span style={notaTarjeta}>
                     {resultado.llm.llamadas} llamadas nuevas al LLM ({resultado.llm.tokens.toLocaleString('es-ES')} tokens) y {resultado.llm.reutilizadas} respuestas ya guardadas.
                   </span>
                 </div>
@@ -884,10 +891,10 @@ export default function App() {
                     Lectura: <strong style={{ color: colorLectura(rutaRes.Lectura) }}>{rutaRes.Lectura} (NPS {formatoNPS(rutaRes.NPS)})</strong>.
                   </span>
                   <span style={lineaTarjeta}>
-                    {rutaRes.n_activan} genes empujan hacia activada, {rutaRes.n_inhiben} hacia inhibida y {rutaRes.n_total - rutaRes.n_activan - rutaRes.n_inhiben} no cuentan.
+                    {rutaRes.n_activan} genes empujan hacia activada, {rutaRes.n_inhiben} hacia inhibida y {rutaRes.n_total - rutaRes.n_activan - rutaRes.n_inhiben} {rutaRes.n_total - rutaRes.n_activan - rutaRes.n_inhiben === 1 ? 'no cuenta' : 'no cuentan'}.
                   </span>
                   <span style={lineaTarjeta}>{explicacionNPS(rutaRes)}</span>
-                  <span style={lineaTarjeta}>
+                  <span style={notaTarjeta}>
                     Pesando cada gen por su log2FC: NPS {formatoNPS(rutaRes.NPS_log2FC)} ({rutaRes.Lectura_log2FC || 'sin tabla'}).
                     {rutaRes.Sensible_al_peso === 'sí' && <strong style={{ color: 'var(--c-fbbf24)' }}> La lectura cambia con ese peso: revisarla.</strong>}
                     {rutaRes.n_pendiente > 0 && <strong style={{ color: 'var(--c-fbbf24)' }}> {rutaRes.n_pendiente} genes pendientes de la Fase 2.</strong>}
