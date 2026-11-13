@@ -15,7 +15,7 @@ Cómo se mueve una tarea por el tablero, qué se hace cuando se bloquea y cómo 
 | DONE | Terminada y cerrada. | Cumplir el [DoD](DOD.md). |
 | BUGS | Un error encontrado y todavía sin tratar. | Ser un issue con cómo reproducirlo. Pasa a TODO con el mismo DoR que el resto. |
 
-Una tarea bloqueada **no cambia de columna**: se queda donde estaba y lleva la etiqueta `Bloqueada`. Así el tablero dice a la vez en qué punto está y que no avanza.
+Una tarea bloqueada **no cambia de columna**: se queda donde estaba y lleva la etiqueta `Bloqueada`. Así el tablero dice a la vez en qué punto está y que no avanza. La vista **Bloqueadas** del tablero ([enlace](https://github.com/users/Pramm99/projects/1/views/6)) muestra solo las tareas con esa etiqueta, con las mismas columnas.
 
 **Backlog completo.** Si alguien dice en una reunión o en el chat «tenemos que hacer X», X se convierte en issue ese mismo día, aunque sea en Backlog y con el DoR a medias.
 
@@ -81,7 +81,7 @@ El comentario no se borra: el issue guarda la historia del bloqueo, y el [DoD](D
 
 ## Rutina de 10 minutos en cada reunión
 
-1. **Bloqueos primero.** Se filtra el tablero por la etiqueta `Bloqueada`. De cada bloqueo: ¿tiene la línea completa? ¿ha vencido su fecha de desbloqueo? Si ha vencido, se decide la salida (tabla de arriba).
+1. **Bloqueos primero.** Se abre la vista **Bloqueadas** del tablero (filtrada por la etiqueta `Bloqueada`). De cada bloqueo: ¿tiene la línea completa? ¿ha vencido su fecha de desbloqueo? Si ha vencido, se decide la salida (tabla de arriba).
 2. **Señales de alerta.** Se repasan las cuatro señales del punto 1 de [Bloqueos](#1-antes-de-que-ocurra).
 3. **Columnas de derecha a izquierda:** REVISION, Progress, TODO. De cada tarea: ¿la columna es su estado real? Si no, se corrige en el momento. Lo que lleve más de dos días en REVISION se asigna a un revisor ya.
 4. **Backlog.** Las tareas sin responsable, revisor o fecha se completan o se quedan en Backlog.
