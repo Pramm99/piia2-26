@@ -42,11 +42,16 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
 1. Busca la ruta por GO_ID, nombre o gen y márcala. Se ve con sus genes *up* y *down*: una ruta que está en las dos
    listas de CIMUS se ejecuta con todos sus genes.
 2. Pulsa **Ejecutar GO:…** y confirma. La barra muestra la fase en curso.
-3. Al terminar aparecen la lectura (activada, inhibida, mixta o insuficiente), el NPS, el NPS con log2FC, la tabla gen a
-   gen y el botón **Descargar Excel** (salida de la Fase 3).
+3. Al terminar aparece el resultado, explicado en lenguaje llano:
+   * una tarjeta por fase: qué encontró la Fase 1 (genes, signos de Gene Ontology, artículos), qué dicen los
+     artículos según el LLM en la Fase 2 y la lectura de la Fase 3 (activada, inhibida, mixta o insuficiente) con la
+     cuenta del NPS y el NPS pesado por log2FC;
+   * una fila por gen: si sube o baja en NK, qué hace en el proceso, hacia dónde empuja la ruta, de dónde sale el signo
+     y por qué. Al pulsarla se ven sus artículos (título con enlace a PubMed, conclusión, confianza y la frase citada);
+   * el botón **Descargar Excel de la Fase 3**.
 
-También se puede **subir otro Excel** con las columnas `ID`, `Description` y `geneID`. La lista (genes *up* o *down*)
-sale del nombre del fichero si contiene «suprimid» y, si no, del selector; **+ Añadir 2ª Lista** suma la otra lista.
+Para trabajar con otros Excels de CIMUS (columnas `ID`, `Description` y `geneID`) están **Subir rutas activadas
+(genes up)** y **Subir rutas suprimidas (genes down)**: cada uno sustituye los genes de su lista.
 
 ## 4. Qué hace el puente
 

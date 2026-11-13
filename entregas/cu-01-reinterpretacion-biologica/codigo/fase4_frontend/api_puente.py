@@ -39,6 +39,7 @@ import main as f1_main  # noqa: E402
 import salida as f1_salida  # noqa: E402
 from fase2_inferencia.__main__ import PRINCIPAL, SECUNDARIO  # noqa: E402
 from fase2_inferencia.cliente import MODELOS, ClienteOpenAICompatible  # noqa: E402
+from fase2_inferencia.limpieza import normalizar_pmid as limpiar  # noqa: E402
 from fase2_inferencia.pipeline import ejecutar_fase2  # noqa: E402
 from fase3_scoring import config as f3_config  # noqa: E402
 from fase3_scoring.nps import COLUMNAS_FASE2, calcular, escribir  # noqa: E402
@@ -112,6 +113,51 @@ def _fase3(carpeta: Path, excel_f1: Path, excel_f2: Path):
     return escribir(pares, rutas, res, abstracts, ruta=carpeta / "fase3_scoring.xlsx"), pares, rutas
 
 
+def _texto(v) -> str:
+    return "" if pd.isna(v) else str(v).strip()
+
+
+def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
+    """Lo que la interfaz explica en lenguaje llano: un resumen de cada fase y, por gen, los artículos que leyó el
+    LLM (título, signo, confianza y la frase citada) y las evidencias de GO cuando el signo sale de la anotación."""
+    f1 = pd.read_excel(excel_f1, sheet_name=["Con_abstract", "Triaje_polaridad"])
+    con, triaje = f1["Con_abstract"], f1["Triaje_polaridad"]
+    titulos = {limpiar(p): _texto(t) for p, t in zip(con["PMID"], con["Titulo"])}
+    f2 = pd.read_excel(excel_f2, sheet_name="Por_ruta")
+    f2 = f2[f2["GO_ID"] == go_id].copy()
+    f2["PMID"] = f2["PMID"].map(limpiar)
+    f2 = f2.sort_values("Confianza_final", ascending=False).drop_duplicates(["Gen", "PMID"])  # un PMID por gen
+
+    genes = {}
+    for gen, filas in f2.groupby("Gen"):
+        genes[gen] = {"articulos": [{
+            "PMID": f["PMID"], "Titulo": titulos.get(f["PMID"], ""), "Signo": _texto(f["Signo_ruta"]),
+            "Estado": _texto(f["Estado"]), "Motivos": _texto(f["Motivos"]),
+            "Confianza": None if pd.isna(f["Confianza_final"]) else int(f["Confianza_final"]),
+            "Cita": _texto(f["Cita"]),
+        } for _, f in filas.iterrows()]}
+    for _, f in triaje[triaje["GO_ID"] == go_id].iterrows():
+        g = genes.setdefault(f["Gen"], {"articulos": []})
+        pmids = [limpiar(p) for p in re.split(r"[;,|\s]+", _texto(f["PMIDs_signo"])) if p]
+        g["GO"] = {"Evidencias": _texto(f["Evidencias_signo"]), "PMIDs": [p for p in pmids if p],
+                   "Motivo": _texto(f["Motivo"])}
+
+    origen = pares["Origen"]
+    leidos = f2[~f2["Motivos"].fillna("").str.contains("no_menciona_gen")]
+    resumen = {
+        "fase1": {"genes": len(pares), "inmunoglobulinas": int((origen == "Ig").sum()),
+                  "signo_GO": int((origen == "GO").sum()),
+                  "genes_con_articulos": int(con.loc[con["GO_ID"] == go_id, "Gen"].nunique()),
+                  "articulos": int(con.loc[con["GO_ID"] == go_id, "PMID"].nunique()),
+                  "sin_articulos": int((pares["Motivos"].fillna("").str.contains("sin_evidencia")).sum())},
+        "fase2": {"articulos_leidos": len(leidos),
+                  "no_mencionan_gen": len(f2) - len(leidos),
+                  "con_signo": int(leidos["Signo_ruta"].isin(["+1", "-1"]).sum()),
+                  "sin_conclusion": int((~leidos["Signo_ruta"].isin(["+1", "-1", "neutro"])).sum())},
+    }
+    return genes, resumen
+
+
 def ejecutar_ruta(ruta: dict):
     """Fases 1 -> 2 -> 3 para una ruta; el progreso y el resultado quedan en _estado."""
     carpeta = DIR_SALIDAS / ruta["GO_ID"].replace(":", "_")
@@ -132,10 +178,13 @@ def ejecutar_ruta(ruta: dict):
         _actualizar(fase=3)
         excel_f3, pares, rutas = _fase3(carpeta, excel_f1, excel_f2)
         tiempos["fase3"] = round(time.time() - t0)
+        genes, resumen = detalle(excel_f1, excel_f2, pares, ruta["GO_ID"])
 
         resultado = {
             "rutas": json.loads(rutas.to_json(orient="records")),
             "pares": json.loads(pares.to_json(orient="records")),
+            "genes": genes,
+            "resumen": resumen,
             "llm": llm,
             "tiempos": tiempos,
             "carpeta": str(carpeta),

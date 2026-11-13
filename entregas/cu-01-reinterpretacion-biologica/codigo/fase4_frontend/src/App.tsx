@@ -7,6 +7,8 @@ import {
   Microscope,
   Circle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Download,
   Play,
   Loader2,
@@ -67,21 +69,17 @@ interface Ruta {
 interface GeneContribution {
   Gen: string;
   GO_ID: string;
-  Ruta_Nombre: string;
   Direccion: string;
   Signo_par: string;
   Estado_par: string;
   Motivos: string | null;
   Origen: string;
-  Votos: string | null;
   Contribucion: number;
-  Freno_retroalimentacion: boolean;
 }
 
 interface PathwayResult {
   GO_ID: string;
   Ruta_Nombre: string;
-  Listas: string;
   NPS: number | null;
   Lectura: string;
   NPS_log2FC?: number | null;
@@ -94,9 +92,29 @@ interface PathwayResult {
   Cobertura: number;
 }
 
+interface Articulo {
+  PMID: string;
+  Titulo: string;
+  Signo: string;
+  Estado: string;
+  Motivos: string;
+  Confianza: number | null;
+  Cita: string;
+}
+
+interface DetalleGen {
+  articulos: Articulo[];
+  GO?: { Evidencias: string; PMIDs: string[]; Motivo: string };
+}
+
 interface Resultado {
   rutas: PathwayResult[];
   pares: GeneContribution[];
+  genes: Record<string, DetalleGen>;
+  resumen: {
+    fase1: { genes: number; inmunoglobulinas: number; signo_GO: number; genes_con_articulos: number; articulos: number; sin_articulos: number };
+    fase2: { articulos_leidos: number; no_mencionan_gen: number; con_signo: number; sin_conclusion: number };
+  };
   llm: { llamadas: number; reutilizadas: number; pendientes: number; tokens: number };
   tiempos: { fase1: number; fase2: number; fase3: number };
   carpeta: string;
@@ -111,18 +129,72 @@ const formatoNPS = (v: number | null | undefined) =>
 
 const colorLectura = (l: string) => (l === 'activada' ? '#34d399' : l === 'inhibida' ? '#f87171' : '#fbbf24');
 
+// Umbrales de lectura de la Fase 3 (fase3_scoring/config.py)
+const UMBRAL_NPS = 0.33;
+const MIN_PARES_CON_SIGNO = 3;
+const MIN_COBERTURA = 0.3;
+
+// Los códigos de las fases, dichos en lenguaje llano
+const SIGNO_TEXTO: Record<string, string> = {
+  '+1': 'Activa el proceso',
+  '-1': 'Inhibe el proceso',
+  neutro: 'No lo cambia',
+  UNKNOWN: 'Sin conclusión',
+};
+
+const MOTIVO_TEXTO: Record<string, string> = {
+  aceptado_por_GO: 'Gene Ontology lo anota con evidencia experimental; no hace falta el LLM.',
+  evidencia_debil: 'Evidencia débil: pocos artículos o poca confianza (suelen ser un solo artículo).',
+  inmunoglobulina: 'Es una inmunoglobulina: se cuenta como neutra.',
+  sin_evidencia: 'No se encontró ningún artículo sobre el gen en este proceso.',
+  no_menciona_gen: 'Los artículos encontrados no nombran el gen, así que no se preguntó al LLM.',
+  baja_confianza: 'El LLM no estaba lo bastante seguro.',
+  marcador_correlacion: 'El artículo solo usa el gen como marcador o muestra una correlación, no un efecto.',
+  contexto_ajeno: 'El artículo trata de otro proceso.',
+  direccion_inversa: 'En el artículo el gen es el que recibe el efecto, no el que lo causa.',
+  efecto_indirecto: 'El efecto es de otra molécula, no del gen.',
+  especulativo: 'El artículo solo lo plantea como hipótesis.',
+  contradictorio: 'El artículo da resultados contradictorios.',
+  cita_no_verificada: 'La frase que citó el LLM no está en el abstract: se descarta.',
+  conflicto_entre_abstracts: 'Unos artículos dicen que activa y otros que inhibe: hay que revisarlo a mano.',
+  minoria_discrepante: 'Algún artículo dice lo contrario que la mayoría.',
+  discrepancia_polaridad_GO: 'El LLM y Gene Ontology no coinciden.',
+  coincide_polaridad_GO: 'El LLM coincide con Gene Ontology.',
+  respaldo_secundario: 'Respondió gpt-oss porque Gemini falló.',
+  peso_por_defecto: 'Sin confianza del modelo: se usó un peso por defecto.',
+  votos_sin_peso: 'Los artículos no pesan lo suficiente.',
+  incoherencia_respuesta: 'La respuesta del LLM era incoherente.',
+  json_invalido: 'La respuesta del LLM no se pudo leer.',
+  LLM_y_revision: 'Gen con función doble conocida: se revisa siempre.',
+};
+
+const motivos = (m: string | null | undefined) =>
+  (m || '').split('|').map((x) => x.trim()).filter(Boolean).map((x) => MOTIVO_TEXTO[x] || x);
+
+const efectoTexto = (c: number) => (c > 0 ? 'Empuja hacia activada' : c < 0 ? 'Empuja hacia inhibida' : 'No cuenta');
+
+const fuenteTexto = (g: GeneContribution, d?: DetalleGen) => {
+  if (g.Origen === 'GO') return 'Gene Ontology';
+  if (g.Origen === 'Ig') return 'Inmunoglobulina';
+  const n = d?.articulos.length || 0;
+  return n ? `${n} artículo${n > 1 ? 's' : ''}` : '—';
+};
+
 const PASOS = [
   { step: 1, title: 'Fase 1 · Ingesta GO & PubMed', desc: 'Subárbol GO, triaje y descarga de abstracts' },
   { step: 2, title: 'Fase 2 · Inferencia LLM', desc: 'Gemini, con gpt-oss solo de respaldo; citas verificadas' },
   { step: 3, title: 'Fase 3 · Scoring NPS', desc: 'Signo de cada gen y Net Pathway Score' },
 ];
 
+const tarjeta: React.CSSProperties = { backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '6px' };
+const tituloTarjeta: React.CSSProperties = { fontSize: '12px', fontWeight: 'bold', color: '#5eead4' };
+const lineaTarjeta: React.CSSProperties = { fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 };
+
 export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
 
   const [rutas, setRutas] = useState<Ruta[]>([]);
   const [origenRutas, setOrigenRutas] = useState<string>('');
-  const [defaultLista, setDefaultLista] = useState<'Activada' | 'Suprimida'>('Activada');
   const [search, setSearch] = useState('');
   const [seleccion, setSeleccion] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState(false);
@@ -132,6 +204,7 @@ export default function App() {
   const [segundos, setSegundos] = useState<number>(0);
   const [feedback, setFeedback] = useState<{ type: 'info' | 'ok' | 'err'; msg: string } | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [abierto, setAbierto] = useState<string | null>(null);
   const inicioRef = useRef<number>(0);
 
   useEffect(() => {
@@ -173,15 +246,13 @@ export default function App() {
         } else if (d.estado === 'terminado') {
           const r: Resultado = d.resultado;
           setResultado(r);
+          setAbierto(null);
           setCurrentStep(4);
           setIsRunning(false);
           const pend = r.llm.pendientes
             ? ` ⚠️ ${r.llm.pendientes} preguntas quedaron pendientes (cupo del LLM agotado): vuelve a ejecutar la ruta más tarde.`
             : '';
-          setFeedback({
-            type: 'ok',
-            msg: `${d.GO_ID} ejecutada en ${r.tiempos.fase1 + r.tiempos.fase2 + r.tiempos.fase3} s: ${r.llm.llamadas} llamadas al LLM, ${r.llm.reutilizadas} respuestas reutilizadas del registro.${pend}`,
-          });
+          setFeedback({ type: 'ok', msg: `${d.GO_ID} ejecutada en ${r.tiempos.fase1 + r.tiempos.fase2 + r.tiempos.fase3} s.${pend}` });
         } else if (d.estado === 'error') {
           setIsRunning(false);
           setCurrentStep(0);
@@ -212,8 +283,8 @@ export default function App() {
     [resultado, rutaRes]
   );
 
-  // Excel propio de CIMUS (ID, Description, geneID): la lista sale del nombre del fichero o del selector
-  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>, append: boolean) => {
+  // Excel de CIMUS (ID, Description, geneID) de una de las dos listas: sustituye los genes de esa lista
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>, campo: 'Genes_up' | 'Genes_down') => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -224,20 +295,19 @@ export default function App() {
       if (!rows.length || !('ID' in rows[0]) || !('Description' in rows[0]) || !('geneID' in rows[0])) {
         throw new Error('El Excel debe contener las columnas obligatorias: ID, Description y geneID.');
       }
-      const lista = file.name.toLowerCase().includes('suprimid') ? 'Suprimida' : defaultLista;
-      const campo = lista === 'Activada' ? 'Genes_up' : 'Genes_down';
       const base: Record<string, Ruta> = {};
-      if (append) rutas.forEach((r) => (base[r.GO_ID] = { ...r }));
+      rutas.forEach((r) => (base[r.GO_ID] = { ...r, [campo]: '' }));
       rows.forEach((r) => {
         const id = String(r.ID || '').trim();
         if (!id) return;
         base[id] = base[id] || { GO_ID: id, Descripcion: String(r.Description || '').trim(), Genes_up: '', Genes_down: '' };
         base[id][campo] = String(r.geneID || '').trim();
       });
-      setRutas(Object.values(base).sort((a, b) => a.GO_ID.localeCompare(b.GO_ID)));
-      setOrigenRutas(append ? `${origenRutas} + ${file.name}` : file.name);
+      setRutas(Object.values(base).filter((r) => r.Genes_up || r.Genes_down).sort((a, b) => a.GO_ID.localeCompare(b.GO_ID)));
+      const lista = campo === 'Genes_up' ? 'rutas activadas (genes up)' : 'rutas suprimidas (genes down)';
+      setOrigenRutas((prev) => `${prev} · ${lista}: ${file.name}`);
       setSeleccion(null);
-      setFeedback({ type: 'ok', msg: `${rows.length} rutas leídas de ${file.name} (genes ${lista === 'Activada' ? 'up' : 'down'}). Elige una y ejecútala.` });
+      setFeedback({ type: 'ok', msg: `${rows.length} ${lista} leídas de ${file.name}. Elige una ruta y ejecútala.` });
     } catch (err) {
       setFeedback({ type: 'err', msg: mensaje(err) });
     }
@@ -267,6 +337,18 @@ export default function App() {
     } catch (err) {
       setFeedback({ type: 'err', msg: mensaje(err) });
     }
+  };
+
+  const botonSubir: React.CSSProperties = { padding: '7px 14px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#f8fafc', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' };
+
+  // Explicación del NPS con los números de la ruta
+  const explicacionNPS = (r: PathwayResult) => {
+    const conSigno = r.n_activan + r.n_inhiben;
+    if (conSigno < MIN_PARES_CON_SIGNO || r.Cobertura < MIN_COBERTURA) {
+      return `Solo ${conSigno} genes tienen signo (cobertura ${(r.Cobertura * 100).toFixed(0)} %): hacen falta al menos ${MIN_PARES_CON_SIGNO} y una cobertura del ${MIN_COBERTURA * 100} % para leer la ruta.`;
+    }
+    const regla = r.Lectura === 'activada' ? `≥ +${UMBRAL_NPS}` : r.Lectura === 'inhibida' ? `≤ −${UMBRAL_NPS}` : `entre −${UMBRAL_NPS} y +${UMBRAL_NPS}`;
+    return `NPS = (${r.n_activan} − ${r.n_inhiben}) / ${conSigno} = ${formatoNPS(r.NPS)}, ${regla} → ${r.Lectura}.`;
   };
 
   return (
@@ -330,33 +412,25 @@ export default function App() {
             <div>
               <h2 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FileSpreadsheet size={18} color="#2dd4bf" />
-                <span>Paso 1 · Elegir la ruta que se va a ejecutar</span>
+                <span>Elige la ruta que quieres ejecutar</span>
               </h2>
               <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
-                Marca una ruta y confirma: se ejecutan seguidas las Fases 1, 2 y 3 con los genes de las dos listas de CIMUS.
+                Marca una ruta y confirma: se ejecutan seguidas las Fases 1, 2 y 3 con sus genes up y down.
                 {origenRutas && <> Rutas de: <strong style={{ color: '#cbd5e1' }}>{origenRutas}</strong>.</>}
               </p>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-              <select
-                value={defaultLista}
-                onChange={(e) => setDefaultLista(e.target.value as 'Activada' | 'Suprimida')}
-                style={{ padding: '7px 10px', fontSize: '12px', borderRadius: '8px', backgroundColor: '#020617', border: '1px solid #334155', color: '#cbd5e1' }}
-              >
-                <option value="Activada">Lista genes UP (Activada)</option>
-                <option value="Suprimida">Lista genes DOWN (Suprimida)</option>
-              </select>
-
-              <label style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#f8fafc', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleExcelUpload(e, false)} style={{ display: 'none' }} />
-                <UploadCloud size={15} color="#2dd4bf" />
-                <span>Subir otro Excel</span>
+              <label style={botonSubir} title="Excel de CIMUS con las rutas enriquecidas en genes up (columnas ID, Description y geneID)">
+                <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleExcelUpload(e, 'Genes_up')} style={{ display: 'none' }} />
+                <UploadCloud size={15} color="#6ee7b7" />
+                <span>Subir rutas activadas (genes up)</span>
               </label>
 
-              <label style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#cbd5e1', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleExcelUpload(e, true)} style={{ display: 'none' }} />
-                <span>+ Añadir 2ª Lista</span>
+              <label style={botonSubir} title="Excel de CIMUS con las rutas enriquecidas en genes down (columnas ID, Description y geneID)">
+                <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleExcelUpload(e, 'Genes_down')} style={{ display: 'none' }} />
+                <UploadCloud size={15} color="#fda4af" />
+                <span>Subir rutas suprimidas (genes down)</span>
               </label>
 
               <button
@@ -463,87 +537,147 @@ export default function App() {
           </div>
         </section>
 
-        {/* PASO 2: RESULTADO DE LA RUTA Y APORTACIÓN POR GEN */}
-        <section style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column' }}>
-          {!rutaRes ? (
+        {/* RESULTADO DE LA RUTA: UNA TARJETA POR FASE Y EL DESGLOSE POR GEN */}
+        <section style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {!rutaRes || !resultado ? (
             <div style={{ color: '#64748b', fontSize: '13px', padding: '20px', textAlign: 'center' }}>
               {isRunning ? 'Ejecutando la ruta: el resultado aparecerá aquí al terminar la Fase 3.' : 'Aún no se ha ejecutado ninguna ruta.'}
             </div>
           ) : (
             <>
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                 <div>
                   <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#2dd4bf', fontWeight: 'bold' }}>{rutaRes.GO_ID}</span>
-                  <h3 style={{ margin: '2px 0 4px 0', fontSize: '16px', fontWeight: 'bold' }}>Paso 2 · {rutaRes.Ruta_Nombre}</h3>
-                  <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>
-                    <span style={{ color: '#34d399' }}>{rutaRes.n_activan} activan</span> · <span style={{ color: '#f87171' }}>{rutaRes.n_inhiben} inhiben</span> · {rutaRes.n_total} genes · Cobertura {(Number(rutaRes.Cobertura || 0) * 100).toFixed(0)}%
-                    {rutaRes.n_pendiente > 0 && <span style={{ color: '#fbbf24' }}> · {rutaRes.n_pendiente} pendientes de la Fase 2</span>}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                    Aportación de cada gen: <code>c = signo × dirección</code> · Con log2FC: NPS {formatoNPS(rutaRes.NPS_log2FC)} ({rutaRes.Lectura_log2FC || 'sin tabla'}){rutaRes.Sensible_al_peso === 'sí' && <strong style={{ color: '#fbbf24' }}> · sensible al peso</strong>}
-                  </div>
+                  <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold' }}>Resultado · {rutaRes.Ruta_Nombre}</h3>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>Lectura de la ruta</span>
-                    <span style={{ fontSize: '17px', fontWeight: 'bold', textTransform: 'uppercase', color: colorLectura(rutaRes.Lectura) }}>
-                      {rutaRes.Lectura} (NPS {formatoNPS(rutaRes.NPS)})
-                    </span>
-                  </div>
-                  {resultado && (
-                    <button
-                      onClick={() => descargarBase64Excel(resultado.excel_b64, resultado.nombre_excel)}
-                      style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: '#14b8a6', color: '#020617', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
-                    >
-                      <Download size={13} />
-                      <span>Descargar Excel</span>
-                    </button>
+                <button
+                  onClick={() => descargarBase64Excel(resultado.excel_b64, resultado.nombre_excel)}
+                  style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: '#14b8a6', color: '#020617', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                >
+                  <Download size={13} />
+                  <span>Descargar Excel de la Fase 3</span>
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                <div style={tarjeta}>
+                  <span style={tituloTarjeta}>Fase 1 · Qué se encontró</span>
+                  <span style={lineaTarjeta}>{resultado.resumen.fase1.genes} genes en la ruta.</span>
+                  <span style={lineaTarjeta}>
+                    {resultado.resumen.fase1.signo_GO} con signo directo de Gene Ontology
+                    {resultado.resumen.fase1.inmunoglobulinas > 0 && <>, {resultado.resumen.fase1.inmunoglobulinas} inmunoglobulina{resultado.resumen.fase1.inmunoglobulinas > 1 ? 's' : ''} (neutras)</>}.
+                  </span>
+                  <span style={lineaTarjeta}>
+                    {resultado.resumen.fase1.articulos} artículos de PubMed para {resultado.resumen.fase1.genes_con_articulos} genes
+                    {resultado.resumen.fase1.sin_articulos > 0 && <>; {resultado.resumen.fase1.sin_articulos} sin ningún artículo</>}.
+                  </span>
+                </div>
+
+                <div style={tarjeta}>
+                  <span style={tituloTarjeta}>Fase 2 · Qué dicen los artículos</span>
+                  <span style={lineaTarjeta}>
+                    El LLM leyó {resultado.resumen.fase2.articulos_leidos} artículos: {resultado.resumen.fase2.con_signo} dicen si el gen activa o inhibe el proceso
+                    {resultado.resumen.fase2.sin_conclusion > 0 && <> y {resultado.resumen.fase2.sin_conclusion} no permiten concluir</>}.
+                  </span>
+                  {resultado.resumen.fase2.no_mencionan_gen > 0 && (
+                    <span style={lineaTarjeta}>{resultado.resumen.fase2.no_mencionan_gen} artículos no nombraban el gen y no se le preguntaron.</span>
                   )}
+                  <span style={{ ...lineaTarjeta, color: '#64748b' }}>
+                    {resultado.llm.llamadas} llamadas nuevas al LLM ({resultado.llm.tokens.toLocaleString('es-ES')} tokens) y {resultado.llm.reutilizadas} respuestas ya guardadas.
+                  </span>
                 </div>
+
+                <div style={{ ...tarjeta, borderColor: colorLectura(rutaRes.Lectura) }}>
+                  <span style={tituloTarjeta}>Fase 3 · Lectura de la ruta</span>
+                  <span style={{ fontSize: '20px', fontWeight: 'bold', textTransform: 'uppercase', color: colorLectura(rutaRes.Lectura) }}>
+                    {rutaRes.Lectura} <span style={{ fontSize: '14px' }}>(NPS {formatoNPS(rutaRes.NPS)})</span>
+                  </span>
+                  <span style={lineaTarjeta}>
+                    {rutaRes.n_activan} genes empujan hacia activada, {rutaRes.n_inhiben} hacia inhibida y {rutaRes.n_total - rutaRes.n_activan - rutaRes.n_inhiben} no cuentan.
+                  </span>
+                  <span style={lineaTarjeta}>{explicacionNPS(rutaRes)}</span>
+                  <span style={{ ...lineaTarjeta, color: '#64748b' }}>
+                    Pesando cada gen por su log2FC: NPS {formatoNPS(rutaRes.NPS_log2FC)} ({rutaRes.Lectura_log2FC || 'sin tabla'}).
+                    {rutaRes.Sensible_al_peso === 'sí' && <strong style={{ color: '#fbbf24' }}> La lectura cambia con ese peso: revisarla.</strong>}
+                    {rutaRes.n_pendiente > 0 && <strong style={{ color: '#fbbf24' }}> {rutaRes.n_pendiente} genes pendientes de la Fase 2.</strong>}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                Un gen empuja hacia <strong>activada</strong> si activa el proceso y sube en NK, o si lo inhibe y baja; hacia <strong>inhibida</strong> en los otros dos casos. Pulsa un gen para ver sus artículos.
               </div>
 
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
                   <thead style={{ backgroundColor: '#020617' }}>
                     <tr style={{ borderBottom: '1px solid #1e293b', color: '#94a3b8' }}>
+                      <th style={{ padding: '9px', width: '20px' }}></th>
                       <th style={{ padding: '9px' }}>Gen</th>
-                      <th style={{ padding: '9px' }}>Expresión (d)</th>
-                      <th style={{ padding: '9px' }}>Signo GO / LLM (s)</th>
-                      <th style={{ padding: '9px' }}>Aportación (c)</th>
-                      <th style={{ padding: '9px' }}>Estado</th>
-                      <th style={{ padding: '9px' }}>Origen</th>
-                      <th style={{ padding: '9px' }}>Evidencia / Motivos</th>
+                      <th style={{ padding: '9px' }}>En NK</th>
+                      <th style={{ padding: '9px' }}>Qué hace en el proceso</th>
+                      <th style={{ padding: '9px' }}>Efecto en la ruta</th>
+                      <th style={{ padding: '9px' }}>Fuente</th>
+                      <th style={{ padding: '9px' }}>Por qué</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paresRes.map((g, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)' }}>
-                        <td style={{ padding: '9px', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                          {g.Gen}
-                          {g.Freno_retroalimentacion && (
-                            <span style={{ marginLeft: '6px', fontSize: '9px', padding: '1px 5px', borderRadius: '4px', backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24' }}>Freno</span>
+                    {paresRes.map((g) => {
+                      const d = resultado.genes[g.Gen];
+                      const c = Number(g.Contribucion);
+                      const abiertoGen = abierto === g.Gen;
+                      return (
+                        <React.Fragment key={g.Gen}>
+                          <tr onClick={() => setAbierto(abiertoGen ? null : g.Gen)} style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)', cursor: 'pointer', backgroundColor: abiertoGen ? 'rgba(20, 184, 166, 0.06)' : 'transparent' }}>
+                            <td style={{ padding: '9px', color: '#64748b' }}>{abiertoGen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
+                            <td style={{ padding: '9px', fontFamily: 'monospace', fontWeight: 'bold' }}>{g.Gen}</td>
+                            <td style={{ padding: '9px', color: g.Direccion === 'up' ? '#6ee7b7' : '#fda4af' }}>{g.Direccion === 'up' ? 'Sube' : 'Baja'}</td>
+                            <td style={{ padding: '9px', fontWeight: 'bold', color: g.Signo_par === '+1' ? '#2dd4bf' : g.Signo_par === '-1' ? '#fb7185' : '#fbbf24' }}>
+                              {SIGNO_TEXTO[g.Signo_par] || g.Signo_par}
+                              {g.Estado_par === 'revisar' && <span style={{ fontWeight: 'normal', color: '#fbbf24' }}> (a revisar)</span>}
+                              {g.Estado_par === 'pendiente' && <span style={{ fontWeight: 'normal', color: '#fbbf24' }}> (pendiente)</span>}
+                            </td>
+                            <td style={{ padding: '9px', fontWeight: 'bold', color: c > 0 ? '#34d399' : c < 0 ? '#f87171' : '#64748b' }}>{efectoTexto(c)}</td>
+                            <td style={{ padding: '9px', color: '#94a3b8' }}>{fuenteTexto(g, d)}</td>
+                            <td style={{ padding: '9px', color: '#cbd5e1' }}>{motivos(g.Motivos).join(' ') || (g.Origen === 'LLM' ? 'Los artículos coinciden.' : '')}</td>
+                          </tr>
+                          {abiertoGen && (
+                            <tr style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)' }}>
+                              <td></td>
+                              <td colSpan={6} style={{ padding: '4px 9px 14px 9px' }}>
+                                {d?.GO && g.Origen === 'GO' && (
+                                  <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '8px' }}>
+                                    Anotación curada de Gene Ontology (evidencia {d.GO.Evidencias || '—'})
+                                    {d.GO.PMIDs.length > 0 && <>: {d.GO.PMIDs.map((p, i) => <React.Fragment key={p}>{i > 0 && ', '}<a href={`https://pubmed.ncbi.nlm.nih.gov/${p}/`} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>PMID {p}</a></React.Fragment>)}</>}.
+                                  </div>
+                                )}
+                                {(d?.articulos || []).map((a) => (
+                                  <div key={a.PMID} style={{ borderLeft: `3px solid ${a.Signo === '+1' ? '#2dd4bf' : a.Signo === '-1' ? '#fb7185' : '#475569'}`, padding: '6px 10px', marginBottom: '8px', backgroundColor: '#020617', borderRadius: '6px' }}>
+                                    <div style={{ fontSize: '12px' }}>
+                                      <a href={`https://pubmed.ncbi.nlm.nih.gov/${a.PMID}/`} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>PMID {a.PMID}</a>
+                                      {a.Titulo && <span style={{ color: '#e2e8f0' }}> · {a.Titulo}</span>}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
+                                      <strong style={{ color: a.Signo === '+1' ? '#2dd4bf' : a.Signo === '-1' ? '#fb7185' : '#fbbf24' }}>{SIGNO_TEXTO[a.Signo] || a.Signo}</strong>
+                                      {a.Confianza !== null && <> · confianza {a.Confianza} %</>}
+                                      {motivos(a.Motivos).length > 0 && <> · {motivos(a.Motivos).join(' ')}</>}
+                                    </div>
+                                    {a.Cita && <div style={{ fontSize: '12px', color: '#cbd5e1', fontStyle: 'italic', marginTop: '4px' }}>«{a.Cita}»</div>}
+                                  </div>
+                                ))}
+                                {!d?.articulos.length && g.Origen !== 'GO' && <div style={{ fontSize: '12px', color: '#64748b' }}>Sin artículos que mostrar.</div>}
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                        <td style={{ padding: '9px', fontFamily: 'monospace', color: g.Direccion === 'up' ? '#6ee7b7' : '#fda4af' }}>{String(g.Direccion).toUpperCase()}</td>
-                        <td style={{ padding: '9px', fontFamily: 'monospace', fontWeight: 'bold', color: g.Signo_par === '+1' ? '#2dd4bf' : g.Signo_par === '-1' ? '#fb7185' : '#fbbf24' }}>{g.Signo_par}</td>
-                        <td style={{ padding: '9px', fontFamily: 'monospace', fontWeight: 'bold', color: Number(g.Contribucion) > 0 ? '#34d399' : Number(g.Contribucion) < 0 ? '#f87171' : '#64748b' }}>
-                          {Number(g.Contribucion) > 0 ? `+${Number(g.Contribucion)}` : Number(g.Contribucion)}
-                        </td>
-                        <td style={{ padding: '9px', fontSize: '11px', color: '#cbd5e1' }}>{g.Estado_par}</td>
-                        <td style={{ padding: '9px', fontFamily: 'monospace', fontSize: '11px', color: '#94a3b8' }}>{g.Origen}</td>
-                        <td style={{ padding: '9px', color: '#cbd5e1', maxWidth: '380px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={[g.Motivos, g.Votos].filter(Boolean).join(' | ')}>
-                          {[g.Votos, g.Motivos].filter(Boolean).join(' · ')}
-                        </td>
-                      </tr>
-                    ))}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-              {resultado && (
-                <div style={{ marginTop: '12px', fontSize: '11px', color: '#64748b' }}>
-                  LLM: {resultado.llm.llamadas} llamadas, {resultado.llm.reutilizadas} respuestas reutilizadas, {resultado.llm.tokens.toLocaleString('es-ES')} tokens. Ficheros de las tres fases en <code>{resultado.carpeta}</code>.
-                </div>
-              )}
+              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                Ficheros de las tres fases en <code>{resultado.carpeta}</code>.
+              </div>
             </>
           )}
         </section>
