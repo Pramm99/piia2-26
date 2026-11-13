@@ -853,7 +853,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* FASE 3: EXCEL QUE ACUMULA LAS RUTAS EJECUTADAS */}
+        {/* EXCEL DE RESULTADOS: ACUMULA LAS RUTAS EJECUTADAS */}
         <ExcelResultados resultado={resultado} />
 
         {/* RESULTADO DE LA RUTA: UNA TARJETA POR FASE Y EL DESGLOSE POR GEN */}

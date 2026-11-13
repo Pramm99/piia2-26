@@ -64,7 +64,7 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
      cambios (**Deshacer mis cambios** los quita). Los cambios no se guardan ni pasan al Excel: una nueva ejecución
      vuelve al resultado automático;
    * el botón **Descargar Excel de la Fase 3** (siempre el resultado automático).
-5. **Excel de resultados (Fase 3).** Para ir juntando varias rutas en un mismo Excel:
+5. **Excel de resultados.** Para ir juntando varias rutas en un mismo Excel:
    * **Abrir Excel** pone uno vacío o uno con rutas ya buscadas, y **Crear Excel nuevo** empieza uno. Si ya habías
      ejecutado una ruta, se añade en ese momento (así se completa un Excel al que le faltaba).
    * Cada ruta que se ejecuta se añade sola: una fila en la hoja `Rutas` y sus genes en la hoja `Genes`. Si la ruta ya

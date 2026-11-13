@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties } fro
 import { ChevronDown, ChevronRight, Download, Eraser, FilePlus2, FileSpreadsheet, FolderOpen, Trash2, X } from 'lucide-react';
 import { colorLectura, formatoNPS, loadXLSX, mensaje, type Fila, type Libro } from './comun';
 
-// Excel de resultados de la Fase 3: va acumulando una fila por ruta ejecutada (hoja Rutas) y sus genes (hoja Genes).
+// Excel de resultados: va acumulando una fila por ruta ejecutada (hoja Rutas) y sus genes (hoja Genes).
 // Se puede empezar con uno vacío o con uno que ya tenga rutas; si la ruta ya estaba, su fila se sustituye.
 // Con Chrome o Edge se guarda directamente en el fichero elegido; en otros navegadores, con «Descargar».
 
@@ -224,7 +224,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
         <div>
           <h2 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <FileSpreadsheet size={18} color="var(--c-2dd4bf)" />
-            <span>Fase 3 · Excel de resultados</span>
+            <span>Excel de resultados</span>
           </h2>
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--c-94a3b8)', maxWidth: '900px' }}>
             Pon un Excel vacío o uno con rutas ya buscadas: cada ruta que ejecutes se añade sola (si ya estaba, se actualiza).
