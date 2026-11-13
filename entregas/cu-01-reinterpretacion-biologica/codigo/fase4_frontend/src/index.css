@@ -1,1 +1,63 @@
 @import "tailwindcss";
+
+/* Paleta de la interfaz: oscura por defecto y clara con data-tema="claro" (botón de la cabecera). */
+:root {
+  --c-020617: #020617;
+  --c-0f172a: #0f172a;
+  --c-1e293b: #1e293b;
+  --c-334155: #334155;
+  --c-f8fafc: #f8fafc;
+  --c-f1f5f9: #f1f5f9;
+  --c-e2e8f0: #e2e8f0;
+  --c-cbd5e1: #cbd5e1;
+  --c-94a3b8: #94a3b8;
+  --c-64748b: #64748b;
+  --c-475569: #475569;
+  --c-2dd4bf: #2dd4bf;
+  --c-5eead4: #5eead4;
+  --c-14b8a6: #14b8a6;
+  --c-0f766e: #0f766e;
+  --c-34d399: #34d399;
+  --c-6ee7b7: #6ee7b7;
+  --c-059669: #059669;
+  --c-f87171: #f87171;
+  --c-fb7185: #fb7185;
+  --c-fda4af: #fda4af;
+  --c-be123c: #be123c;
+  --c-fbbf24: #fbbf24;
+  --c-b45309: #b45309;
+  --c-38bdf8: #38bdf8;
+}
+
+:root[data-tema="claro"] {
+  --c-020617: #ffffff;
+  --c-0f172a: #f1f5f9;
+  --c-1e293b: #e2e8f0;
+  --c-334155: #cbd5e1;
+  --c-f8fafc: #0f172a;
+  --c-f1f5f9: #1e293b;
+  --c-e2e8f0: #1e293b;
+  --c-cbd5e1: #334155;
+  --c-94a3b8: #475569;
+  --c-64748b: #64748b;
+  --c-475569: #94a3b8;
+  --c-2dd4bf: #0d9488;
+  --c-5eead4: #0f766e;
+  --c-14b8a6: #14b8a6;
+  --c-0f766e: #0f766e;
+  --c-34d399: #059669;
+  --c-6ee7b7: #047857;
+  --c-059669: #059669;
+  --c-f87171: #dc2626;
+  --c-fb7185: #e11d48;
+  --c-fda4af: #be123c;
+  --c-be123c: #be123c;
+  --c-fbbf24: #b45309;
+  --c-b45309: #b45309;
+  --c-38bdf8: #0369a1;
+}
+
+body {
+  margin: 0;
+  background-color: var(--c-020617);
+}

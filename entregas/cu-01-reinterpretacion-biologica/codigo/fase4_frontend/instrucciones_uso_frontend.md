@@ -35,7 +35,8 @@ Escucha en `http://127.0.0.1:8000`.
 npm run dev
 ```
 
-Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado** cuando el puente responde.
+Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado** cuando el puente responde. El botón
+**Fondo blanco / Fondo oscuro** de la cabecera cambia el tema, y el navegador lo recuerda para la próxima vez.
 
 ## 3. Uso
 

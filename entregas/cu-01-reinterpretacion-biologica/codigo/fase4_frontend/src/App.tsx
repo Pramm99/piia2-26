@@ -12,6 +12,8 @@ import {
   Download,
   Play,
   Loader2,
+  Moon,
+  Sun,
   X
 } from 'lucide-react';
 
@@ -146,7 +148,7 @@ const genes = (s: string) => s.split('/').map((g) => g.trim()).filter(Boolean);
 const formatoNPS = (v: number | null | undefined) =>
   v === null || v === undefined ? 'N/A' : v > 0 ? `+${v.toFixed(2)}` : v.toFixed(2);
 
-const colorLectura = (l: string) => (l === 'activada' ? '#34d399' : l === 'inhibida' ? '#f87171' : '#fbbf24');
+const colorLectura = (l: string) => (l === 'activada' ? 'var(--c-34d399)' : l === 'inhibida' ? 'var(--c-f87171)' : 'var(--c-fbbf24)');
 
 // Umbrales de lectura de la Fase 3 (fase3_scoring/config.py)
 const UMBRAL_NPS = 0.33;
@@ -218,22 +220,22 @@ const EVIDENCIA_GO_TEXTO: Record<string, string> = {
 
 const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
   if (g.Signo_par === 'neutro') {
-    return <span style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.05em', color: '#94a3b8', backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px' }}>NEUTRO</span>;
+    return <span style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.05em', color: 'var(--c-94a3b8)', backgroundColor: 'var(--c-1e293b)', padding: '2px 8px', borderRadius: '4px' }}>NEUTRO</span>;
   }
   if (g.Origen === 'GO') {
     // El signo GO no se pondera: se acepta entero porque lo respalda una anotación experimental cercana a la ruta
     const codigos = (d?.GO?.Evidencias || '').split('|').filter(Boolean);
-    const color = g.Signo_par === '+1' ? '#2dd4bf' : '#fb7185';
+    const color = g.Signo_par === '+1' ? 'var(--c-2dd4bf)' : 'var(--c-fb7185)';
     return (
       <div style={{ minWidth: '120px' }} title={codigos.map((c) => `${c}: ${EVIDENCIA_GO_TEXTO[c] || c}`).join(' · ')}>
         <div style={{ width: '120px', height: '6px', borderRadius: '3px', backgroundColor: color }} />
-        <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '3px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--c-cbd5e1)', marginTop: '3px' }}>
           Gene Ontology{codigos.length > 0 && <> ({codigos.join(', ')})</>}: experimental, no se pondera
         </div>
       </div>
     );
   }
-  if (g.Origen !== 'LLM') return <span style={{ color: '#475569' }}>—</span>;
+  if (g.Origen !== 'LLM') return <span style={{ color: 'var(--c-475569)' }}>—</span>;
   const pos = Number(g.W_pos || 0);
   const neg = Number(g.W_neg || 0);
   const debil = Math.max(pos, neg) < MIN_PESO_EVIDENCIA;
@@ -242,12 +244,12 @@ const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
   );
   return (
     <div style={{ minWidth: '120px' }}>
-      <div style={{ position: 'relative', width: '120px', height: '6px', backgroundColor: '#1e293b', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
-        {pos > 0 && barra(pos, '#2dd4bf')}
-        {neg > 0 && barra(neg, '#fb7185')}
-        <div title="Umbral: peso 1" style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '2px', backgroundColor: '#f8fafc' }} />
+      <div style={{ position: 'relative', width: '120px', height: '6px', backgroundColor: 'var(--c-1e293b)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
+        {pos > 0 && barra(pos, 'var(--c-2dd4bf)')}
+        {neg > 0 && barra(neg, 'var(--c-fb7185)')}
+        <div title="Umbral: peso 1" style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '2px', backgroundColor: 'var(--c-f8fafc)' }} />
       </div>
-      <div style={{ fontSize: '11px', color: debil ? '#fbbf24' : '#cbd5e1', marginTop: '3px' }}>
+      <div style={{ fontSize: '11px', color: debil ? 'var(--c-fbbf24)' : 'var(--c-cbd5e1)', marginTop: '3px' }}>
         {pos > 0 && <>{coma(pos)} activa</>}
         {pos > 0 && neg > 0 && ' · '}
         {neg > 0 && <>{coma(neg)} inhibe</>}
@@ -272,9 +274,9 @@ const PASOS = [
   { step: 3, title: 'Fase 3 · Scoring NPS', desc: 'Signo de cada gen y Net Pathway Score' },
 ];
 
-const tarjeta: React.CSSProperties = { backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '6px' };
-const tituloTarjeta: React.CSSProperties = { fontSize: '12px', fontWeight: 'bold', color: '#5eead4' };
-const lineaTarjeta: React.CSSProperties = { fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 };
+const tarjeta: React.CSSProperties = { backgroundColor: 'var(--c-020617)', border: '1px solid var(--c-1e293b)', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '6px' };
+const tituloTarjeta: React.CSSProperties = { fontSize: '12px', fontWeight: 'bold', color: 'var(--c-5eead4)' };
+const lineaTarjeta: React.CSSProperties = { fontSize: '12px', color: 'var(--c-cbd5e1)', lineHeight: 1.5 };
 
 // Cuántos genes a favor tendrían que dejar de contar para que la ruta perdiera su lectura (activada o inhibida)
 const genesParaCambiar = (aFavor: number, enContra: number) => {
@@ -301,16 +303,16 @@ const ChipGen = ({ g, onClick }: { g: GeneContribution; onClick: () => void }) =
     <button
       onClick={onClick}
       title={`${g.Gen}: ${g.Direccion === 'up' ? 'sobreexpresado' : 'infraexpresado'}, ${(SIGNO_TEXTO[g.Signo_par] || g.Signo_par).toLowerCase()}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #334155', backgroundColor: '#0f172a', color: '#f8fafc', fontSize: '12px', cursor: 'pointer' }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-0f172a)', color: 'var(--c-f8fafc)', fontSize: '12px', cursor: 'pointer' }}
     >
-      <span style={{ color: g.Direccion === 'up' ? '#6ee7b7' : '#fda4af' }}>{g.Direccion === 'up' ? '▲' : '▼'}</span>
+      <span style={{ color: g.Direccion === 'up' ? 'var(--c-6ee7b7)' : 'var(--c-fda4af)' }}>{g.Direccion === 'up' ? '▲' : '▼'}</span>
       <strong style={{ fontFamily: 'monospace' }}>{g.Gen}</strong>
       {fuente && (
-        <span style={{ fontSize: '10px', padding: '0 5px', borderRadius: '4px', backgroundColor: g.Origen === 'GO' ? 'rgba(56, 189, 248, 0.15)' : '#1e293b', color: g.Origen === 'GO' ? '#38bdf8' : '#94a3b8' }}>
+        <span style={{ fontSize: '10px', padding: '0 5px', borderRadius: '4px', backgroundColor: g.Origen === 'GO' ? 'rgba(56, 189, 248, 0.15)' : 'var(--c-1e293b)', color: g.Origen === 'GO' ? 'var(--c-38bdf8)' : 'var(--c-94a3b8)' }}>
           {fuente}
         </span>
       )}
-      {debil && <span title="Evidencia débil (peso < 1)" style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#fbbf24' }} />}
+      {debil && <span title="Evidencia débil (peso < 1)" style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--c-fbbf24)' }} />}
     </button>
   );
 };
@@ -339,22 +341,22 @@ const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribut
   }
 
   const columna = (titulo: string, lista: GeneContribution[], col: string) => (
-    <div style={{ flex: '1 1 220px', backgroundColor: '#020617', border: `1px solid ${col}33`, borderRadius: '10px', padding: '10px' }}>
+    <div style={{ flex: '1 1 220px', backgroundColor: 'var(--c-020617)', border: `1px solid color-mix(in srgb, ${col} 20%, transparent)`, borderRadius: '10px', padding: '10px' }}>
       <div style={{ fontSize: '12px', fontWeight: 'bold', color: col, marginBottom: '8px' }}>{titulo} ({lista.length})</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-        {lista.length ? lista.map((g) => <ChipGen key={g.Gen} g={g} onClick={() => onGen(g.Gen)} />) : <span style={{ fontSize: '12px', color: '#475569' }}>Ninguno</span>}
+        {lista.length ? lista.map((g) => <ChipGen key={g.Gen} g={g} onClick={() => onGen(g.Gen)} />) : <span style={{ fontSize: '12px', color: 'var(--c-475569)' }}>Ninguno</span>}
       </div>
     </div>
   );
 
   return (
-    <div style={{ border: `2px solid ${color}`, borderRadius: '14px', padding: '18px', backgroundColor: `${color}0d`, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <div style={{ border: `2px solid ${color}`, borderRadius: '14px', padding: '18px', backgroundColor: `color-mix(in srgb, ${color} 5%, transparent)`, display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color }}>{TITULO_LECTURA[r.Lectura] || r.Lectura}</div>
-          <div style={{ fontSize: '13px', color: '#cbd5e1', marginTop: '4px', maxWidth: '720px', lineHeight: 1.5 }}>{solidez}</div>
+          <div style={{ fontSize: '13px', color: 'var(--c-cbd5e1)', marginTop: '4px', maxWidth: '720px', lineHeight: 1.5 }}>{solidez}</div>
           {(r.Sensible_al_peso === 'sí' || r.n_pendiente > 0) && (
-            <div style={{ fontSize: '12px', color: '#fbbf24', marginTop: '4px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--c-fbbf24)', marginTop: '4px' }}>
               {r.Sensible_al_peso === 'sí' && 'Si cada gen pesa según cuánto cambia su expresión (log2FC), la lectura cambia: conviene revisarla. '}
               {r.n_pendiente > 0 && `${r.n_pendiente} genes siguen pendientes del LLM.`}
             </div>
@@ -367,24 +369,24 @@ const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribut
             <div style={{ flex: 1, backgroundColor: 'rgba(251, 191, 36, 0.25)' }} />
             <div style={{ width: pct(-UMBRAL_NPS), backgroundColor: 'rgba(52, 211, 153, 0.45)' }} />
             {nps !== null && (
-              <div style={{ position: 'absolute', left: `calc(${pct(nps)} - 2px)`, top: 0, bottom: 0, width: '4px', backgroundColor: '#f8fafc' }} />
+              <div style={{ position: 'absolute', left: `calc(${pct(nps)} - 2px)`, top: 0, bottom: 0, width: '4px', backgroundColor: 'var(--c-f8fafc)' }} />
             )}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--c-94a3b8)', marginTop: '4px' }}>
             <span>−1 inhibida</span><span>mixta</span><span>activada +1</span>
           </div>
-          <div style={{ textAlign: 'center', fontSize: '12px', color: '#e2e8f0', marginTop: '2px' }}>NPS {formatoNPS(nps)}</div>
+          <div style={{ textAlign: 'center', fontSize: '12px', color: 'var(--c-e2e8f0)', marginTop: '2px' }}>NPS {formatoNPS(nps)}</div>
         </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-        {columna('Empujan hacia activada', activan, '#34d399')}
-        {columna('Empujan hacia inhibida', inhiben, '#f87171')}
-        {columna('No cuentan', noCuentan, '#64748b')}
+        {columna('Empujan hacia activada', activan, 'var(--c-34d399)')}
+        {columna('Empujan hacia inhibida', inhiben, 'var(--c-f87171)')}
+        {columna('No cuentan', noCuentan, 'var(--c-64748b)')}
       </div>
-      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-        ▲ sobreexpresado · ▼ infraexpresado en NK · <span style={{ color: '#38bdf8' }}>GO</span> evidencia directa de Gene Ontology · artículos: lo decidió el LLM leyendo PubMed ·{' '}
-        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#fbbf24' }} /> evidencia débil. Pulsa un gen para ver su detalle.
+      <div style={{ fontSize: '11px', color: 'var(--c-94a3b8)' }}>
+        ▲ sobreexpresado · ▼ infraexpresado en NK · <span style={{ color: 'var(--c-38bdf8)' }}>GO</span> evidencia directa de Gene Ontology · artículos: lo decidió el LLM leyendo PubMed ·{' '}
+        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--c-fbbf24)' }} /> evidencia débil. Pulsa un gen para ver su detalle.
       </div>
     </div>
   );
@@ -392,6 +394,23 @@ const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribut
 
 export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
+  const [tema, setTema] = useState<'oscuro' | 'claro'>(() => {
+    try {
+      return localStorage.getItem('tema') === 'claro' ? 'claro' : 'oscuro';
+    } catch {
+      return 'oscuro';
+    }
+  });
+
+  // Los colores son variables CSS (index.css): el tema solo cambia el atributo de la página
+  useEffect(() => {
+    document.documentElement.dataset.tema = tema;
+    try {
+      localStorage.setItem('tema', tema);
+    } catch {
+      // sin almacenamiento local (p. ej. navegación privada): el tema dura lo que la pestaña
+    }
+  }, [tema]);
 
   const [excelUp, setExcelUp] = useState<ExcelLista | null>(null);
   const [excelDown, setExcelDown] = useState<ExcelLista | null>(null);
@@ -544,33 +563,33 @@ export default function App() {
     }
   };
 
-  const botonSubir: React.CSSProperties = { padding: '6px 12px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#f8fafc', fontSize: '12px', fontWeight: 500, cursor: isRunning ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: isRunning ? 0.5 : 1 };
+  const botonSubir: React.CSSProperties = { padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', fontSize: '12px', fontWeight: 500, cursor: isRunning ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: isRunning ? 0.5 : 1 };
 
   // Hueco de una lista: sin Excel, el botón para subirlo; con Excel, su nombre, «Cambiar» y «Quitar»
   const huecoExcel = (lista: 'up' | 'down') => {
     const excel = lista === 'up' ? excelUp : excelDown;
-    const color = lista === 'up' ? '#6ee7b7' : '#fda4af';
+    const color = lista === 'up' ? 'var(--c-6ee7b7)' : 'var(--c-fda4af)';
     const entrada = (
       <input type="file" accept=".xlsx,.xls,.csv" disabled={isRunning} onChange={(e) => handleExcelUpload(e, lista)} style={{ display: 'none' }} />
     );
     return (
-      <div style={{ flex: '1 1 340px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${excel ? color : '#334155'}`, backgroundColor: '#020617' }}>
+      <div style={{ flex: '1 1 340px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${excel ? color : 'var(--c-334155)'}`, backgroundColor: 'var(--c-020617)' }}>
         <span style={{ fontSize: '12px', fontWeight: 'bold', color, minWidth: '230px' }}>
           {lista === 'up' ? '▲ Rutas sobreexpresadas (upregulated)' : '▼ Rutas infraexpresadas (downregulated)'}
         </span>
         {excel ? (
           <>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#e2e8f0', flex: 1, minWidth: 0 }} title={excel.nombre}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--c-e2e8f0)', flex: 1, minWidth: 0 }} title={excel.nombre}>
               <FileSpreadsheet size={14} color={color} />
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{excel.nombre}</span>
-              <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>· {excel.filas.length} rutas</span>
+              <span style={{ color: 'var(--c-64748b)', whiteSpace: 'nowrap' }}>· {excel.filas.length} rutas</span>
             </span>
             <label style={botonSubir} title="Subir otro Excel en lugar de este">
               {entrada}
               <UploadCloud size={14} color={color} />
               <span>Cambiar</span>
             </label>
-            <button disabled={isRunning} onClick={() => quitarExcel(lista)} style={{ ...botonSubir, color: '#fda4af' }} title="Quitar este Excel">
+            <button disabled={isRunning} onClick={() => quitarExcel(lista)} style={{ ...botonSubir, color: 'var(--c-fda4af)' }} title="Quitar este Excel">
               <X size={14} />
               <span>Quitar</span>
             </button>
@@ -597,18 +616,18 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#020617', color: '#f8fafc', display: 'flex', flexDirection: 'column', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--c-020617)', color: 'var(--c-f8fafc)', display: 'flex', flexDirection: 'column', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
       {/* HEADER */}
-      <header style={{ borderBottom: '1px solid #1e293b', backgroundColor: '#0f172a', padding: '14px 24px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+      <header style={{ borderBottom: '1px solid var(--c-1e293b)', backgroundColor: 'var(--c-0f172a)', padding: '14px 24px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#14b8a6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#020617' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'var(--c-14b8a6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-020617)' }}>
             <Microscope size={22} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '16px', fontWeight: 'bold' }}>CU-01 PathScore Studio</span>
-              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(20, 184, 166, 0.12)', color: '#5eead4', border: '1px solid rgba(20, 184, 166, 0.25)' }}>
+              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(20, 184, 166, 0.12)', color: 'var(--c-5eead4)', border: '1px solid rgba(20, 184, 166, 0.25)' }}>
                 Células NK · Laringe y Faringe (HNSC)
               </span>
               <span style={{
@@ -616,27 +635,35 @@ export default function App() {
                 padding: '2px 8px',
                 borderRadius: '999px',
                 backgroundColor: backendOnline ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                color: backendOnline ? '#6ee7b7' : '#fbbf24',
-                border: `1px solid ${backendOnline ? '#059669' : '#b45309'}`
+                color: backendOnline ? 'var(--c-6ee7b7)' : 'var(--c-fbbf24)',
+                border: `1px solid ${backendOnline ? 'var(--c-059669)' : 'var(--c-b45309)'}`
               }}>
                 {backendOnline ? '● Motor Python conectado' : '○ Motor Python desconectado (ejecuta api_puente.py)'}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--c-94a3b8)' }}>
               Reinterpretación funcional de rutas biológicas scRNA-seq mediante Gene Ontology y LLMs verificados
             </p>
           </div>
         </div>
+        <button
+          onClick={() => setTema(tema === 'oscuro' ? 'claro' : 'oscuro')}
+          title={tema === 'oscuro' ? 'Cambiar a fondo blanco' : 'Cambiar a fondo oscuro'}
+          style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          {tema === 'oscuro' ? <Sun size={15} /> : <Moon size={15} />}
+          <span>{tema === 'oscuro' ? 'Fondo blanco' : 'Fondo oscuro'}</span>
+        </button>
       </header>
 
       {/* FEEDBACK */}
       {feedback && (
         <div style={{
           backgroundColor: feedback.type === 'err' ? 'rgba(225, 29, 72, 0.15)' : 'rgba(20, 184, 166, 0.12)',
-          borderBottom: `1px solid ${feedback.type === 'err' ? '#be123c' : '#0f766e'}`,
+          borderBottom: `1px solid ${feedback.type === 'err' ? 'var(--c-be123c)' : 'var(--c-0f766e)'}`,
           padding: '8px 24px',
           fontSize: '12px',
-          color: feedback.type === 'err' ? '#fda4af' : '#5eead4',
+          color: feedback.type === 'err' ? 'var(--c-fda4af)' : 'var(--c-5eead4)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
@@ -652,14 +679,14 @@ export default function App() {
       <main style={{ flex: 1, padding: '24px', maxWidth: '1720px', width: '100%', margin: '0 auto', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
         {/* PASO 1: ELEGIR UNA RUTA */}
-        <section style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '20px' }}>
+        <section style={{ backgroundColor: 'var(--c-0f172a)', border: '1px solid var(--c-1e293b)', borderRadius: '16px', padding: '20px' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
             <div>
               <h2 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileSpreadsheet size={18} color="#2dd4bf" />
+                <FileSpreadsheet size={18} color="var(--c-2dd4bf)" />
                 <span>Elige la ruta que quieres ejecutar</span>
               </h2>
-              <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--c-94a3b8)' }}>
                 Sube un Excel de rutas sobreexpresadas, uno de infraexpresadas o los dos (columnas ID, Description y geneID). Marca una ruta y confirma: se ejecutan seguidas las Fases 1, 2 y 3 con sus genes de las dos listas.
               </p>
             </div>
@@ -672,8 +699,8 @@ export default function App() {
                   padding: '8px 18px',
                   borderRadius: '8px',
                   border: 'none',
-                  backgroundColor: isRunning || !rutaSel ? '#0f766e' : '#14b8a6',
-                  color: '#020617',
+                  backgroundColor: isRunning || !rutaSel ? 'var(--c-0f766e)' : 'var(--c-14b8a6)',
+                  color: 'var(--c-020617)',
                   fontWeight: 'bold',
                   fontSize: '12px',
                   cursor: isRunning || !rutaSel ? 'not-allowed' : 'pointer',
@@ -696,19 +723,19 @@ export default function App() {
 
           {/* BARRA DE PROGRESO (fase real que informa el puente) */}
           {(isRunning || currentStep > 0) && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px', backgroundColor: '#020617', padding: '12px', borderRadius: '10px', border: '1px solid #1e293b' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px', backgroundColor: 'var(--c-020617)', padding: '12px', borderRadius: '10px', border: '1px solid var(--c-1e293b)' }}>
               {PASOS.map((s) => {
                 const done = currentStep > s.step;
                 const active = currentStep === s.step;
                 return (
                   <div key={s.step} style={{ display: 'flex', alignItems: 'center', gap: '10px', opacity: currentStep >= s.step ? 1 : 0.4 }}>
-                    {done ? <CheckCircle2 size={18} color="#34d399" /> : active ? <Loader2 size={18} color="#2dd4bf" /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #475569' }} />}
+                    {done ? <CheckCircle2 size={18} color="var(--c-34d399)" /> : active ? <Loader2 size={18} color="var(--c-2dd4bf)" /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid var(--c-475569)' }} />}
                     <div>
-                      <div style={{ fontSize: '12px', fontWeight: 'bold', color: done ? '#6ee7b7' : active ? '#2dd4bf' : '#cbd5e1' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 'bold', color: done ? 'var(--c-6ee7b7)' : active ? 'var(--c-2dd4bf)' : 'var(--c-cbd5e1)' }}>
                         {s.title}
-                        {done && resultado && <span style={{ fontWeight: 'normal', color: '#64748b' }}> · {resultado.tiempos[`fase${s.step}` as 'fase1' | 'fase2' | 'fase3']} s</span>}
+                        {done && resultado && <span style={{ fontWeight: 'normal', color: 'var(--c-64748b)' }}> · {resultado.tiempos[`fase${s.step}` as 'fase1' | 'fase2' | 'fase3']} s</span>}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>{s.desc}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--c-64748b)' }}>{s.desc}</div>
                     </div>
                   </div>
                 );
@@ -718,24 +745,24 @@ export default function App() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '12px' }}>
             <div style={{ position: 'relative', flex: 1, maxWidth: '420px' }}>
-              <Search size={14} color="#64748b" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+              <Search size={14} color="var(--c-64748b)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="text"
                 placeholder="Filtrar por GO_ID, nombre o gen..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                style={{ width: '100%', padding: '6px 10px 6px 30px', fontSize: '12px', borderRadius: '8px', backgroundColor: '#020617', border: '1px solid #1e293b', color: '#f8fafc', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '6px 10px 6px 30px', fontSize: '12px', borderRadius: '8px', backgroundColor: 'var(--c-020617)', border: '1px solid var(--c-1e293b)', color: 'var(--c-f8fafc)', boxSizing: 'border-box' }}
               />
             </div>
-            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-              {filtradas.length} de {rutas.length} rutas{rutaSel && <> · elegida: <strong style={{ color: '#2dd4bf' }}>{rutaSel.GO_ID}</strong></>}
+            <span style={{ fontSize: '12px', color: 'var(--c-94a3b8)' }}>
+              {filtradas.length} de {rutas.length} rutas{rutaSel && <> · elegida: <strong style={{ color: 'var(--c-2dd4bf)' }}>{rutaSel.GO_ID}</strong></>}
             </span>
           </div>
 
-          <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid #1e293b', borderRadius: '10px' }}>
+          <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid var(--c-1e293b)', borderRadius: '10px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-              <thead style={{ backgroundColor: '#020617', position: 'sticky', top: 0 }}>
-                <tr style={{ borderBottom: '1px solid #1e293b', color: '#94a3b8' }}>
+              <thead style={{ backgroundColor: 'var(--c-020617)', position: 'sticky', top: 0 }}>
+                <tr style={{ borderBottom: '1px solid var(--c-1e293b)', color: 'var(--c-94a3b8)' }}>
                   <th style={{ padding: '8px 10px', width: '36px' }}></th>
                   <th style={{ padding: '8px 10px' }}>GO_ID</th>
                   <th style={{ padding: '8px 10px' }}>Descripción</th>
@@ -746,7 +773,7 @@ export default function App() {
               <tbody>
                 {rutas.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ padding: '14px', color: '#64748b', textAlign: 'center' }}>
+                    <td colSpan={5} style={{ padding: '14px', color: 'var(--c-64748b)', textAlign: 'center' }}>
                       Sube el Excel de rutas sobreexpresadas, el de infraexpresadas o los dos para ver aquí sus rutas.
                     </td>
                   </tr>
@@ -759,12 +786,12 @@ export default function App() {
                       onClick={() => !isRunning && setSeleccion(sel ? null : r.GO_ID)}
                       style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)', backgroundColor: sel ? 'rgba(20, 184, 166, 0.08)' : 'transparent', cursor: isRunning ? 'default' : 'pointer' }}
                     >
-                      <td style={{ padding: '8px 10px', textAlign: 'center' }}>{sel ? <CheckCircle2 size={15} color="#2dd4bf" /> : <Circle size={15} color="#475569" />}</td>
-                      <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: '#2dd4bf' }}>{r.GO_ID}</td>
-                      <td style={{ padding: '8px 10px', color: '#f1f5f9' }}>{r.Descripcion}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'center' }}>{sel ? <CheckCircle2 size={15} color="var(--c-2dd4bf)" /> : <Circle size={15} color="var(--c-475569)" />}</td>
+                      <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: 'var(--c-2dd4bf)' }}>{r.GO_ID}</td>
+                      <td style={{ padding: '8px 10px', color: 'var(--c-f1f5f9)' }}>{r.Descripcion}</td>
                       {[r.Genes_up, r.Genes_down].map((g, i) => (
-                        <td key={i} style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '11px', color: i === 0 ? '#6ee7b7' : '#fda4af', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={g}>
-                          {g ? <><strong>({genes(g).length})</strong> {g}</> : <span style={{ color: '#475569' }}>—</span>}
+                        <td key={i} style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '11px', color: i === 0 ? 'var(--c-6ee7b7)' : 'var(--c-fda4af)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={g}>
+                          {g ? <><strong>({genes(g).length})</strong> {g}</> : <span style={{ color: 'var(--c-475569)' }}>—</span>}
                         </td>
                       ))}
                     </tr>
@@ -776,21 +803,21 @@ export default function App() {
         </section>
 
         {/* RESULTADO DE LA RUTA: UNA TARJETA POR FASE Y EL DESGLOSE POR GEN */}
-        <section style={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <section style={{ backgroundColor: 'var(--c-0f172a)', border: '1px solid var(--c-1e293b)', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {!rutaRes || !resultado ? (
-            <div style={{ color: '#64748b', fontSize: '13px', padding: '20px', textAlign: 'center' }}>
+            <div style={{ color: 'var(--c-64748b)', fontSize: '13px', padding: '20px', textAlign: 'center' }}>
               {isRunning ? 'Ejecutando la ruta: el resultado aparecerá aquí al terminar la Fase 3.' : 'Aún no se ha ejecutado ninguna ruta.'}
             </div>
           ) : (
             <>
               <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                 <div>
-                  <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#2dd4bf', fontWeight: 'bold' }}>{rutaRes.GO_ID}</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--c-2dd4bf)', fontWeight: 'bold' }}>{rutaRes.GO_ID}</span>
                   <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold' }}>Resultado · {rutaRes.Ruta_Nombre}</h3>
                 </div>
                 <button
                   onClick={() => descargarBase64Excel(resultado.excel_b64, resultado.nombre_excel)}
-                  style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: '#14b8a6', color: '#020617', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--c-14b8a6)', color: 'var(--c-020617)', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
                 >
                   <Download size={13} />
                   <span>Descargar Excel de la Fase 3</span>
@@ -806,7 +833,7 @@ export default function App() {
                 }}
               />
 
-              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#cbd5e1' }}>Cómo se llegó a este resultado</div>
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--c-cbd5e1)' }}>Cómo se llegó a este resultado</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
                 <div style={tarjeta}>
                   <span style={tituloTarjeta}>Fase 1 · Qué se encontró</span>
@@ -830,7 +857,7 @@ export default function App() {
                   {resultado.resumen.fase2.no_mencionan_gen > 0 && (
                     <span style={lineaTarjeta}>{resultado.resumen.fase2.no_mencionan_gen} artículos no nombraban el gen y no se le preguntaron.</span>
                   )}
-                  <span style={{ ...lineaTarjeta, color: '#64748b' }}>
+                  <span style={{ ...lineaTarjeta, color: 'var(--c-64748b)' }}>
                     {resultado.llm.llamadas} llamadas nuevas al LLM ({resultado.llm.tokens.toLocaleString('es-ES')} tokens) y {resultado.llm.reutilizadas} respuestas ya guardadas.
                   </span>
                 </div>
@@ -844,15 +871,15 @@ export default function App() {
                     {rutaRes.n_activan} genes empujan hacia activada, {rutaRes.n_inhiben} hacia inhibida y {rutaRes.n_total - rutaRes.n_activan - rutaRes.n_inhiben} no cuentan.
                   </span>
                   <span style={lineaTarjeta}>{explicacionNPS(rutaRes)}</span>
-                  <span style={{ ...lineaTarjeta, color: '#64748b' }}>
+                  <span style={{ ...lineaTarjeta, color: 'var(--c-64748b)' }}>
                     Pesando cada gen por su log2FC: NPS {formatoNPS(rutaRes.NPS_log2FC)} ({rutaRes.Lectura_log2FC || 'sin tabla'}).
-                    {rutaRes.Sensible_al_peso === 'sí' && <strong style={{ color: '#fbbf24' }}> La lectura cambia con ese peso: revisarla.</strong>}
-                    {rutaRes.n_pendiente > 0 && <strong style={{ color: '#fbbf24' }}> {rutaRes.n_pendiente} genes pendientes de la Fase 2.</strong>}
+                    {rutaRes.Sensible_al_peso === 'sí' && <strong style={{ color: 'var(--c-fbbf24)' }}> La lectura cambia con ese peso: revisarla.</strong>}
+                    {rutaRes.n_pendiente > 0 && <strong style={{ color: 'var(--c-fbbf24)' }}> {rutaRes.n_pendiente} genes pendientes de la Fase 2.</strong>}
                   </span>
                 </div>
               </div>
 
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+              <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)' }}>
                 Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
                 El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
                 Pulsa un gen para ver sus artículos y el cálculo.
@@ -860,8 +887,8 @@ export default function App() {
 
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-                  <thead style={{ backgroundColor: '#020617' }}>
-                    <tr style={{ borderBottom: '1px solid #1e293b', color: '#94a3b8' }}>
+                  <thead style={{ backgroundColor: 'var(--c-020617)' }}>
+                    <tr style={{ borderBottom: '1px solid var(--c-1e293b)', color: 'var(--c-94a3b8)' }}>
                       <th style={{ padding: '9px', width: '20px' }}></th>
                       <th style={{ padding: '9px' }}>Gen</th>
                       <th style={{ padding: '9px' }}>En NK</th>
@@ -880,60 +907,60 @@ export default function App() {
                       return (
                         <React.Fragment key={g.Gen}>
                           <tr id={`gen-${g.Gen}`} onClick={() => setAbierto(abiertoGen ? null : g.Gen)} style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)', cursor: 'pointer', backgroundColor: abiertoGen ? 'rgba(20, 184, 166, 0.06)' : 'transparent' }}>
-                            <td style={{ padding: '9px', color: '#64748b' }}>{abiertoGen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
+                            <td style={{ padding: '9px', color: 'var(--c-64748b)' }}>{abiertoGen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
                             <td style={{ padding: '9px', fontFamily: 'monospace', fontWeight: 'bold' }}>{g.Gen}</td>
-                            <td style={{ padding: '9px', color: g.Direccion === 'up' ? '#6ee7b7' : '#fda4af' }}>{g.Direccion === 'up' ? 'Sobreexpresado' : 'Infraexpresado'}</td>
-                            <td style={{ padding: '9px', fontWeight: 'bold', color: g.Signo_par === '+1' ? '#2dd4bf' : g.Signo_par === '-1' ? '#fb7185' : '#fbbf24' }}>
+                            <td style={{ padding: '9px', color: g.Direccion === 'up' ? 'var(--c-6ee7b7)' : 'var(--c-fda4af)' }}>{g.Direccion === 'up' ? 'Sobreexpresado' : 'Infraexpresado'}</td>
+                            <td style={{ padding: '9px', fontWeight: 'bold', color: g.Signo_par === '+1' ? 'var(--c-2dd4bf)' : g.Signo_par === '-1' ? 'var(--c-fb7185)' : 'var(--c-fbbf24)' }}>
                               {SIGNO_TEXTO[g.Signo_par] || g.Signo_par}
-                              {g.Estado_par === 'revisar' && <span style={{ fontWeight: 'normal', color: '#fbbf24' }}> (a revisar)</span>}
-                              {g.Estado_par === 'pendiente' && <span style={{ fontWeight: 'normal', color: '#fbbf24' }}> (pendiente)</span>}
+                              {g.Estado_par === 'revisar' && <span style={{ fontWeight: 'normal', color: 'var(--c-fbbf24)' }}> (a revisar)</span>}
+                              {g.Estado_par === 'pendiente' && <span style={{ fontWeight: 'normal', color: 'var(--c-fbbf24)' }}> (pendiente)</span>}
                             </td>
-                            <td style={{ padding: '9px', fontWeight: 'bold', color: c > 0 ? '#34d399' : c < 0 ? '#f87171' : '#64748b' }}>{efectoTexto(c)}</td>
-                            <td style={{ padding: '9px', color: '#94a3b8' }}>{fuenteTexto(g, d)}</td>
+                            <td style={{ padding: '9px', fontWeight: 'bold', color: c > 0 ? 'var(--c-34d399)' : c < 0 ? 'var(--c-f87171)' : 'var(--c-64748b)' }}>{efectoTexto(c)}</td>
+                            <td style={{ padding: '9px', color: 'var(--c-94a3b8)' }}>{fuenteTexto(g, d)}</td>
                             <td style={{ padding: '9px' }}><PesoEvidencia g={g} d={d} /></td>
-                            <td style={{ padding: '9px', color: '#cbd5e1' }}>{motivos(g.Motivos).join(' ') || (g.Origen === 'LLM' ? 'Los artículos coinciden.' : '')}</td>
+                            <td style={{ padding: '9px', color: 'var(--c-cbd5e1)' }}>{motivos(g.Motivos).join(' ') || (g.Origen === 'LLM' ? 'Los artículos coinciden.' : '')}</td>
                           </tr>
                           {abiertoGen && (
                             <tr style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)' }}>
                               <td></td>
                               <td colSpan={7} style={{ padding: '4px 9px 14px 9px' }}>
                                 {d?.GO && g.Origen === 'GO' && (
-                                  <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '8px' }}>
+                                  <div style={{ fontSize: '12px', color: 'var(--c-cbd5e1)', marginBottom: '8px' }}>
                                     Anotación curada de Gene Ontology con evidencia experimental ({(d.GO.Evidencias || '—').split('|').map((c) => `${c}: ${EVIDENCIA_GO_TEXTO[c] || c}`).join(', ')}).
                                     El signo se acepta entero, sin pesar artículos, porque la anotación es experimental, está a 2 pasos o menos de la ruta en GO y no es de otro tipo celular ni indirecta
                                     {d.GO.PMIDs.length > 0 && <>. Artículos de la anotación</>}
-                                    {d.GO.PMIDs.length > 0 && <>: {d.GO.PMIDs.map((p, i) => <React.Fragment key={p}>{i > 0 && ', '}<a href={`https://pubmed.ncbi.nlm.nih.gov/${p}/`} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>PMID {p}</a></React.Fragment>)}</>}.
+                                    {d.GO.PMIDs.length > 0 && <>: {d.GO.PMIDs.map((p, i) => <React.Fragment key={p}>{i > 0 && ', '}<a href={`https://pubmed.ncbi.nlm.nih.gov/${p}/`} target="_blank" rel="noreferrer" style={{ color: 'var(--c-38bdf8)' }}>PMID {p}</a></React.Fragment>)}</>}.
                                   </div>
                                 )}
                                 {(d?.articulos || []).map((a) => (
-                                  <div key={a.PMID} style={{ borderLeft: `3px solid ${a.Signo === '+1' ? '#2dd4bf' : a.Signo === '-1' ? '#fb7185' : '#475569'}`, padding: '6px 10px', marginBottom: '8px', backgroundColor: '#020617', borderRadius: '6px' }}>
+                                  <div key={a.PMID} style={{ borderLeft: `3px solid ${a.Signo === '+1' ? 'var(--c-2dd4bf)' : a.Signo === '-1' ? 'var(--c-fb7185)' : 'var(--c-475569)'}`, padding: '6px 10px', marginBottom: '8px', backgroundColor: 'var(--c-020617)', borderRadius: '6px' }}>
                                     <div style={{ fontSize: '12px' }}>
-                                      <a href={`https://pubmed.ncbi.nlm.nih.gov/${a.PMID}/`} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>PMID {a.PMID}</a>
-                                      {a.Titulo && <span style={{ color: '#e2e8f0' }}> · {a.Titulo}</span>}
+                                      <a href={`https://pubmed.ncbi.nlm.nih.gov/${a.PMID}/`} target="_blank" rel="noreferrer" style={{ color: 'var(--c-38bdf8)' }}>PMID {a.PMID}</a>
+                                      {a.Titulo && <span style={{ color: 'var(--c-e2e8f0)' }}> · {a.Titulo}</span>}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
-                                      <strong style={{ color: a.Signo === '+1' ? '#2dd4bf' : a.Signo === '-1' ? '#fb7185' : '#fbbf24' }}>{SIGNO_TEXTO[a.Signo] || a.Signo}</strong>
+                                    <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)', marginTop: '3px' }}>
+                                      <strong style={{ color: a.Signo === '+1' ? 'var(--c-2dd4bf)' : a.Signo === '-1' ? 'var(--c-fb7185)' : 'var(--c-fbbf24)' }}>{SIGNO_TEXTO[a.Signo] || a.Signo}</strong>
                                       {motivos(a.Motivos).length > 0 && <> · {motivos(a.Motivos).join(' ')}</>}
                                     </div>
                                     {a.Votos.length > 0 && (
-                                      <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                                      <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)', marginTop: '4px' }}>
                                         {a.Votos.length > 1 ? `Cuenta ${a.Votos.length} veces, una por cada subproceso de la ruta por el que se preguntó:` : 'Cuenta una vez:'}
                                         <ul style={{ margin: '2px 0 0 0', paddingLeft: '18px' }}>
                                           {a.Votos.map((v, i) => (
                                             <li key={i}>
-                                              {v.Proceso}: <strong style={{ color: v.Signo === '+1' ? '#2dd4bf' : v.Signo === '-1' ? '#fb7185' : '#fbbf24' }}>{(SIGNO_TEXTO[v.Signo] || v.Signo).toLowerCase()}</strong>
+                                              {v.Proceso}: <strong style={{ color: v.Signo === '+1' ? 'var(--c-2dd4bf)' : v.Signo === '-1' ? 'var(--c-fb7185)' : 'var(--c-fbbf24)' }}>{(SIGNO_TEXTO[v.Signo] || v.Signo).toLowerCase()}</strong>
                                               {['+1', '-1', 'neutro'].includes(v.Signo) && <>, peso {calculoPeso(v)}</>}
                                             </li>
                                           ))}
                                         </ul>
                                       </div>
                                     )}
-                                    {a.Cita && <div style={{ fontSize: '12px', color: '#cbd5e1', fontStyle: 'italic', marginTop: '4px' }}>«{a.Cita}»</div>}
+                                    {a.Cita && <div style={{ fontSize: '12px', color: 'var(--c-cbd5e1)', fontStyle: 'italic', marginTop: '4px' }}>«{a.Cita}»</div>}
                                   </div>
                                 ))}
-                                {!d?.articulos.length && g.Origen !== 'GO' && <div style={{ fontSize: '12px', color: '#64748b' }}>Sin artículos que mostrar.</div>}
+                                {!d?.articulos.length && g.Origen !== 'GO' && <div style={{ fontSize: '12px', color: 'var(--c-64748b)' }}>Sin artículos que mostrar.</div>}
                                 {g.Origen === 'LLM' && (
-                                  <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                                  <div style={{ fontSize: '12px', color: 'var(--c-cbd5e1)' }}>
                                     Peso total: {coma(Number(g.W_pos || 0))} a favor de que activa y {coma(Number(g.W_neg || 0))} a favor de que inhibe.
                                     {Math.max(Number(g.W_pos || 0), Number(g.W_neg || 0)) < MIN_PESO_EVIDENCIA && ' No llega a 1: la evidencia es débil, pero el signo cuenta igual en el NPS.'}
                                   </div>
@@ -947,7 +974,7 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>
+              <div style={{ fontSize: '11px', color: 'var(--c-64748b)' }}>
                 Ficheros de las tres fases en <code>{resultado.carpeta}</code>.
               </div>
             </>
@@ -958,26 +985,26 @@ export default function App() {
       {/* CONFIRMACIÓN ANTES DE EJECUTAR */}
       {confirmando && rutaSel && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', zIndex: 50 }}>
-          <div style={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '14px', padding: '22px', maxWidth: '520px', width: '100%' }}>
+          <div style={{ backgroundColor: 'var(--c-0f172a)', border: '1px solid var(--c-334155)', borderRadius: '14px', padding: '22px', maxWidth: '520px', width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#5eead4' }}>¿Ejecutar esta ruta?</h3>
-              <button onClick={() => setConfirmando(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={18} /></button>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: 'var(--c-5eead4)' }}>¿Ejecutar esta ruta?</h3>
+              <button onClick={() => setConfirmando(false)} style={{ background: 'none', border: 'none', color: 'var(--c-94a3b8)', cursor: 'pointer' }}><X size={18} /></button>
             </div>
-            <div style={{ fontSize: '13px', color: '#e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div><span style={{ fontFamily: 'monospace', color: '#2dd4bf', fontWeight: 'bold' }}>{rutaSel.GO_ID}</span> · {rutaSel.Descripcion}</div>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+            <div style={{ fontSize: '13px', color: 'var(--c-e2e8f0)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div><span style={{ fontFamily: 'monospace', color: 'var(--c-2dd4bf)', fontWeight: 'bold' }}>{rutaSel.GO_ID}</span> · {rutaSel.Descripcion}</div>
+              <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)' }}>
                 {genes(rutaSel.Genes_up).length} sobreexpresados · {genes(rutaSel.Genes_down).length} infraexpresados
               </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.5 }}>
+              <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)', lineHeight: 1.5 }}>
                 Se ejecutan seguidas las tres fases: ingesta (GO y abstracts de PubMed), inferencia con Gemini (gpt-oss solo si Gemini falla) y Net Pathway Score.
                 Con las cachés tarda unos segundos; en frío, unos 2–3 minutos. Las respuestas ya registradas no se vuelven a pedir al LLM.
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
-              <button onClick={() => setConfirmando(false)} style={{ padding: '8px 14px', fontSize: '12px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#cbd5e1', cursor: 'pointer' }}>
+              <button onClick={() => setConfirmando(false)} style={{ padding: '8px 14px', fontSize: '12px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-cbd5e1)', cursor: 'pointer' }}>
                 Cancelar
               </button>
-              <button onClick={ejecutarRuta} style={{ padding: '8px 16px', fontSize: '12px', fontWeight: 'bold', borderRadius: '8px', border: 'none', backgroundColor: '#14b8a6', color: '#020617', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button onClick={ejecutarRuta} style={{ padding: '8px 16px', fontSize: '12px', fontWeight: 'bold', borderRadius: '8px', border: 'none', backgroundColor: 'var(--c-14b8a6)', color: 'var(--c-020617)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Play size={14} />
                 <span>Confirmar y ejecutar</span>
               </button>
