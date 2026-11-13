@@ -115,6 +115,11 @@ def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
     hojas = pd.read_excel(excel_f2, sheet_name=["Por_ruta", "Preguntas"])
     votos = casos_con_peso(hojas["Por_ruta"][hojas["Por_ruta"]["GO_ID"] == go_id], hojas["Preguntas"])
     f2 = votos.sort_values("Confianza_final", ascending=False).drop_duplicates(["Gen", "PMID"])  # un PMID por gen
+    # Lo que respondió el modelo aunque el código lo dejara en UNKNOWN: efecto, confianza y tipo de evidencia
+    preguntas = hojas["Preguntas"].copy()
+    preguntas["PMID"] = preguntas["PMID"].map(limpiar)
+    respuesta = {(r["Gen"], r["PMID"]): r for _, r in
+                 preguntas.sort_values("Confianza_modelo", ascending=False).drop_duplicates(["Gen", "PMID"]).iterrows()}
 
     genes = {}
     for gen, filas in f2.groupby("Gen"):
@@ -123,6 +128,11 @@ def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
             "Estado": _texto(f["Estado"]), "Motivos": _texto(f["Motivos"]),
             "Confianza": None if pd.isna(f["Confianza_final"]) else int(f["Confianza_final"]),
             "Cita": _texto(f["Cita"]),
+            "Efecto_LLM": _texto(respuesta[(gen, f["PMID"])]["Efecto"]) if (gen, f["PMID"]) in respuesta else "",
+            "Confianza_LLM": (None if (gen, f["PMID"]) not in respuesta
+                              or pd.isna(respuesta[(gen, f["PMID"])]["Confianza_modelo"])
+                              else int(respuesta[(gen, f["PMID"])]["Confianza_modelo"])),
+            "Tipo_evidencia": _texto(respuesta[(gen, f["PMID"])]["Tipo_evidencia"]) if (gen, f["PMID"]) in respuesta else "",
             "Votos": [{"Proceso": _texto(v["Proceso"]), "Signo": _texto(v["Signo_ruta"]),
                        "Organismo": _texto(v["Organismo"]), "Tipo_celular": _texto(v["Tipo_celular"]),
                        "Confianza": None if pd.isna(v["Confianza_final"]) else int(v["Confianza_final"]),

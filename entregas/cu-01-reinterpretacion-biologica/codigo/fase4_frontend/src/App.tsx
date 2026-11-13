@@ -110,6 +110,9 @@ interface Articulo {
   Motivos: string;
   Confianza: number | null;
   Cita: string;
+  Efecto_LLM: string;
+  Confianza_LLM: number | null;
+  Tipo_evidencia: string;
   Votos: Voto[];
 }
 
@@ -187,6 +190,18 @@ const MOTIVO_TEXTO: Record<string, string> = {
   incoherencia_respuesta: 'La respuesta del LLM era incoherente.',
   json_invalido: 'La respuesta del LLM no se pudo leer.',
   LLM_y_revision: 'Gen con función doble conocida: se revisa siempre.',
+};
+
+// Lo que contestó el modelo antes de que el código decidiera (UMBRAL_VEREDICTO, fase2_inferencia/esquema.py)
+const UMBRAL_VEREDICTO = 80;
+const EFECTO_TEXTO: Record<string, string> = { INCREASES: 'activa', DECREASES: 'inhibe', NO_EFFECT: 'no lo cambia' };
+const TIPO_EVIDENCIA_TEXTO: Record<string, string> = {
+  gain_of_function: 'experimento de ganancia de función (sobreexpresión, activación del gen)',
+  loss_of_function: 'experimento de pérdida de función (knockout, silenciamiento, bloqueo)',
+  direct_measurement: 'medida directa del efecto del gen',
+  correlation_or_marker: 'solo correlación o uso como marcador (no prueba que el gen cause el efecto)',
+  background_statement: 'afirmación de contexto, no un experimento del propio artículo',
+  none: 'el artículo no aporta evidencia sobre el gen',
 };
 
 const motivos = (m: string | null | undefined) =>
@@ -943,6 +958,18 @@ export default function App() {
                                       <strong style={{ color: a.Signo === '+1' ? 'var(--c-2dd4bf)' : a.Signo === '-1' ? 'var(--c-fb7185)' : 'var(--c-fbbf24)' }}>{SIGNO_TEXTO[a.Signo] || a.Signo}</strong>
                                       {motivos(a.Motivos).length > 0 && <> · {motivos(a.Motivos).join(' ')}</>}
                                     </div>
+                                    {a.Tipo_evidencia && (
+                                      <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)', marginTop: '3px' }}>
+                                        Tipo de evidencia: {TIPO_EVIDENCIA_TEXTO[a.Tipo_evidencia] || a.Tipo_evidencia}.
+                                      </div>
+                                    )}
+                                    {a.Signo === 'UNKNOWN' && EFECTO_TEXTO[a.Efecto_LLM] && (
+                                      <div style={{ fontSize: '12px', color: 'var(--c-fbbf24)', marginTop: '3px' }}>
+                                        El LLM se inclinaba por que <strong>{EFECTO_TEXTO[a.Efecto_LLM]}</strong> el proceso
+                                        {a.Confianza_LLM !== null && <> con una confianza del {a.Confianza_LLM} %</>}, pero para dar un signo se exige
+                                        un {UMBRAL_VEREDICTO} % y que el artículo pruebe el efecto del propio gen, así que queda sin conclusión.
+                                      </div>
+                                    )}
                                     {a.Votos.length > 0 && (
                                       <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)', marginTop: '4px' }}>
                                         {a.Votos.length > 1 ? `Cuenta ${a.Votos.length} veces, una por cada subproceso de la ruta por el que se preguntó:` : 'Cuenta una vez:'}
