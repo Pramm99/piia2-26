@@ -42,7 +42,7 @@ from fase2_inferencia.cliente import MODELOS, ClienteOpenAICompatible  # noqa: E
 from fase2_inferencia.limpieza import normalizar_pmid as limpiar  # noqa: E402
 from fase2_inferencia.pipeline import ejecutar_fase2  # noqa: E402
 from fase3_scoring import config as f3_config  # noqa: E402
-from fase3_scoring.nps import COLUMNAS_FASE2, calcular, escribir  # noqa: E402
+from fase3_scoring.nps import COLUMNAS_FASE2, calcular, casos_con_peso, escribir  # noqa: E402
 
 DIR_SALIDAS = CODIGO_DIR / "data" / "frontend"
 PATRON_GO = re.compile(r"^GO:\d{7}$")
@@ -119,14 +119,15 @@ def _texto(v) -> str:
 
 def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
     """Lo que la interfaz explica en lenguaje llano: un resumen de cada fase y, por gen, los artículos que leyó el
-    LLM (título, signo, confianza y la frase citada) y las evidencias de GO cuando el signo sale de la anotación."""
+    LLM (título, signo, confianza y la frase citada) y las evidencias de GO cuando el signo sale de la anotación.
+    Cada artículo lleva sus votos: uno por subproceso de la ruta por el que se preguntó, con el peso que le da la
+    Fase 3 (confianza / 100, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes)."""
     f1 = pd.read_excel(excel_f1, sheet_name=["Con_abstract", "Triaje_polaridad"])
     con, triaje = f1["Con_abstract"], f1["Triaje_polaridad"]
     titulos = {limpiar(p): _texto(t) for p, t in zip(con["PMID"], con["Titulo"])}
-    f2 = pd.read_excel(excel_f2, sheet_name="Por_ruta")
-    f2 = f2[f2["GO_ID"] == go_id].copy()
-    f2["PMID"] = f2["PMID"].map(limpiar)
-    f2 = f2.sort_values("Confianza_final", ascending=False).drop_duplicates(["Gen", "PMID"])  # un PMID por gen
+    hojas = pd.read_excel(excel_f2, sheet_name=["Por_ruta", "Preguntas"])
+    votos = casos_con_peso(hojas["Por_ruta"][hojas["Por_ruta"]["GO_ID"] == go_id], hojas["Preguntas"])
+    f2 = votos.sort_values("Confianza_final", ascending=False).drop_duplicates(["Gen", "PMID"])  # un PMID por gen
 
     genes = {}
     for gen, filas in f2.groupby("Gen"):
@@ -135,6 +136,11 @@ def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
             "Estado": _texto(f["Estado"]), "Motivos": _texto(f["Motivos"]),
             "Confianza": None if pd.isna(f["Confianza_final"]) else int(f["Confianza_final"]),
             "Cita": _texto(f["Cita"]),
+            "Votos": [{"Proceso": _texto(v["Proceso"]), "Signo": _texto(v["Signo_ruta"]),
+                       "Organismo": _texto(v["Organismo"]), "Tipo_celular": _texto(v["Tipo_celular"]),
+                       "Confianza": None if pd.isna(v["Confianza_final"]) else int(v["Confianza_final"]),
+                       "Peso": round(float(v["w"]), 2)}
+                      for _, v in votos[(votos["Gen"] == gen) & (votos["PMID"] == f["PMID"])].iterrows()],
         } for _, f in filas.iterrows()]}
     for _, f in triaje[triaje["GO_ID"] == go_id].iterrows():
         g = genes.setdefault(f["Gen"], {"articulos": []})

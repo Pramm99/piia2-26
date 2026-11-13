@@ -74,6 +74,8 @@ interface GeneContribution {
   Estado_par: string;
   Motivos: string | null;
   Origen: string;
+  W_pos: number | null;
+  W_neg: number | null;
   Contribucion: number;
 }
 
@@ -100,6 +102,17 @@ interface Articulo {
   Motivos: string;
   Confianza: number | null;
   Cita: string;
+  Votos: Voto[];
+}
+
+// Un voto del artículo: uno por cada subproceso de la ruta por el que se preguntó al LLM
+interface Voto {
+  Proceso: string;
+  Signo: string;
+  Organismo: string;
+  Tipo_celular: string;
+  Confianza: number | null;
+  Peso: number;
 }
 
 interface DetalleGen {
@@ -170,6 +183,49 @@ const MOTIVO_TEXTO: Record<string, string> = {
 
 const motivos = (m: string | null | undefined) =>
   (m || '').split('|').map((x) => x.trim()).filter(Boolean).map((x) => MOTIVO_TEXTO[x] || x);
+
+// Peso de cada voto en la Fase 3 (fase3_scoring/config.py): confianza / 100, por 0,5 si el estudio no es en humano
+// y otro 0,5 si no es en células inmunes. Un gen con menos de MIN_PESO_EVIDENCIA a su favor tiene evidencia débil.
+const MIN_PESO_EVIDENCIA = 1;
+const ORGANISMOS_VALIDOS = ['human', 'not_stated', ''];
+const TIPOS_CELULARES_VALIDOS = ['NK', 'T', 'other_immune', 'not_stated', ''];
+const ORGANISMO_TEXTO: Record<string, string> = { mouse: 'ratón', rat: 'rata', other: 'otro organismo' };
+const CELULA_TEXTO: Record<string, string> = { tumor: 'células tumorales', other: 'células no inmunes' };
+
+const coma = (v: number) => v.toFixed(2).replace('.', ',');
+
+const calculoPeso = (v: Voto) => {
+  const factores: string[] = [];
+  if (!ORGANISMOS_VALIDOS.includes(v.Organismo)) factores.push(`0,5 por ser en ${ORGANISMO_TEXTO[v.Organismo] || v.Organismo}`);
+  if (!TIPOS_CELULARES_VALIDOS.includes(v.Tipo_celular)) factores.push(`0,5 por ser en ${CELULA_TEXTO[v.Tipo_celular] || v.Tipo_celular}`);
+  const confianza = v.Confianza === null ? 'confianza por defecto 50 %' : `confianza ${v.Confianza} %`;
+  return factores.length ? `${coma(v.Peso)} (${confianza} × ${factores.join(' × ')})` : `${coma(v.Peso)} (${confianza})`;
+};
+
+const PesoEvidencia = ({ g }: { g: GeneContribution }) => {
+  if (g.Origen !== 'LLM') return <span style={{ color: '#475569' }}>—</span>;
+  const pos = Number(g.W_pos || 0);
+  const neg = Number(g.W_neg || 0);
+  const debil = Math.max(pos, neg) < MIN_PESO_EVIDENCIA;
+  const barra = (w: number, color: string) => (
+    <div style={{ width: `${Math.min(w / 2, 1) * 100}%`, height: '100%', backgroundColor: color }} />
+  );
+  return (
+    <div style={{ minWidth: '120px' }}>
+      <div style={{ position: 'relative', width: '120px', height: '6px', backgroundColor: '#1e293b', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
+        {pos > 0 && barra(pos, '#2dd4bf')}
+        {neg > 0 && barra(neg, '#fb7185')}
+        <div title="Umbral: peso 1" style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '2px', backgroundColor: '#f8fafc' }} />
+      </div>
+      <div style={{ fontSize: '11px', color: debil ? '#fbbf24' : '#cbd5e1', marginTop: '3px' }}>
+        {pos > 0 && <>{coma(pos)} activa</>}
+        {pos > 0 && neg > 0 && ' · '}
+        {neg > 0 && <>{coma(neg)} inhibe</>}
+        {debil && ' (débil, < 1)'}
+      </div>
+    </div>
+  );
+};
 
 const efectoTexto = (c: number) => (c > 0 ? 'Empuja hacia activada' : c < 0 ? 'Empuja hacia inhibida' : 'No cuenta');
 
@@ -605,7 +661,9 @@ export default function App() {
               </div>
 
               <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos. Pulsa un gen para ver sus artículos.
+                Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
+                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
+                Pulsa un gen para ver sus artículos y el cálculo.
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -618,6 +676,7 @@ export default function App() {
                       <th style={{ padding: '9px' }}>Qué hace en el proceso</th>
                       <th style={{ padding: '9px' }}>Efecto en la ruta</th>
                       <th style={{ padding: '9px' }}>Fuente</th>
+                      <th style={{ padding: '9px' }}>Peso de la evidencia</th>
                       <th style={{ padding: '9px' }}>Por qué</th>
                     </tr>
                   </thead>
@@ -639,12 +698,13 @@ export default function App() {
                             </td>
                             <td style={{ padding: '9px', fontWeight: 'bold', color: c > 0 ? '#34d399' : c < 0 ? '#f87171' : '#64748b' }}>{efectoTexto(c)}</td>
                             <td style={{ padding: '9px', color: '#94a3b8' }}>{fuenteTexto(g, d)}</td>
+                            <td style={{ padding: '9px' }}><PesoEvidencia g={g} /></td>
                             <td style={{ padding: '9px', color: '#cbd5e1' }}>{motivos(g.Motivos).join(' ') || (g.Origen === 'LLM' ? 'Los artículos coinciden.' : '')}</td>
                           </tr>
                           {abiertoGen && (
                             <tr style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)' }}>
                               <td></td>
-                              <td colSpan={6} style={{ padding: '4px 9px 14px 9px' }}>
+                              <td colSpan={7} style={{ padding: '4px 9px 14px 9px' }}>
                                 {d?.GO && g.Origen === 'GO' && (
                                   <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '8px' }}>
                                     Anotación curada de Gene Ontology (evidencia {d.GO.Evidencias || '—'})
@@ -659,13 +719,31 @@ export default function App() {
                                     </div>
                                     <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
                                       <strong style={{ color: a.Signo === '+1' ? '#2dd4bf' : a.Signo === '-1' ? '#fb7185' : '#fbbf24' }}>{SIGNO_TEXTO[a.Signo] || a.Signo}</strong>
-                                      {a.Confianza !== null && <> · confianza {a.Confianza} %</>}
                                       {motivos(a.Motivos).length > 0 && <> · {motivos(a.Motivos).join(' ')}</>}
                                     </div>
+                                    {a.Votos.length > 0 && (
+                                      <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                                        {a.Votos.length > 1 ? `Cuenta ${a.Votos.length} veces, una por cada subproceso de la ruta por el que se preguntó:` : 'Cuenta una vez:'}
+                                        <ul style={{ margin: '2px 0 0 0', paddingLeft: '18px' }}>
+                                          {a.Votos.map((v, i) => (
+                                            <li key={i}>
+                                              {v.Proceso}: <strong style={{ color: v.Signo === '+1' ? '#2dd4bf' : v.Signo === '-1' ? '#fb7185' : '#fbbf24' }}>{(SIGNO_TEXTO[v.Signo] || v.Signo).toLowerCase()}</strong>
+                                              {['+1', '-1', 'neutro'].includes(v.Signo) && <>, peso {calculoPeso(v)}</>}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
                                     {a.Cita && <div style={{ fontSize: '12px', color: '#cbd5e1', fontStyle: 'italic', marginTop: '4px' }}>«{a.Cita}»</div>}
                                   </div>
                                 ))}
                                 {!d?.articulos.length && g.Origen !== 'GO' && <div style={{ fontSize: '12px', color: '#64748b' }}>Sin artículos que mostrar.</div>}
+                                {g.Origen === 'LLM' && (
+                                  <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                                    Peso total: {coma(Number(g.W_pos || 0))} a favor de que activa y {coma(Number(g.W_neg || 0))} a favor de que inhibe.
+                                    {Math.max(Number(g.W_pos || 0), Number(g.W_neg || 0)) < MIN_PESO_EVIDENCIA && ' No llega a 1: la evidencia es débil, pero el signo cuenta igual en el NPS.'}
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           )}
