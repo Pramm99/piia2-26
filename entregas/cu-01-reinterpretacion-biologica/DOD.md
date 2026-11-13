@@ -19,7 +19,7 @@
 ## Parte por tipo de tarea (se suma a la común)
 
 ### Código
-- [ ] Pruebas en verde (`python -m pytest` desde `codigo/`), con un test nuevo si la tarea cambia el comportamiento.
+- [ ] Pruebas en verde (`python -m pytest` desde `codigo/`), con un test nuevo si la tarea cambia el comportamiento. En la Fase 4 (frontend), además, `npx tsc -b` y `npx eslint src` sin errores desde `codigo/fase4_frontend/`.
 - [ ] El comando de ejecución está documentado, y el README, el spec o el ADR están al día si cambia el comportamiento.
 - [ ] Ninguna clave en el commit: solo en `codigo/.env`, que no se versiona.
 

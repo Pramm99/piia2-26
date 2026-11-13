@@ -85,3 +85,6 @@ cd fase4_frontend && npm install && npm run dev   # Fase 4: interfaz web (http:/
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
 * los umbrales definitivos del scoring y la revisión de las rutas `Sensible_al_peso`;
+* la estabilidad de la lectura de una ruta entre ejecuciones (#37). Ojo: el frontend reutiliza el registro del LLM, así que repetir una ruta desde la web no vuelve a preguntar nada; para medir la estabilidad hay que ejecutarla en limpio;
+* si un artículo debe contar una sola vez por gen en la Fase 3 (#41);
+* las pruebas automáticas de la Fase 4 (#40).

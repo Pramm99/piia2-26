@@ -193,6 +193,9 @@ Las cifras son de la ejecución de referencia del 2026-11-13: las de los pasos 1
 
 ## Pendiente de decidir
 * **Fase 3:** los valores provisionales de la spec de scoring (pesos de contexto, minoría de ⅓ y umbrales de lectura del NPS) y la revisión a mano de las 20 rutas `Sensible_al_peso`.
+* **Fase 3:** si un artículo debe contar una sola vez por gen. Hoy vota una vez por cada subproceso de la ruta por el que se le pregunta, lo que no cambia el NPS pero infla el peso de la evidencia (#41).
+* **Fase 2:** qué hacer cuando la lectura de una ruta cambia entre ejecuciones, como GO:0072678, activada o mixta según la respuesta de GPR183 (#37).
+* **Fase 4:** no tiene pruebas automáticas; se comprueba con `npx tsc -b`, `npx eslint src` y a mano (#40).
 
 ## Decisiones de arquitectura
 | ADR | Decisión |

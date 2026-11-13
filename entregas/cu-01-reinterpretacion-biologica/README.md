@@ -80,6 +80,11 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Métrica de resolución:** Integración del signo inferido con la dirección de expresión de cada gen en el dataset original (_Net Pathway Score_), implementada según la [spec de scoring](specs/scoring-net-pathway-score.md) (`python -m fase3_scoring`). Todos los genes pesan igual; el _log2 Fold-Change_ de CIMUS da un segundo score de sensibilidad que señala las rutas cuya conclusión depende de cuánto cambia cada gen.
 
+- **Interfaz web (Fase 4):** para ejecutar una ruta entera desde el navegador y leer el resultado explicado: veredicto
+  de la ruta, qué aportó cada fase y, por gen, sus artículos con la cita y el peso de cada voto. Una persona experta puede
+  corregir en pantalla el signo de un gen sin que se guarde, y un Excel de resultados acumula las rutas ejecutadas
+  ([instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)).
+
 - **Reproducibilidad:**
   - registro de todas las respuestas de los modelos, que permite reanudar una ejecución y regenerar los resultados sin volver a llamar ([ADR-004](decisions/adr-004-persistencia-ficheros-locales.md));
   - un cliente simulado (`ClienteSimulado`) que permite probar el pipeline sin red ni cuotas;

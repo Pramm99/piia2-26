@@ -34,7 +34,9 @@ Este documento separa tres columnas:
 | Disco | 50 MB (47 MB del OBO y el GAF) | 127 MB entre cachés y salidas | — |
 | Memoria máxima | 777 MB (Fase 1, al cargar el GAF) | no medida | — |
 
-Una ejecución posterior de la misma ruta reutiliza las cachés: la red y el LLM solo se usan para lo nuevo.
+Una ejecución posterior de la misma ruta reutiliza las cachés: la red y el LLM solo se usan para lo nuevo. Desde la
+interfaz web (Fase 4), con las cachés y el registro ya hechos, una ruta tarda entre 9 y 20 s y no hace ninguna llamada
+al LLM (medido el 2026-11-13 con GO:0072678, GO:0001906, GO:0001909 y GO:0001774).
 
 ## Evidencia y resultado
 
