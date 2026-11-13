@@ -66,7 +66,7 @@ Aceptamos los compromisos asociados:
 * **GeneCards:**
   * *Motivo de descarte:* sus condiciones de uso prohíben el acceso automatizado.
 * **OmniPath y otras bases:**
-  * *Aplazadas.* Para los pares que siguen sin abstract (642), se probó gene2pubmed + MeSH (#31, sobre los 668 de la Fase 1 del 2026-11-09): con el MeSH buscado de forma automática solo gana abstract el 3,9 % de los pares, con una precisión de alrededor del 40 % (documento de la limitación).
+  * *Aplazadas.* Para los pares que siguen sin abstract (642), se probó gene2pubmed + MeSH (#31, sobre los 668 de la Fase 1 del 2026-11-09): con el MeSH buscado de forma automática solo gana abstract el 3,9 % de los pares; con una tabla ruta GO → MeSH hecha a mano, el 51 % (326 de 642), pero con una precisión del 53 % en una muestra leída, por debajo de GeneRIF y Europe PMC (documento de la limitación).
 
 ## Referencias
 * **Código del proyecto** (`codigo/fase1_ingesta/`):

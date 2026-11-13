@@ -111,7 +111,17 @@ Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
     (55 PMIDs).
   - En una primera lectura de esos 26, solo unos 10 tratan del gen en el proceso (alrededor del 40 %, frente a
     unos 8 de cada 10 de GeneRIF y Europe PMC). Falta confirmarlo con una lectura a mano.
-  - Para que rinda haría falta la tabla GO → MeSH hecha a mano para las 261 rutas.
+  - Para que rinda hace falta una tabla GO → MeSH hecha a mano.
+- **Piloto con la tabla GO → MeSH hecha a mano (2026-11-13), sobre los 642 pares de la Fase 1 actual:**
+  - La tabla cubre las 252 rutas: 134 con un MeSH equivalente (confianza alta), 86 con una combinación de célula y
+    proceso (media), 28 con una aproximación amplia (baja) y 4 sin MeSH porque son demasiado generales. «Regulation
+    of X» se mapea como X. Las 139 consultas se comprobaron en PubMed sin avisos.
+  - **326 pares (51 %) ganan algún abstract** (703 PMIDs), frente a 26 con el MeSH automático.
+  - **Precisión en una muestra de 30 pares: 16 tratan del gen en el proceso (53 %; 60 % con los dudosos)**, por debajo
+    del listón del § 4. Los fallos no dependen de la confianza del mapeo: son artículos que NCBI liga al gen pero en
+    los que el gen es solo un marcador o un locus de asociación (biomarcadores, GWAS, metilación).
+  - La tabla, las consultas y la muestra valorada están en `research_notes`, fuera del repositorio, hasta que se decida
+    si se integra (#31).
 
 ### Qué no se resolverá
 
@@ -136,5 +146,5 @@ Una etapa solo se queda si su precisión es comparable a la de GeneRIF y Europe 
 de 2026-11-08, unos 8 de cada 10 abstracts trataban del gen en el proceso). Si no la alcanza, sus PMIDs pasan
 a revisión humana en vez de ir directamente al LLM.
 
-Para gene2pubmed + MeSH, el piloto del § 3 da una cobertura del 3,9 % y una precisión por debajo de ese
-listón.
+Para gene2pubmed + MeSH, el piloto del § 3 da, con la tabla hecha a mano, una cobertura del 51 % de los pares y una
+precisión del 53 %, por debajo de ese listón.
