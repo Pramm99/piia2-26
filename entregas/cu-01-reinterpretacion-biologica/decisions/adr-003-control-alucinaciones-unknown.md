@@ -121,7 +121,7 @@ Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga 
 
 **El umbral se aplica a `confianza_modelo`, no a `confianza_final`** (decidido por el equipo el 2026-11-11). `confianza_modelo` decide si hay signo (≥ `UMBRAL_VEREDICTO`, 80) y `confianza_final` solo pesa ese signo en la agregación (spec de scoring). Motivos:
 * **Estabilidad:** `confianza_final` incluye el acuerdo con el otro modelo, y sin respuesta del secundario vale ×0,9 (`sin_segundo`). Como el secundario solo responde cuando falla el principal (8 de 2.464 preguntas en la ejecución completa), casi todos los signos llevan ese factor; un umbral sobre `confianza_final` penalizaría por igual a casi todos y dependería del modo de ejecución.
-* **Recorte:** sobre los 563 signos de esa ejecución (todos con `confianza_modelo` entre 80 y 100, mediana 90), `confianza_final` ≥ 80 quitaría 380 (67 %) y ≥ 70, 164 (29 %).
+* **Recorte:** sobre los 725 signos `+1`/`−1` que da el LLM en esa ejecución (hoja `Preguntas` de `fase2_resultados.xlsx`, Excel completo del 2026-11-13; todos con `confianza_modelo` entre 80 y 100, mediana 90, y `confianza_final` de mediana 76), `confianza_final` ≥ 80 quitaría 520 (72 %) y ≥ 70, 211 (29 %).
 * **Sin doble penalización:** el tipo de evidencia y la frase citada ya rebajan el peso del voto en el scoring; si decidieran también el umbral, contarían dos veces.
 * **El benchmark no la favorece:** para Gemini, `confianza_final` separa algo mejor (AUROC de 0,76 frente a 0,72; ECE de 7 puntos frente a 15), pero para gpt-oss es al revés (AUROC de 0,66 frente a 0,74; ECE de 15 frente a 5). Con 40 y 34 signos ninguna diferencia es concluyente, y sus factores se fijaron con un prompt anterior.
 
