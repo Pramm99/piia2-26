@@ -146,7 +146,7 @@ interface Resultado {
 const genes = (s: string) => s.split('/').map((g) => g.trim()).filter(Boolean);
 
 const formatoNPS = (v: number | null | undefined) =>
-  v === null || v === undefined ? 'N/A' : v > 0 ? `+${v.toFixed(2)}` : v.toFixed(2);
+  v === null || v === undefined ? 'N/A' : v > 0 ? `+${v.toFixed(2)}` : v.toFixed(2).replace('-', '−');
 
 const colorLectura = (l: string) => (l === 'activada' ? 'var(--c-34d399)' : l === 'inhibida' ? 'var(--c-f87171)' : 'var(--c-fbbf24)');
 
@@ -275,8 +275,9 @@ const PASOS = [
 ];
 
 const tarjeta: React.CSSProperties = { backgroundColor: 'var(--c-020617)', border: '1px solid var(--c-1e293b)', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '6px' };
-const tituloTarjeta: React.CSSProperties = { fontSize: '12px', fontWeight: 'bold', color: 'var(--c-5eead4)' };
-const lineaTarjeta: React.CSSProperties = { fontSize: '12px', color: 'var(--c-cbd5e1)', lineHeight: 1.5 };
+// Las tres tarjetas de fase usan el mismo tipo de letra: un estilo para el título y otro para todas las líneas
+const tituloTarjeta: React.CSSProperties = { fontSize: '13px', fontWeight: 'bold', color: 'var(--c-5eead4)' };
+const lineaTarjeta: React.CSSProperties = { fontSize: '13px', color: 'var(--c-cbd5e1)', lineHeight: 1.5 };
 
 // Cuántos genes a favor tendrían que dejar de contar para que la ruta perdiera su lectura (activada o inhibida)
 const genesParaCambiar = (aFavor: number, enContra: number) => {
@@ -857,21 +858,21 @@ export default function App() {
                   {resultado.resumen.fase2.no_mencionan_gen > 0 && (
                     <span style={lineaTarjeta}>{resultado.resumen.fase2.no_mencionan_gen} artículos no nombraban el gen y no se le preguntaron.</span>
                   )}
-                  <span style={{ ...lineaTarjeta, color: 'var(--c-64748b)' }}>
+                  <span style={lineaTarjeta}>
                     {resultado.llm.llamadas} llamadas nuevas al LLM ({resultado.llm.tokens.toLocaleString('es-ES')} tokens) y {resultado.llm.reutilizadas} respuestas ya guardadas.
                   </span>
                 </div>
 
                 <div style={{ ...tarjeta, borderColor: colorLectura(rutaRes.Lectura) }}>
                   <span style={tituloTarjeta}>Fase 3 · Lectura de la ruta</span>
-                  <span style={{ fontSize: '20px', fontWeight: 'bold', textTransform: 'uppercase', color: colorLectura(rutaRes.Lectura) }}>
-                    {rutaRes.Lectura} <span style={{ fontSize: '14px' }}>(NPS {formatoNPS(rutaRes.NPS)})</span>
+                  <span style={lineaTarjeta}>
+                    Lectura: <strong style={{ color: colorLectura(rutaRes.Lectura) }}>{rutaRes.Lectura} (NPS {formatoNPS(rutaRes.NPS)})</strong>.
                   </span>
                   <span style={lineaTarjeta}>
                     {rutaRes.n_activan} genes empujan hacia activada, {rutaRes.n_inhiben} hacia inhibida y {rutaRes.n_total - rutaRes.n_activan - rutaRes.n_inhiben} no cuentan.
                   </span>
                   <span style={lineaTarjeta}>{explicacionNPS(rutaRes)}</span>
-                  <span style={{ ...lineaTarjeta, color: 'var(--c-64748b)' }}>
+                  <span style={lineaTarjeta}>
                     Pesando cada gen por su log2FC: NPS {formatoNPS(rutaRes.NPS_log2FC)} ({rutaRes.Lectura_log2FC || 'sin tabla'}).
                     {rutaRes.Sensible_al_peso === 'sí' && <strong style={{ color: 'var(--c-fbbf24)' }}> La lectura cambia con ese peso: revisarla.</strong>}
                     {rutaRes.n_pendiente > 0 && <strong style={{ color: 'var(--c-fbbf24)' }}> {rutaRes.n_pendiente} genes pendientes de la Fase 2.</strong>}
