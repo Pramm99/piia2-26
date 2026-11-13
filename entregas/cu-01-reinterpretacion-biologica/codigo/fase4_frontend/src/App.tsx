@@ -270,6 +270,120 @@ const tarjeta: React.CSSProperties = { backgroundColor: '#020617', border: '1px 
 const tituloTarjeta: React.CSSProperties = { fontSize: '12px', fontWeight: 'bold', color: '#5eead4' };
 const lineaTarjeta: React.CSSProperties = { fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 };
 
+// Cuántos genes a favor tendrían que dejar de contar para que la ruta perdiera su lectura (activada o inhibida)
+const genesParaCambiar = (aFavor: number, enContra: number) => {
+  for (let k = 1; k <= aFavor; k++) {
+    const total = aFavor - k + enContra;
+    if (total < MIN_PARES_CON_SIGNO || (aFavor - k - enContra) / total < UMBRAL_NPS) return k;
+  }
+  return aFavor;
+};
+
+const TITULO_LECTURA: Record<string, string> = {
+  activada: 'La ruta está ACTIVADA',
+  inhibida: 'La ruta está INHIBIDA',
+  mixta: 'Sin dirección clara (MIXTA)',
+  insuficiente: 'Evidencia insuficiente',
+};
+
+const ChipGen = ({ g, onClick }: { g: GeneContribution; onClick: () => void }) => {
+  const pos = Number(g.W_pos || 0);
+  const neg = Number(g.W_neg || 0);
+  const debil = g.Origen === 'LLM' && Math.max(pos, neg) < MIN_PESO_EVIDENCIA;
+  const fuente = g.Origen === 'GO' ? 'GO' : g.Origen === 'LLM' ? 'artículos' : g.Origen === 'Ig' ? 'Ig' : '';
+  return (
+    <button
+      onClick={onClick}
+      title={`${g.Gen}: ${g.Direccion === 'up' ? 'sobreexpresado' : 'infraexpresado'}, ${(SIGNO_TEXTO[g.Signo_par] || g.Signo_par).toLowerCase()}`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #334155', backgroundColor: '#0f172a', color: '#f8fafc', fontSize: '12px', cursor: 'pointer' }}
+    >
+      <span style={{ color: g.Direccion === 'up' ? '#6ee7b7' : '#fda4af' }}>{g.Direccion === 'up' ? '▲' : '▼'}</span>
+      <strong style={{ fontFamily: 'monospace' }}>{g.Gen}</strong>
+      {fuente && (
+        <span style={{ fontSize: '10px', padding: '0 5px', borderRadius: '4px', backgroundColor: g.Origen === 'GO' ? 'rgba(56, 189, 248, 0.15)' : '#1e293b', color: g.Origen === 'GO' ? '#38bdf8' : '#94a3b8' }}>
+          {fuente}
+        </span>
+      )}
+      {debil && <span title="Evidencia débil (peso < 1)" style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#fbbf24' }} />}
+    </button>
+  );
+};
+
+const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribution[]; onGen: (gen: string) => void }) => {
+  const activan = pares.filter((g) => Number(g.Contribucion) > 0);
+  const inhiben = pares.filter((g) => Number(g.Contribucion) < 0);
+  const noCuentan = pares.filter((g) => Number(g.Contribucion) === 0);
+  const color = colorLectura(r.Lectura);
+  const aFavor = r.Lectura === 'inhibida' ? inhiben : activan;
+  const directos = aFavor.filter((g) => g.Origen === 'GO').length;
+  const debiles = aFavor.filter((g) => g.Origen === 'LLM' && Math.max(Number(g.W_pos || 0), Number(g.W_neg || 0)) < MIN_PESO_EVIDENCIA).length;
+  const nps = r.NPS === null || r.NPS === undefined ? null : Number(r.NPS);
+  const pct = (v: number) => `${((v + 1) / 2) * 100}%`;
+
+  let solidez: string;
+  if (r.Lectura === 'activada' || r.Lectura === 'inhibida') {
+    const k = genesParaCambiar(aFavor.length, (r.Lectura === 'activada' ? inhiben : activan).length);
+    solidez = `La sostienen ${aFavor.length} genes: ${directos} con evidencia directa de Gene Ontology y ${aFavor.length - directos} por artículos`
+      + (debiles ? ` (${debiles} con evidencia débil)` : '')
+      + `. ${k === 1 ? 'Basta con que cambie 1 gen' : `Tendrían que cambiar ${k} genes`} para que dejara de leerse como ${r.Lectura}.`;
+  } else if (r.Lectura === 'mixta') {
+    solidez = `${activan.length} genes empujan hacia activada y ${inhiben.length} hacia inhibida: el balance no llega a ±${UMBRAL_NPS}.`;
+  } else {
+    solidez = `Solo ${activan.length + inhiben.length} genes tienen signo: hacen falta al menos ${MIN_PARES_CON_SIGNO} y una cobertura del ${MIN_COBERTURA * 100} %.`;
+  }
+
+  const columna = (titulo: string, lista: GeneContribution[], col: string) => (
+    <div style={{ flex: '1 1 220px', backgroundColor: '#020617', border: `1px solid ${col}33`, borderRadius: '10px', padding: '10px' }}>
+      <div style={{ fontSize: '12px', fontWeight: 'bold', color: col, marginBottom: '8px' }}>{titulo} ({lista.length})</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        {lista.length ? lista.map((g) => <ChipGen key={g.Gen} g={g} onClick={() => onGen(g.Gen)} />) : <span style={{ fontSize: '12px', color: '#475569' }}>Ninguno</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ border: `2px solid ${color}`, borderRadius: '14px', padding: '18px', backgroundColor: `${color}0d`, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+        <div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color }}>{TITULO_LECTURA[r.Lectura] || r.Lectura}</div>
+          <div style={{ fontSize: '13px', color: '#cbd5e1', marginTop: '4px', maxWidth: '720px', lineHeight: 1.5 }}>{solidez}</div>
+          {(r.Sensible_al_peso === 'sí' || r.n_pendiente > 0) && (
+            <div style={{ fontSize: '12px', color: '#fbbf24', marginTop: '4px' }}>
+              {r.Sensible_al_peso === 'sí' && 'Si cada gen pesa según cuánto cambia su expresión (log2FC), la lectura cambia: conviene revisarla. '}
+              {r.n_pendiente > 0 && `${r.n_pendiente} genes siguen pendientes del LLM.`}
+            </div>
+          )}
+        </div>
+        {/* Escala del NPS de −1 a +1 con las tres zonas de lectura */}
+        <div style={{ width: '320px', maxWidth: '100%' }}>
+          <div style={{ position: 'relative', height: '14px', borderRadius: '7px', overflow: 'hidden', display: 'flex' }}>
+            <div style={{ width: pct(-UMBRAL_NPS), backgroundColor: 'rgba(248, 113, 113, 0.45)' }} />
+            <div style={{ flex: 1, backgroundColor: 'rgba(251, 191, 36, 0.25)' }} />
+            <div style={{ width: pct(-UMBRAL_NPS), backgroundColor: 'rgba(52, 211, 153, 0.45)' }} />
+            {nps !== null && (
+              <div style={{ position: 'absolute', left: `calc(${pct(nps)} - 2px)`, top: 0, bottom: 0, width: '4px', backgroundColor: '#f8fafc' }} />
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>
+            <span>−1 inhibida</span><span>mixta</span><span>activada +1</span>
+          </div>
+          <div style={{ textAlign: 'center', fontSize: '12px', color: '#e2e8f0', marginTop: '2px' }}>NPS {formatoNPS(nps)}</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+        {columna('Empujan hacia activada', activan, '#34d399')}
+        {columna('Empujan hacia inhibida', inhiben, '#f87171')}
+        {columna('No cuentan', noCuentan, '#64748b')}
+      </div>
+      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+        ▲ sobreexpresado · ▼ infraexpresado en NK · <span style={{ color: '#38bdf8' }}>GO</span> evidencia directa de Gene Ontology · artículos: lo decidió el LLM leyendo PubMed ·{' '}
+        <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#fbbf24' }} /> evidencia débil. Pulsa un gen para ver su detalle.
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
 
@@ -639,6 +753,16 @@ export default function App() {
                 </button>
               </div>
 
+              <Veredicto
+                r={rutaRes}
+                pares={paresRes}
+                onGen={(gen) => {
+                  setAbierto(gen);
+                  setTimeout(() => document.getElementById(`gen-${gen}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+                }}
+              />
+
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#cbd5e1' }}>Cómo se llegó a este resultado</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
                 <div style={tarjeta}>
                   <span style={tituloTarjeta}>Fase 1 · Qué se encontró</span>
@@ -711,7 +835,7 @@ export default function App() {
                       const abiertoGen = abierto === g.Gen;
                       return (
                         <React.Fragment key={g.Gen}>
-                          <tr onClick={() => setAbierto(abiertoGen ? null : g.Gen)} style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)', cursor: 'pointer', backgroundColor: abiertoGen ? 'rgba(20, 184, 166, 0.06)' : 'transparent' }}>
+                          <tr id={`gen-${g.Gen}`} onClick={() => setAbierto(abiertoGen ? null : g.Gen)} style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)', cursor: 'pointer', backgroundColor: abiertoGen ? 'rgba(20, 184, 166, 0.06)' : 'transparent' }}>
                             <td style={{ padding: '9px', color: '#64748b' }}>{abiertoGen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
                             <td style={{ padding: '9px', fontFamily: 'monospace', fontWeight: 'bold' }}>{g.Gen}</td>
                             <td style={{ padding: '9px', color: g.Direccion === 'up' ? '#6ee7b7' : '#fda4af' }}>{g.Direccion === 'up' ? 'Sobreexpresado' : 'Infraexpresado'}</td>
