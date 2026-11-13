@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 
-from ._fase1 import MIN_ALIAS, datos_mygene, menciona_gen, patron_gen
+from ._fase1 import MIN_ALIAS, datos_mygene, menciona_gen, nombres_proteina, nombres_utiles, patron_gen
 from .esquema import CasoProceso
 from .limpieza import limpiar_abstract, normalizar_pmid, segmentar_frases, valor_texto
 from .proceso import nombre, nucleo_y_polaridad, resolver_termino, signo_camino
@@ -45,7 +45,8 @@ def construir_casos_y_cerrados(df: pd.DataFrame) -> Tuple[List[CasoProceso], Lis
     la salida final de la Fase 2 los incluya como UNKNOWN."""
     genes = sorted({valor_texto(g).upper() for g in df["Gen"]})
     mg = datos_mygene(genes)
-    patrones = {g: patron_gen(g, mg[g]["Alias"], mg[g]["Nombre"]) for g in genes}
+    proteinas = nombres_utiles(nombres_proteina(genes))  # solo para el filtro: el prompt sigue con los alias
+    patrones = {g: patron_gen(g, mg[g]["Alias"], mg[g]["Nombre"], proteinas[g]) for g in genes}
 
     casos: "OrderedDict[tuple, dict]" = OrderedDict()
     cuenta = {"filas": 0, "filas_respaldo_ruta": 0, "filas_ruta_sin_direccion": 0}

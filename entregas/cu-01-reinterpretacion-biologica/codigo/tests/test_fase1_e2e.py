@@ -33,7 +33,7 @@ import inmunoglobulinas
 import main
 import salida
 from conftest import respuesta
-from fuentes import europepmc, generif, uniprot
+from fuentes import europepmc, gene2pubmed, generif, nombres, uniprot
 
 FIXTURES = Path(__file__).parent / "fixtures"
 IGS = {"IGKC", "IGHM"}
@@ -118,11 +118,12 @@ def preparar_fase1(tmp_path, mp):
     # Las cachés: las globales de abstracts y los valores por defecto de las fuentes (se fijan al importar)
     mp.setattr(abstracts, "CACHE_FILE", str(tmp_path / "cache_abstracts.json"))
     for funcion, nombre in ((inmunoglobulinas.cargar_lista_ig, "hgnc.json"), (generif.datos_mygene, "mygene.json"),
-                            (europepmc.buscar, "epmc.json"), (uniprot.entradas_uniprot, "uniprot.json")):
+                            (europepmc.buscar, "epmc.json"), (uniprot.entradas_uniprot, "uniprot.json"),
+                            (nombres.nombres_proteina, "nombres.json"), (gene2pubmed.articulos, "gene2pubmed.json")):
         mp.setattr(funcion, "__defaults__", (str(tmp_path / nombre),))
 
     sesion = SesionGrabada()
-    for modulo in (abstracts, inmunoglobulinas, europepmc, generif, uniprot):
+    for modulo in (abstracts, inmunoglobulinas, europepmc, gene2pubmed, generif, nombres, uniprot):
         mp.setattr(modulo, "configurar_sesion", lambda: sesion)
     return sesion
 
@@ -279,7 +280,7 @@ def test_fases_2_y_3_sobre_la_salida_de_la_fase1(fase1, tmp_path, monkeypatch):
         unido = por_ruta.merge(direccion, on=["Gen", "GO_ID"], how="left")
         assert len(unido) == len(por_ruta) and unido["Estado_Original"].notna().all()
 
-        pares, rutas, _ = calcular(f1, tmp_path / "fase2.xlsx")
+        pares, rutas, *_ = calcular(f1, tmp_path / "fase2.xlsx")
         assert set(rutas["GO_ID"]) == {"GO:9000001", "GO:9000010", "GO:9000020"}
         assert set(pares.loc[pares["Gen"].isin(IGS), "Signo_par"]) == {"neutro"}
     finally:

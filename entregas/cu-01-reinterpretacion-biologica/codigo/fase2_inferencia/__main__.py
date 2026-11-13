@@ -1,11 +1,12 @@
 """Fase 2 desde la línea de comandos.
 
 Ejecución completa (llama a los modelos; reanudable, el registro va a codigo/data/):
-  python -m fase2_inferencia ejecutar [principal|-] [secundario|-|ninguno] [gen|-] [GO:XXXXXXX|-] [ruta_excel|-] [--solo-respaldo]
+  python -m fase2_inferencia ejecutar [principal|-] [secundario|-|ninguno] [gen|-] [GO:XXXXXXX|-] [ruta_excel|-] [--contraste]
   Escribe codigo/data/fase2_resultados.xlsx (hojas Por_ruta, Preguntas y Resumen). Los modelos son los
   nombres de cliente.MODELOS; por defecto, los del ADR-005 (principal Gemini, secundario gpt-oss en Groq).
-  Si el principal no responde (cupo agotado) o su JSON no vale, decide el secundario (respaldo_secundario).
-  --solo-respaldo: el secundario solo recibe esas preguntas, sin contrastar las demás (ahorra su cupo).
+  El secundario es solo un respaldo: recibe y decide únicamente las preguntas en que el principal no responde
+  (cupo agotado) o su JSON no vale (respaldo_secundario).
+  --contraste: el secundario responde a todas y se contrastan los dos modelos (discrepancia_entre_modelos).
 Demo: imprime la primera llamada que se enviaría para un gen (sin llamar a ningún modelo):
   python -m fase2_inferencia CD7 [GO:XXXXXXX|-] [ruta_excel|-]
 Se puede lanzar también como script (python fase2_inferencia/__main__.py …, p. ej. el botón Run del IDE).
@@ -55,8 +56,8 @@ def ejecutar_cli(arg) -> None:
 
 
 if __name__ == "__main__":
-    SOLO_RESPALDO = "--solo-respaldo" in sys.argv
-    sys.argv = [a for a in sys.argv if a != "--solo-respaldo"]
+    SOLO_RESPALDO = "--contraste" not in sys.argv  # --solo-respaldo se acepta por compatibilidad: ya es lo normal
+    sys.argv = [a for a in sys.argv if a not in ("--contraste", "--solo-respaldo")]
     arg = lambda i: sys.argv[i] if len(sys.argv) > i and sys.argv[i] != "-" else None
     if arg(1) == "ejecutar":
         ejecutar_cli(arg)

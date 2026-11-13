@@ -7,16 +7,11 @@ state: Aceptado (2026-10-28; la persistencia se concreta en el ADR-004 y los mod
 
 ## Decisión
 Se decide implementar una arquitectura basada en un pipeline **RAG (Retrieval-Augmented Generation)**, que se apoya en tres elementos:
-* **Fuentes abiertas:** los ficheros oficiales de Gene Ontology (OBO y GAF) y las APIs públicas de Europe PMC y NCBI ([ADR-002](adr-002-europe-pmc-api.md)).
+* **Fuentes abiertas:** los ficheros oficiales de Gene Ontology (OBO y GAF) y las APIs públicas de Europe PMC, NCBI (E-utilities, y GeneRIF vía MyGene.info), HGNC y UniProt ([ADR-002](adr-002-europe-pmc-api.md)).
 * **Modelos de lenguaje externos y gratuitos:** hoy Gemini 3.5 Flash-Lite como principal y gpt-oss-120b en Groq como secundario ([ADR-005](adr-005-eleccion-modelo-coste-cero.md)).
 * **Sin infraestructura de datos:** ni servidores ni bases de datos. El estado se guarda solo en ficheros locales: cachés desechables y un registro de respuestas ([ADR-004](adr-004-persistencia-ficheros-locales.md)).
 
 Se descarta el desarrollo y mantenimiento de un modelo clasificador Transformer local entrenado/ajustado ad-hoc (`BioLinkBERT-base` acoplado con `scispaCy`) y la persistencia en bases de datos locales o Lakehouses.
-
-> **Histórico.** La versión del 2026-10-28 describía un pipeline «stateless» con ejecución en memoria (`@lru_cache`), la API de QuickGO y Llama-3 en Groq como ejemplo de modelo. Al implementarlo cambiaron tres cosas:
-> * se leen los ficheros de GO en vez de QuickGO;
-> * Groq retiró los Llama de su plan gratuito;
-> * las ejecuciones de varios días con límites diarios obligaron a guardar cachés y respuestas en disco (ADR-004).
 
 ## Motivación
 El objetivo del proyecto es resolver las contradicciones biológicas en análisis scRNA-seq (rutas enriquecidas con genes up-regulados y down-regulados simultáneamente en células NK de tumores de laringe y faringe), determinando la contribución cualitativa y mecanicista de cada gen respecto a la activación de la ruta: `+1` si la activa, `-1` si la inhibe, `neutro` si no la cambia o `UNKNOWN` si la evidencia no es concluyente.
@@ -47,6 +42,13 @@ Se evaluó en profundidad la siguiente alternativa principal:
     * mantener *fixtures* de tensores y tokens para el clasificador, además de los *mocks* de red que ambas opciones necesitan.
 
     Se espera que la Opción A ofrezca una explicabilidad suficiente con menor coste operativo. Esta hipótesis se valida con el benchmark sobre el *gold set* ([spec del benchmark](../specs/benchmark-gold-set.md)), etiquetado a ciegas con doble etiqueta.
+
+Durante el avance del proyecto el equipo descartó también dos piezas, porque no son compatibles con la solución adoptada:
+
+* **Reranker de abstracts (#7):**
+  * *Motivo de descarte:* los abstracts no salen de una búsqueda abierta que haya que ordenar, sino de los PMIDs curados del GAF y de fuentes ya filtradas por gen y ruta, y todos se envían al LLM, que decide con una cita verificada. Un filtro previo de relevancia, medido el 2026-11-12, perdía el 34 % de los signos ([spec de inferencia](../specs/inferencia-llm.md)).
+* **Harness para el LLM (#11):**
+  * *Motivo de descarte:* cada pregunta es una llamada sin estado, con un prompt y un esquema JSON fijos, y la validación, el contraste con GO y el registro los hace el código ([ADR-003](adr-003-control-alucinaciones-unknown.md), [ADR-004](adr-004-persistencia-ficheros-locales.md)).
 
 ## Referencias
 * **Documentación del proyecto:**

@@ -27,11 +27,11 @@ def preparar_prompts(ruta_excel: str, gen: Optional[str] = None, go_id: Optional
 
 def ejecutar_fase2(ruta_excel: str, clientes: Sequence, gen: Optional[str] = None, go_id: Optional[str] = None,
                    registro: Optional[Registro] = None, salida: Optional[Path] = FICHERO_RESULTADOS,
-                   solo_respaldo: bool = False):
+                   solo_respaldo: bool = True):
     """Fase 2 completa: Excel de la Fase 1 -> preguntas -> modelos (clientes[0] principal, clientes[1] secundario, opcional) -> contraste -> Excel de resultados.
     Reanudable: lo registrado no se vuelve a pedir y lo que no responde queda «pendiente» para la siguiente
-    ejecución. Procesa las rutas activadas y las suprimidas. solo_respaldo: el secundario solo responde lo que el
-    principal no pudo (ejecucion.py).
+    ejecución. Procesa las rutas activadas y las suprimidas. solo_respaldo (por defecto): el secundario solo
+    responde lo que el principal no pudo; con False se contrastan los dos (ejecucion.py).
     Devuelve (hoja Preguntas, hoja Por_ruta, resumen de la ejecución, recuento de casos)."""
     df = pendientes_de_llm(filtrar(cargar_hoja(ruta_excel), gen, go_id))
     casos, cerrados, cuenta = construir_casos_y_cerrados(df)

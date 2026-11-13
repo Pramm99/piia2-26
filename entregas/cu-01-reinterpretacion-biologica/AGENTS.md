@@ -17,9 +17,10 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 | `codigo/fase3_scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m fase3_scoring` desde `codigo/`; los umbrales están en `fase3_scoring/config.py`. |
 | `codigo/evaluacion/` | Benchmark: gold set, guía de etiquetado, `evaluar_gold.py`, `seleccionar_gold.py` y `buscar_neutros.py`. |
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
-| `codigo/tools_cimus/` | Entrada original de CIMUS (únicos Excels versionados). |
+| `codigo/tools_cimus/` | Entrada original de CIMUS: rutas enriquecidas (únicos Excels versionados) y tabla de log2FC (`NK_cells_DESeq2_results.xlsx`, se reparte dentro del equipo y no se sube). |
 | `codigo/data/` | Cachés, registro de respuestas del LLM y salidas. **No se versiona.** |
-| `decisions/`, `specs/`, `docs/` | ADRs, specs funcionales y limitaciones conocidas. |
+| `decisions/`, `specs/`, `docs/` | ADRs, specs funcionales, limitaciones conocidas y plantillas de issue. |
+| `DOR.md`, `DOD.md`, `TABLERO.md` | Cuándo empieza y cuándo termina una tarea, y cómo se gestionan el tablero y los bloqueos. |
 | `PlanesViables/` | Análisis previo de alternativas (opciones A y B). Es histórico: no se toca. |
 
 ## Cómo se ejecuta
@@ -31,14 +32,14 @@ cp .env.example .env          # y rellena las claves que vayas a usar
 
 python fase1_ingesta/main.py   # Fase 1 (unos 58 min en frío, unos minutos con caché)
 python -m fase2_inferencia CD7    # Fase 2 en modo demo: imprime la primera llamada, sin llamar a nadie
-python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel]   # Fase 2 real, reanudable
-python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc]   # Fase 3, sin red (segundos)
+python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] [excel] [--contraste]   # Fase 2 real, reanudable
+python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc|ninguno]   # Fase 3, sin red (segundos)
 python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
 ```
 
 * **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta.
-* **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b`. Si Gemini no responde o su JSON no vale, decide gpt-oss (`respaldo_secundario`). Con `--solo-respaldo`, gpt-oss solo recibe esas preguntas, para ahorrar su cupo diario. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
+* **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b`. **gpt-oss es solo el respaldo de Gemini:** solo recibe una pregunta si Gemini no responde o su JSON no vale, y entonces decide él (`respaldo_secundario`). Si Gemini responde, la pregunta no va a gpt-oss, y una respuesta suya que esté en el registro no se usa. `--contraste` (envía todo a los dos y los contrasta) es solo para experimentos. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
 
 ## Reglas que no se negocian
 1. **Coste cero.** Solo planes gratuitos. No propongas ningún servicio, modelo ni API de pago.
@@ -67,17 +68,17 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 
 ## Cómo trabajar en este repositorio
 * **Idioma:** el código, los comentarios, la documentación y los commits van en español. Solo el prompt al LLM va en inglés.
-* **Estilo:** imita el código que lo rodea: nombres en español, docstrings cortas que dicen el *porqué*, sin capas de abstracción innecesarias. Los parámetros ajustables van en `config.py` (Fase 1) o `esquema.py` (Fase 2), no repartidos por el código.
+* **Estilo:** imita el código que lo rodea: nombres en español, docstrings cortas que dicen el *porqué*, sin capas de abstracción innecesarias. Los parámetros ajustables van en `fase1_ingesta/config.py`, `fase2_inferencia/esquema.py` (los modelos y sus límites, en `cliente.py:MODELOS`) o `fase3_scoring/config.py`, no repartidos por el código.
 * **Pruebas:** todo cambio de comportamiento lleva su prueba en `codigo/tests/`, sin red: las APIs se simulan con `monkeypatch` y los modelos con `ClienteSimulado`. `python -m pytest` tiene que pasar antes de cualquier commit.
 * **Specs:** los criterios de aceptación son verificables y llevan `[x] ✅` y la prueba que los cubre cuando se cumplen. Si cambias el comportamiento, actualiza la spec, el ADR y `ARCHITECTURE.md` en el mismo commit.
-* **Documentación:** describe solo el estado actual, sin versiones antiguas ni históricos. Las cifras de la Fase 1 son las de la ejecución de referencia del 2026-11-09, indicando la fecha.
+* **Documentación:** describe solo el estado actual, sin versiones antiguas ni históricos. Las cifras de las Fases 1, 2 y 3 son las de la ejecución de referencia del 2026-11-13, indicando la fecha; las del *gold set* y el benchmark, de la Fase 1 del 2026-11-09.
 * **No toques una fase que no te han pedido:** un cambio en la Fase 1 altera el Excel del que dependen la Fase 2, el gold set y el benchmark.
 * **No afirmes decisiones** que solo aparecen en un comentario del código: compruébalas en los ADR o pregunta.
 * **Commits:** el título lleva la fase que cambia, p. ej. `Fase 1 (INGESTA): …`, `Fase 2: …` o `Fase 3 (SCORING): …`. Si toca varias, nómbralas todas. Añade los ficheros con rutas explícitas, nunca con `git add -A`. El push va a `main` del fork `Pramm99/piia2-26`, que alimenta el PR #19 (Entrega 2) de `usc-gria/piia2-26`.
+* **Tareas del tablero:** al abrir un issue usa la plantilla de [`docs/plantillas-issue/tarea.md`](docs/plantillas-issue/tarea.md). Al cerrar trabajo, comenta el issue con el commit y déjalo en REVISION: lo cierra otra persona contra el [DoD](DOD.md). Si algo te bloquea, sigue [`TABLERO.md`](TABLERO.md#bloqueos).
 * **Varios asistentes a la vez:** si otra sesión tiene cambios sin commit en la misma carpeta, no los incluyas en tu commit ni edites sus ficheros hasta que termine.
 
 ## Estado y pendientes
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
-* el fichero de log2FC por gen de CIMUS y los umbrales definitivos del scoring;
-* el contraste entre modelos: relanzar la Fase 2 sin `--solo-respaldo` (varios días por el cupo de Groq).
+* los umbrales definitivos del scoring y la revisión de las rutas `Sensible_al_peso`;

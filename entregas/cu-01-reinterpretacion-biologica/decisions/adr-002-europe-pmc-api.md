@@ -1,6 +1,6 @@
 ---
 description: Ingesta de evidencias a partir del fichero GAF de Gene Ontology, con GeneRIF y búsqueda dirigida en Europe PMC para los pares sin artículo, y descarga de abstracts por lotes desde Europe PMC con NCBI E-utilities como respaldo.
-state: Aceptado (fuentes externas añadidas el 2026-11-08; cifras de la ejecución completa del 2026-11-09)
+state: Aceptado (fuentes externas añadidas el 2026-11-08; cifras de la ejecución completa del 2026-11-13)
 ---
 
 # ADR 002 - Ingesta de Evidencias: GAF de Gene Ontology + Europe PMC con Respaldo en NCBI
@@ -15,8 +15,9 @@ La ingesta de evidencias (Fase 1, `codigo/fase1_ingesta/`) se resuelve en tres e
      * de cada anotación se extraen los identificadores `PMID:` de la columna de referencias, el código de evidencia, el calificador y la extensión;
      * los genes se resuelven por símbolo oficial y, solo si no hay ambigüedad, por sinónimo.
 2. **Fuentes externas para los pares sin abstract utilizable en el GAF** (sin PMID, o con PMIDs que no tienen abstract en PubMed):
-   * **NCBI GeneRIF**, vía MyGene.info: frases curadas por NCBI, cada una con su PMID. Solo se acepta si el texto del GeneRIF nombra al gen.
-   * **Búsqueda dirigida en Europe PMC**, para los pares que siguen vacíos: se buscan el gen y los nombres del subárbol de la ruta, y solo se acepta un abstract si el gen y un término del subárbol aparecen **en la misma frase**. Los alias en minúsculas no cuentan como mención del gen.
+   * **NCBI GeneRIF**, vía MyGene.info: frases curadas por NCBI, cada una con su PMID. Solo se acepta si la frase del GeneRIF o el abstract nombran al gen y a la ruta (o a un término de su subárbol).
+   * **Búsqueda dirigida en Europe PMC**, para los pares que siguen vacíos: se buscan el gen (con sus alias) y los nombres de la ruta y de su subárbol hasta 2 niveles, y solo se acepta un abstract si el gen y un término del subárbol aparecen **en la misma frase**. Los alias en minúsculas no cuentan como mención del gen.
+   * **NCBI gene2pubmed + MeSH de la ruta + «Humans»**, para los que siguen vacíos (#31): los artículos que NCBI liga al gen humano y que el indexador de MeSH marcó con el tema de la ruta. La consulta MeSH de cada ruta sale de una tabla hecha a mano y versionada (`fase1_ingesta/tabla_go_mesh.tsv`). No se exige la ruta en el texto, porque los autores la nombran con otras palabras que GO («Th2 differentiation»); sí que el abstract nombre al gen. Acierta en un 53 % de los pares (muestra leída del 2026-11-13), así que el LLM hace de filtro y solo entran los 3 artículos más recientes por par (`MAX_PMIDS_GENE2PUBMED_POR_PAR`). El MeSH es imprescindible: sin él, gene2pubmed devuelve todos los artículos del gen (mediana de 242), los mismos para cada ruta. Una ruta que no está en la tabla no se consulta, así que un Excel nuevo de CIMUS obliga a ampliarla.
    * Como máximo 10 PMIDs por par, y cada fila guarda su `Fuente` y la frase que la justifica.
 3. **Descarga de título y abstract de cada PMID** con peticiones HTTP **síncronas y por lotes**:
    * **Europe PMC** (servicio REST `search`, formato JSON) en lotes de **40 PMIDs** por petición.
@@ -29,15 +30,15 @@ Los genes de inmunoglobulina (lista de HGNC) se apartan antes del cruce y no sig
 ## Motivación
 1. **Un solo fichero frente a miles de llamadas:** el GAF humano (~15 MB comprimido) contiene todas las anotaciones de todos los genes. Leerlo localmente sustituye a una consulta por gen y término a una API, elimina los *rate limits* en esta etapa y permite trabajar sin conexión una vez descargado.
 2. **Reproducibilidad:** el GAF y el OBO son instantáneas fechadas (la versión actual del GAF se generó el 2026-05-21). Una ejecución puede repetirse sobre exactamente los mismos datos, algo que una API viva no garantiza.
-3. **La polaridad sale del grafo, no del texto:** al propagar por `positively_regulates` y `negatively_regulates`, la Fase 1 obtiene ya un signo curado por GO para muchos pares. En la ejecución del 2026-11-09, el 26 % de las 5.014 filas con abstract tiene `Polaridad_GO` +1 o −1. Ese signo sirve después para contrastar la salida del LLM, y en 332 pares basta para aceptarlo sin LLM (triaje `aceptar_GO`, [ADR-003](adr-003-control-alucinaciones-unknown.md)).
+3. **La polaridad sale del grafo, no del texto:** al propagar por `positively_regulates` y `negatively_regulates`, la Fase 1 obtiene ya un signo curado por GO para muchos pares. En la ejecución del 2026-11-13, el 22 % de las 5.963 filas con abstract tiene `Polaridad_GO` +1 o −1. Ese signo sirve después para contrastar la salida del LLM, y en 332 pares basta para aceptarlo sin LLM (triaje `aceptar_GO`, [spec de ingesta](../specs/descarga-evidencias-go-pmc.md)).
 4. **El GAF no basta para muchos pares:**
    * De los 3.069 pares (sin inmunoglobulinas) de las dos listas de CIMUS, solo 1.547 tienen algún PMID en el GAF. Sin otra fuente, la mitad de los pares no tendría ningún artículo que leer.
    * Para elegir las fuentes externas se siguió el criterio de usar el menor número posible de bases, gratuitas y con los abstracts más fiables y claros. GeneRIF es curado y da el PMID directamente. La búsqueda dirigida en Europe PMC cubre lo que GeneRIF no tiene, con un filtro (gen y proceso en la misma frase) que limita el ruido de una búsqueda libre.
-   * En la ejecución del 2026-11-09, de los 1.523 pares sin abstract del GAF, **855** consiguen PMID con estas fuentes. Los **668** que siguen sin ninguno se cierran como `UNKNOWN` ([limitación documentada](../docs/limitacion-pares-sin-abstract.md)).
+   * En la ejecución del 2026-11-13, de los 1.523 pares sin abstract del GAF, **1.213** consiguen PMID con estas fuentes. Los **310** que siguen sin ninguno se cierran como `UNKNOWN` ([limitación documentada](../docs/limitacion-pares-sin-abstract.md)).
 5. **Europe PMC primero por su formato:** devuelve el abstract como un campo JSON (`abstractText`), más sencillo de procesar que el XML de PubMed. NCBI se mantiene como respaldo porque cubre PMIDs cuyo abstract no está en Europe PMC.
 6. **Síncrono es suficiente:**
-   * El GAF da 383 PMIDs únicos (ejecución del 2026-11-09). Las fuentes externas, en cambio, descargan unos 32.700 abstracts candidatos para comprobar si nombran al gen y al proceso, y al final quedan 1.420 PMIDs.
-   * La primera ejecución completa tarda casi una hora, sobre todo por esa comprobación. Las siguientes reutilizan la caché y tardan unos minutos.
+   * El GAF da 383 PMIDs únicos (ejecución del 2026-11-13). Las fuentes externas, en cambio, descargan unos 33.200 abstracts candidatos para comprobar si nombran al gen y al proceso, y al final quedan 1.842 PMIDs en total (GAF y fuentes externas).
+   * Con el Excel completo de CIMUS, la primera ejecución tarda casi una hora (con una ruta, unos 90 s; `docs/kpis.md`), sobre todo por esa comprobación. Las siguientes reutilizan la caché y tardan unos minutos.
    * El cuello de botella son los límites de las APIs, no la concurrencia: lanzar peticiones en paralelo aumentaría el riesgo de `429` sin acelerar la descarga.
 7. **Filtrado implícito de evidencia no informativa:** al exigir un `PMID`, las referencias `GO_REF`, `Reactome` u otras quedan fuera. Las anotaciones automáticas `IEA` nunca llevan PMID en el GAF actual (0 de 194.927), así que tampoco llegan al LLM. El resto de códigos se conservan y se marcan con la columna `Experimental`; el filtro estricto (`SOLO_EXPERIMENTAL`) queda como opción configurable en `config.py`.
 8. **Tolerancia a fallos:** un PMID que no existe o no tiene abstract no interrumpe el lote; los confirmados sin abstract se registran como cadena vacía y los que fallan por red se reintentan en la siguiente ejecución.
@@ -65,8 +66,8 @@ Aceptamos los compromisos asociados:
   * *Motivo de descarte:* se probó el 2026-11-08 y aportaba pocos pares. UniProt se sigue usando solo para describir la función de las inmunoglobulinas.
 * **GeneCards:**
   * *Motivo de descarte:* sus condiciones de uso prohíben el acceso automatizado.
-* **Reactome y OmniPath:**
-  * *Aplazadas.* Para los 668 pares que siguen sin abstract, el documento de la limitación propone, por orden: las anotaciones TAS de Reactome resueltas a su referencia, un diccionario fijo de palabras clave por ruta para Europe PMC, y gene2pubmed + MeSH. Están pendientes de decidir.
+* **OmniPath y otras bases:**
+  * *Aplazadas.* Para los pares que siguen sin abstract se integró gene2pubmed + MeSH (ver la decisión, punto 2), tras comprobar que con el MeSH buscado de forma automática solo ganaba abstract el 3,9 % de los pares y que exigir el gen y la ruta en la misma frase lo dejaba en 1 par (documento de la limitación).
 
 ## Referencias
 * **Código del proyecto** (`codigo/fase1_ingesta/`):

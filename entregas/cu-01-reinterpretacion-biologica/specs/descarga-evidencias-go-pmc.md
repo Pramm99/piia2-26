@@ -26,6 +26,7 @@ Un módulo de ingesta (Fase 1, `codigo/fase1_ingesta/`, `python codigo/fase1_ing
 6. **Fuentes externas** (`pmid_externos.py`, `relevancia.py`, `fuentes/`): para los pares sin abstract utilizable en el GAF (sin PMID, o con PMIDs sin abstract en PubMed):
    * **NCBI GeneRIF**, vía MyGene.info: solo se acepta si el texto del GeneRIF nombra al gen.
    * **Búsqueda dirigida en Europe PMC**, para los que siguen vacíos: el gen y un término del subárbol de la ruta en la misma frase. Los alias en minúsculas no cuentan como mención.
+   * **NCBI gene2pubmed + MeSH**, para los que siguen vacíos: los artículos que NCBI liga al gen con la consulta MeSH de la ruta (`fase1_ingesta/tabla_go_mesh.tsv`, hecha a mano) y «Humans», de los más recientes a los más antiguos; entran los `MAX_PMIDS_GENE2PUBMED_POR_PAR` = 3 primeros cuyo título o abstract nombra al gen. Las rutas marcadas `sin_mesh` en la tabla, y las que no están en ella, no se consultan: con un Excel nuevo de CIMUS hay que añadir sus rutas a la tabla antes de lanzar la Fase 1.
    * Como máximo `MAX_PMIDS_EXTERNOS_POR_PAR` = 10 PMIDs por par.
 
    Estas filas guardan su `Fuente`, la `Frase_fuente`, el `Termino_coincidente` y dónde coincide (`Coincide_en`).
@@ -41,10 +42,10 @@ Un módulo de ingesta (Fase 1, `codigo/fase1_ingesta/`, `python codigo/fase1_ing
 
    Las tres primeras hojas llevan además la columna `Destino` del triaje.
 
-Cifras de la ejecución completa del 2026-11-09:
-* **Entrada y triaje:** 3.172 pares de entrada, de los que 103 son de inmunoglobulinas. Destinos: 332 `aceptar_GO`, 2.003 `LLM`, 66 `LLM_y_revision` y 668 `sin_evidencia`.
-* **PMIDs:** 1.547 pares con PMID en el GAF y 855 con PMID externo.
-* **Salida:** 1.420 PMIDs únicos y 5.014 filas en `Con_abstract`.
+Cifras de la ejecución completa del 2026-11-13:
+* **Entrada y triaje:** 3.172 pares de entrada, de los que 103 son de inmunoglobulinas. Destinos: 332 `aceptar_GO`, 2.361 `LLM`, 66 `LLM_y_revision` y 310 `sin_evidencia`.
+* **PMIDs:** 1.547 pares con PMID en el GAF y 1.213 con PMID externo.
+* **Salida:** 1.842 PMIDs únicos y 5.963 filas en `Con_abstract`.
 
 ## Por qué
 El análisis transcriptómico a nivel de célula única clasifica los genes diferencialmente expresados en listas independientes sobreexpresadas (*Up*) e infraexpresadas (*Down*). Las bases de datos convencionales catalogan los genes de forma cualitativa (presencia o ausencia en la ruta), provocando que una misma ruta aparezca enriquecida en ambos sentidos sin explicar el efecto neto.
@@ -58,9 +59,9 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
 ## Restricciones
 * **Sin bases de datos ([ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md)):** No se levantan bases de datos ni servicios de almacenamiento. El estado se guarda en ficheros locales dentro de `codigo/data/`:
   * los ficheros de GO (`go-basic.obo`, `goa_human.gaf.gz`);
-  * las cachés de abstracts (`cache_abstracts.json`), MyGene y GeneRIF (`cache_mygene.json`), búsquedas de Europe PMC (`cache_epmc_busquedas.json`), UniProt (`cache_uniprot.json`) y la lista de inmunoglobulinas de HGNC (`hgnc_inmunoglobulinas.json`).
+  * las cachés de abstracts (`cache_abstracts.json`), MyGene y GeneRIF (`cache_mygene.json`), búsquedas de Europe PMC (`cache_epmc_busquedas.json`), gene2pubmed (`cache_gene2pubmed.json`), nombres de proteína (`cache_nombres_proteina.json`), UniProt (`cache_uniprot.json`) y la lista de inmunoglobulinas de HGNC (`hgnc_inmunoglobulinas.json`).
 
-  Se reutilizan entre ejecuciones. Borrar la caché de abstracts o los ficheros de GO solo alarga la ejecución; borrar las de GeneRIF o Europe PMC puede cambiar el resultado, porque esas APIs cambian con el tiempo y Europe PMC ordena por relevancia. Las cachés y las descargas del OBO y el GAF se escriben de forma atómica (fichero temporal y renombrado) para que una interrupción no deje ficheros corruptos. El Excel de salida no se escribe de forma atómica.
+  Se reutilizan entre ejecuciones. Borrar la caché de abstracts o los ficheros de GO solo alarga la ejecución; borrar las de GeneRIF, Europe PMC o gene2pubmed puede cambiar el resultado, porque esas APIs cambian con el tiempo y Europe PMC ordena por relevancia. Las cachés y las descargas del OBO y el GAF se escriben de forma atómica (fichero temporal y renombrado) para que una interrupción no deje ficheros corruptos. El Excel de salida no se escribe de forma atómica.
 * **Control de tasa de peticiones (*Rate Limiting*):**
   * **Lotes:** 40 PMIDs por petición en Europe PMC y 100 en NCBI (valores fijos en `abstracts.py`).
   * **Pausas:**
@@ -70,6 +71,7 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
   * **Reintentos con espera exponencial (*exponential backoff*):** todas las peticiones a las APIs usan la sesión de `red.configurar_sesion` (Europe PMC, NCBI, MyGene, HGNC y UniProt).
     * Esa sesión reintenta hasta **5 veces** (`Retry(total=5, backoff_factor=1)`) ante HTTP `429`, `500`, `502`, `503` y `504`, tanto en GET como en POST.
     * Con urllib3 2.x, la espera antes de cada reintento es de 0, 2, 4, 8 y 16 s, unos 30 s como máximo. Si el servidor envía la cabecera `Retry-After`, se respeta.
+  * **Aviso de progreso:** las descargas largas (abstracts de Europe PMC y NCBI, y búsquedas dirigidas de Europe PMC) escriben por consola lo que llevan, su porcentaje, el tiempo transcurrido y una estimación de lo que falta (`red.Progreso`), cada 5 % y como mucho una vez cada 10 s. En frío, la descarga de los abstracts de GeneRIF dura unos 30 min y, sin el aviso, parecería colgada. Una descarga de menos de 10 s no escribe nada.
   * **Tiempos de espera por petición:**
     * Europe PMC (abstracts): 30 s;
     * NCBI, búsqueda dirigida, HGNC y UniProt: 60 s;
@@ -88,20 +90,22 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
 * **Gestión de credenciales y red:** El correo de contacto y la clave de API de NCBI (`NCBI_EMAIL`, `NCBI_API_KEY`) se leen de las variables de entorno o del fichero `codigo/.env` (documentado en `codigo/.env.example`), sin escribir datos privados en el código. `codigo/.env` no se sube al repositorio. Si no hay correo, no se envía ninguno.
 
 ## Criterios de aceptación
-* [x] ✅ **Carga de la entrada:** Dado un Excel con una sola ruta, `GO:0000001` (obsoleta, sustituida por `GO:0000002`), y `geneID` = `CD7/gzmb/PRF1/NKG7/KLRD1`, el parser devuelve exactamente estas 5 filas, en este orden y todas con `Estado_Original = "Activada"`: `(GO:0000002, CD7)`, `(GO:0000002, GZMB)`, `(GO:0000002, PRF1)`, `(GO:0000002, NKG7)` y `(GO:0000002, KLRD1)`. (`tests/test_fase1.py`.)
-* [x] ✅ **Entrada de CIMUS:** Con los dos Excels de `codigo/tools_cimus/`, la carga da 3.172 pares y 224 genes, y ningún gen aparece en las dos listas. (`tests/test_fase1.py`.)
-* [x] ✅ **Validación de columnas:** Un fichero (`.xlsx` o `.csv`) al que le falte `ID`, `Description` o `geneID` se rechaza con un `ValueError` que nombra la columna que falta, antes de ninguna petición de red: `ejecutar_fase_1` no llega a llamar a `descargar_archivo`. (`tests/test_entrada.py`.)
-* [x] ✅ **Entrada `.csv`:** Un `.csv` con las mismas columnas y el mismo contenido que un `.xlsx`, separado por `,` o por `;`, da exactamente las mismas filas. (`tests/test_entrada.py`.)
-* [x] ✅ **Reintentos:** La sesión de `red.configurar_sesion` reintenta 5 veces con `backoff_factor` 1 ante los códigos `429`, `500`, `502`, `503` y `504`, en GET y POST, y sus esperas son 0, 2, 4, 8 y 16 s. (`tests/test_red.py`.)
+* [x] ✅ **Carga de la entrada:** Dado un Excel con una sola ruta, `GO:0000001` (obsoleta, sustituida por `GO:0000002`), y `geneID` = `CD7/gzmb/PRF1/NKG7/KLRD1`, el parser devuelve exactamente estas 5 filas, en este orden y todas con `Estado_Original = "Activada"`: `(GO:0000002, CD7)`, `(GO:0000002, GZMB)`, `(GO:0000002, PRF1)`, `(GO:0000002, NKG7)` y `(GO:0000002, KLRD1)`. (`tests/test_fase1.py::test_entrada_extrae_pares_y_traduce_ids_obsoletos`)
+* [x] ✅ **Entrada de CIMUS:** Con los dos Excels de `codigo/tools_cimus/`, la carga da 3.172 pares y 224 genes, y ningún gen aparece en las dos listas. (`tests/test_fase1.py::test_entrada_lee_los_excels_de_cimus`)
+* [x] ✅ **Validación de columnas:** Un fichero (`.xlsx` o `.csv`) al que le falte `ID`, `Description` o `geneID` se rechaza con un `ValueError` que nombra la columna que falta, antes de ninguna petición de red: `ejecutar_fase_1` no llega a llamar a `descargar_archivo`. (`tests/test_entrada.py::test_columna_ausente_da_value_error_con_su_nombre`, `::test_la_entrada_se_valida_antes_de_descargar`)
+* [x] ✅ **Entrada `.csv`:** Un `.csv` con las mismas columnas y el mismo contenido que un `.xlsx`, separado por `,` o por `;`, da exactamente las mismas filas. (`tests/test_entrada.py::test_csv_da_los_mismos_pares_que_xlsx`)
+* [x] ✅ **Reintentos:** La sesión de `red.configurar_sesion` reintenta 5 veces con `backoff_factor` 1 ante los códigos `429`, `500`, `502`, `503` y `504`, en GET y POST, y sus esperas son 0, 2, 4, 8 y 16 s. (`tests/test_red.py::test_reintentos_con_espera_exponencial`)
+* [x] ✅ **Aviso de progreso:** `red.Progreso` avisa al cruzar cada paso de porcentaje con lo que lleva, el porcentaje, el tiempo transcurrido y lo que falta, da una última línea al 100 % y no escribe nada en una descarga corta. (`tests/test_red.py::test_progreso_avisa_con_porcentaje_y_tiempo`, `::test_progreso_no_avisa_en_una_descarga_corta`)
 * [x] ✅ **Credenciales:**
   * `NCBI_EMAIL` y `NCBI_API_KEY` se leen de `codigo/.env`, que ignora los comentarios y las líneas sin `=`;
   * una variable de entorno tiene prioridad sobre el fichero;
   * sin fichero ni variable, el valor es `None` (`tests/test_fase1.py`);
   * `git check-ignore codigo/.env` confirma que no se versiona.
-* [x] ✅ **Resolución gen–ruta → PMID:** Para el par de referencia (`CD7`, `GO:0002443` *leukocyte mediated immunity*), la salida contiene el `PMID` `10652336`, anotado en el término descendiente `GO:0002726` con evidencia `IDA` y `Polaridad_GO = +1`. Ninguna fila de la hoja `Con_abstract` contiene un `PMID` no numérico. (Comprobado en la ejecución del 2026-11-09.)
-* [x] ✅ **Composición de la polaridad en el grafo:** Para un término alcanzado a través de una única relación `negatively_regulates`, `Polaridad_GO` es `-1`; a través de dos relaciones `negatively_regulates` encadenadas, es `+1`; si el término se alcanza por caminos de signo opuesto, es `conflicto`. (`tests/test_fase1.py`, con un OBO mínimo.)
+* [x] ✅ **Resolución gen–ruta → PMID:** Para el par de referencia (`CD7`, `GO:0002443` *leukocyte mediated immunity*), la salida contiene el `PMID` `10652336`, anotado en el término descendiente `GO:0002726` con evidencia `IDA` y `Polaridad_GO = +1`. Ninguna fila de la hoja `Con_abstract` contiene un `PMID` no numérico. (El par, comprobado en la ejecución del 2026-11-13; el PMID numérico, `tests/test_fase1_e2e.py::test_con_abstract_fuentes_y_limpieza`.)
+* [x] ✅ **Composición de la polaridad en el grafo:** Para un término alcanzado a través de una única relación `negatively_regulates`, `Polaridad_GO` es `-1`; a través de dos relaciones `negatively_regulates` encadenadas, es `+1`; si el término se alcanza por caminos de signo opuesto, es `conflicto`. (`tests/test_fase1.py::test_polaridad_compuesta_por_el_grafo`, con un OBO mínimo.)
 * [x] ✅ **Inmunoglobulinas:** los pares de genes de inmunoglobulina (p. ej. IGKC, IGHM) aparecen en la hoja `Inmunoglobulinas` con signo `neutro` y no aparecen en `Con_abstract`; IGFBP7, que empieza por «IG» pero no es una inmunoglobulina, no se aparta. (`tests/test_fase1_e2e.py::test_inmunoglobulinas_neutras_y_fuera_de_con_abstract`.)
 * [x] ✅ **Triaje:** cada par de la entrada que no es inmunoglobulina tiene exactamente un `Destino` en `Triaje_polaridad`, y todo par sin ninguna fila en `Con_abstract` tiene una fila en `Sin_evidencia` con su causa y `Destino = sin_evidencia`, salvo los `aceptar_GO`: su signo no depende del abstract, así que conservan `aceptar_GO` y salen en `Sin_evidencia` con el signo GO, `Estado = resuelto_GO` y `Motivo = aceptar_GO` ([limitación de pares sin abstract](../docs/limitacion-pares-sin-abstract.md)). (`tests/test_fase1_e2e.py::test_triaje_un_destino_por_par`, `::test_pares_sin_abstract_cerrados_con_su_causa` y `::test_aceptar_go_sin_abstract_conserva_el_signo_go`.)
-* [x] ✅ **Consumo y tolerancia a fallos en Europe PMC:** La función de descarga procesa un lote de hasta 40 `PMID`s en una sola petición HTTP. Ante un `PMID` inexistente o sin abstract, el campo del abstract queda vacío (la fila pasa a `PMID_sin_abstract`) sin interrumpir el resto del lote.
-* [x] ✅ **Reutilización de la caché:** Una segunda ejecución sobre la misma entrada, con la caché de abstracts completa, no realiza ninguna petición a Europe PMC ni a NCBI para descargar abstracts.
+* [x] ✅ **Consumo y tolerancia a fallos en Europe PMC:** La función de descarga procesa un lote de hasta 40 `PMID`s en una sola petición HTTP. Ante un `PMID` inexistente o sin abstract, ese PMID no aparece entre los abstracts descargados (en la caché queda con el abstract vacío) y su fila pasa a `PMID_sin_abstract`, sin interrumpir el resto del lote. (`tests/test_fase1.py::test_descarga_por_lotes_con_respaldo_y_cache`, `tests/test_fase1_e2e.py::test_pares_sin_abstract_cerrados_con_su_causa`)
+* [x] ✅ **gene2pubmed + MeSH:** la tabla se lee sin entrecomillar y sin las rutas `sin_mesh`; la consulta a NCBI añade «Humans», los PMIDs salen del más reciente al más antiguo y la segunda vez salen de la caché; de cinco artículos ligados entran los 3 más recientes que nombran el gen, con `Fuente = gene2pubmed`, y un par cuya ruta no está en la tabla no recibe ninguno. (`tests/test_gene2pubmed.py`)
+* [x] ✅ **Reutilización de la caché:** Una segunda ejecución sobre la misma entrada, con la caché de abstracts completa, no realiza ninguna petición a Europe PMC ni a NCBI para descargar abstracts. (`tests/test_fase1.py::test_descarga_por_lotes_con_respaldo_y_cache`, `tests/test_fase1_e2e.py::test_segunda_ejecucion_sin_peticiones`)
 * [x] ✅ **Pruebas unitarias desacopladas de red (Mocks/Fixtures):** La suite de pruebas en `pytest` (`codigo/tests/`) ejecuta la descarga emulando las respuestas HTTP de Europe PMC y NCBI con respuestas simuladas, sin conexión a internet. `tests/test_fase1_e2e.py` ejecuta la Fase 1 completa (y su paso por las Fases 2 y 3) con los datos de `codigo/tests/fixtures/`: un OBO y un GAF mínimos, las dos listas de CIMUS y las respuestas grabadas de HGNC, UniProt, MyGene.info, Europe PMC y NCBI, con los sockets bloqueados. Una segunda ejecución sale de las cachés. La suite completa tarda unos 3 s.

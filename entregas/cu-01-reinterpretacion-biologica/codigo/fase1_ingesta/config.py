@@ -65,10 +65,18 @@ EPMC_PROFUNDIDAD_CONSULTA = 2       # frases de la ruta en la consulta (la verif
 EPMC_FRASES_POR_CONSULTA = 80       # las rutas con más frases se reparten en varias consultas
 EPMC_RESULTADOS_POR_CONSULTA = 25   # los más relevantes según Europe PMC
 MAX_PMIDS_EXTERNOS_POR_PAR = 10     # límite de abstracts por par para no saturar al LLM
+# 3) Para los pares que siguen vacíos: NCBI gene2pubmed + el MeSH de la ruta + «Humans» (fuentes/gene2pubmed.py).
+# La consulta MeSH de cada ruta está en una tabla hecha a mano y versionada (#31).
+NCBI_ELINK = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi"
+TABLA_GO_MESH = os.path.join(DIR_FASE1, "tabla_go_mesh.tsv")
+GENE2PUBMED_CACHE = os.path.join(DIR_DATA, "cache_gene2pubmed.json")
+MAX_PMIDS_GENE2PUBMED_POR_PAR = 3   # la fuente acierta en ~53 %: pocos artículos por par para no disparar las preguntas
 
 # --- UniProt Swiss-Prot (función de la Ig completa) ---
 UNIPROT_API = "https://rest.uniprot.org/uniprotkb/search"
 UNIPROT_CACHE = os.path.join(DIR_DATA, "cache_uniprot.json")
+# Nombres de la proteína (UniProt y MyGene «other_names»), solo para el filtro de mención (fuentes/nombres.py)
+NOMBRES_CACHE = os.path.join(DIR_DATA, "cache_nombres_proteina.json")
 
 # --- Función de la Ig completa (UniProt Swiss-Prot) ---
 # Isotipos y piezas del complejo con función propia; el resto (segmentos V/D/J, cadenas κ/λ)

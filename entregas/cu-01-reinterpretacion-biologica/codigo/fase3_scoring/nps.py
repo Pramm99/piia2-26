@@ -8,8 +8,12 @@ fases anteriores.
      w = Confianza_final / 100 × f_contexto (especie y tipo celular de la pregunta).
   2. Par: reglas 1-9 de la spec, en orden (Ig, GO, sin_evidencia, mayoría, conflicto, revisar, contradictorio,
      pendiente, UNKNOWN). Un conflicto no se promedia a 0: va a revisar con los recuentos visibles.
-  3. Ruta (término GO, juntando las dos listas de CIMUS): c = s × d × m y NPS = Σc / Σm sobre los pares
-     resueltos con signo ±1. Los neutros no entran en el cociente (se informan como Fraccion_neutros).
+  3. Ruta (término GO, juntando las dos listas de CIMUS): c = s × d y NPS = media de c sobre los pares
+     resueltos con signo ±1; todos los genes pesan igual. Los neutros no entran (se informan como Fraccion_neutros).
+     Con el log2FC de CIMUS se calcula además NPS_log2FC = Σ c·|log2FC| / Σ |log2FC| como sensibilidad: las rutas
+     cuya lectura cambia llevan Sensible_al_peso.
+  4. Para leer a mano lo que quedó sin signo: la hoja Abstracts_sin_signo da cada artículo de los pares UNKNOWN que sí
+     tienen evidencia (enlace a PubMed, título, abstract y lo que respondió el modelo).
 """
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +37,7 @@ COLUMNAS_FASE2 = {"Por_ruta": ("Gen", "GO_ID", "PMID", "Proceso_ID", "Signo_ruta
                   "Preguntas": ("Gen", "PMID", "Proceso_ID", "Organismo", "Tipo_celular")}
 COLUMNAS_FASE1 = {"Triaje_polaridad": ("Gen", "GO_ID", "Ruta_Nombre", "Estado_Original", "Signo_GO", "Destino"),
                   "Inmunoglobulinas": ("Gen", "GO_ID", "Ruta_Nombre", "Estado_Original")}
+URL_PUBMED = "https://pubmed.ncbi.nlm.nih.gov/{}/"
 
 
 def leer_hojas(ruta, columnas: Dict[str, Tuple[str, ...]]) -> Dict[str, pd.DataFrame]:
@@ -52,13 +57,17 @@ def leer_hojas(ruta, columnas: Dict[str, Tuple[str, ...]]) -> Dict[str, pd.DataF
 
 
 def leer_log2fc(ruta, direcciones: Dict[str, int]) -> Dict[str, float]:
-    """Fichero opcional de CIMUS (.xlsx o .csv) con Gen y log2FC. Un log2FC cuyo signo contradice la lista del
-    gen (negativo en la de genes up, positivo en la de down) es un error de entrada, no un dato."""
+    """Fichero de CIMUS (.xlsx o .csv) con Gen y log2FC, o su tabla de expresión diferencial tal cual (el gen en
+    la primera columna, sin nombre, y log2FoldChange). Un log2FC cuyo signo contradice la lista del gen
+    (negativo en la de genes up, positivo en la de down) es un error de entrada, no un dato."""
     ruta = Path(ruta)
     if ruta.suffix.lower() == ".csv":
         df = pd.read_csv(ruta, sep=None, engine="python", encoding="utf-8-sig")
     else:
         df = pd.read_excel(ruta)
+    if "Gen" not in df.columns and str(df.columns[0]).startswith("Unnamed"):
+        df = df.rename(columns={df.columns[0]: "Gen"})
+    df = df.rename(columns={"log2FoldChange": "log2FC"})
     faltan = [c for c in ("Gen", "log2FC") if c not in df.columns]
     if faltan:
         raise ValueError(f"{ruta.name}: faltan las columnas {', '.join(faltan)}")
@@ -71,6 +80,19 @@ def leer_log2fc(ruta, direcciones: Dict[str, int]) -> Dict[str, float]:
             raise ValueError(f"log2FC de {gen} ({fc}) contradice su lista ({'up' if d > 0 else 'down'})")
         valores[gen] = float(fc)
     return valores
+
+
+def leer_abstracts(ruta) -> pd.DataFrame:
+    """Título y abstract de cada PMID (hoja Con_abstract de la Fase 1). Es opcional: sin la hoja, tabla vacía."""
+    vacio = pd.DataFrame(columns=["PMID", "Titulo", "Abstract"])
+    if "Con_abstract" not in pd.ExcelFile(ruta).sheet_names:
+        return vacio
+    df = pd.read_excel(ruta, sheet_name="Con_abstract")
+    if not {"PMID", "Titulo", "Abstract"} <= set(df.columns):
+        return vacio
+    df = df[["PMID", "Titulo", "Abstract"]].copy()
+    df["PMID"] = df["PMID"].map(normalizar_pmid)
+    return df.drop_duplicates("PMID")
 
 
 def normalizar_signo(v) -> str:
@@ -199,22 +221,25 @@ def tabla_pares(triaje: pd.DataFrame, igs: pd.DataFrame, casos: pd.DataFrame,
     for c in ("n_PMIDs", "n_PMIDs_pos", "n_PMIDs_neg", "n_PMIDs_neutro"):
         df[c] = df[c].astype(float).fillna(0).astype(int)
     df["Votos"] = df["Votos"].fillna("")
+    # Todos los artículos que la Fase 2 leyó para el par, también los que no votaron (UNKNOWN, revisar, pendiente)
+    consultados = casos.groupby(["Gen", "GO_ID"])["PMID"].agg(lambda s: "; ".join(sorted(set(map(str, s)))))
+    df["PMIDs_consultados"] = [consultados.get((g, go), "") for g, go in zip(df["Gen"], df["GO_ID"])]
     df["Direccion"] = df["Estado_Original"].map({"Activada": "up", "Suprimida": "down"})
     d = df["Estado_Original"].map(DIRECCION)
     if log2fc is not None:
         df["Log2FC"] = df["Gen"].str.upper().map(log2fc)
         sin = df["Log2FC"].isna()
         df.loc[sin, "Motivos"] = df.loc[sin, "Motivos"].map(lambda m: "|".join(filter(None, [m, "sin_log2FC"])))
-        df["m"] = df["Log2FC"].abs().fillna(1.0)
     else:
-        df["Log2FC"], df["m"] = float("nan"), 1.0
+        df["Log2FC"] = float("nan")
+    # Peso del gen solo en la sensibilidad (NPS_log2FC): |log2FC|, o 1 si el gen no lo tiene.
+    df["m_log2FC"] = df["Log2FC"].abs().fillna(1.0)
     s = df["Signo_par"].map(VALOR).fillna(0)
     resuelto = df["Estado_par"] == ESTADO_RESUELTO
-    df["Contribucion"] = (s * d * df["m"]).where(resuelto, 0.0).astype(float) + 0.0  # sin -0.0
+    df["Contribucion"] = (s * d).where(resuelto, 0.0).astype(float) + 0.0  # sin -0.0
     df["Freno_retroalimentacion"] = df["Contribucion"] < 0
     # Lo que aportaría el par si se confirmara su clase de mayor peso (NPS_con_revisar)
-    df["c_revisar"] = (df["Signo_revisar"].map(VALOR).fillna(0) * d * df["m"]).where(
-        df["Estado_par"] == ESTADO_REVISAR, 0.0)
+    df["c_revisar"] = (df["Signo_revisar"].map(VALOR).fillna(0) * d).where(df["Estado_par"] == ESTADO_REVISAR, 0.0)
     df = df.sort_values(["GO_ID", "Gen"], kind="mergesort").reset_index(drop=True)
     return df
 
@@ -240,18 +265,23 @@ def tabla_rutas(pares: pd.DataFrame, con_log2fc: bool) -> pd.DataFrame:
         neutros = g[resuelto & (g["Signo_par"] == SIGNO_NEUTRO)]
         revisar = g[g["Estado_par"] == ESTADO_REVISAR]
         sin_ev = g["Motivos"].str.split("|").map(lambda m: "sin_evidencia" in m)
-        nps = con_signo["Contribucion"].sum() / con_signo["m"].sum() if len(con_signo) else float("nan")
+        nps = con_signo["Contribucion"].mean() if len(con_signo) else float("nan")
         rev = revisar[revisar["c_revisar"] != 0]
-        den = con_signo["m"].sum() + rev["m"].sum()
+        den = len(con_signo) + len(rev)
         nps_rev = (con_signo["Contribucion"].sum() + rev["c_revisar"].sum()) / den if den else float("nan")
+        m = con_signo["m_log2FC"]
+        nps_fc = (con_signo["Contribucion"] * m).sum() / m.sum() if con_log2fc and len(con_signo) else float("nan")
         cobertura = (len(con_signo) + len(neutros)) / len(g)
+        lectura = _lectura(nps, len(con_signo), cobertura)
+        lectura_fc = _lectura(nps_fc, len(con_signo), cobertura) if con_log2fc else ""
         listas = set(g["Estado_Original"])
         filas.append({
             "GO_ID": go, "Ruta_Nombre": g["Ruta_Nombre"].iloc[0],
             "Listas": "ambas" if len(listas) > 1 else {"Activada": "activadas", "Suprimida": "suprimidas"}
             .get(next(iter(listas)), ""),
-            "NPS": round(nps, 3), "NPS_con_revisar": round(nps_rev, 3),
-            "Lectura": _lectura(nps, len(con_signo), cobertura),
+            "NPS": round(nps, 3), "NPS_con_revisar": round(nps_rev, 3), "Lectura": lectura,
+            "NPS_log2FC": round(nps_fc, 3), "Lectura_log2FC": lectura_fc,
+            "Sensible_al_peso": ("sí" if lectura_fc != lectura else "no") if con_log2fc else "",
             "n_total": len(g), "n_activan": int((g["Contribucion"] > 0).sum()),
             "n_inhiben": int((g["Contribucion"] < 0).sum()), "n_neutros": len(neutros), "n_revisar": len(revisar),
             "n_no_concluyente": int(((g["Estado_par"] == ESTADO_NO_CONCLUYENTE) & ~sin_ev).sum()),
@@ -260,21 +290,45 @@ def tabla_rutas(pares: pd.DataFrame, con_log2fc: bool) -> pd.DataFrame:
             "Fraccion_neutros": round(len(neutros) / (len(con_signo) + len(neutros)), 3)
             if len(con_signo) + len(neutros) else float("nan"),
             "Genes_activan": _genes(g[g["Contribucion"] > 0]), "Genes_inhiben": _genes(g[g["Contribucion"] < 0]),
-            "Genes_revisar": _genes(revisar), "Con_log2FC": "sí" if con_log2fc else "no"})
+            "Genes_revisar": _genes(revisar)})
     df = pd.DataFrame(filas)
     orden = df["NPS"].abs().fillna(-1)
     return df.assign(_o=orden).sort_values(["_o", "GO_ID"], ascending=[False, True], kind="mergesort") \
         .drop(columns="_o").reset_index(drop=True)
 
 
+COLUMNAS_ABSTRACTS = ["Gen", "GO_ID", "Ruta_Nombre", "Direccion", "Estado_par", "PMID", "Enlace", "Proceso",
+                      "Veredicto_LLM", "Confianza_modelo", "Estado", "Motivos", "Cita", "Titulo", "Abstract"]
+
+
+def tabla_abstracts_sin_signo(pares: pd.DataFrame, casos: pd.DataFrame, abstracts: pd.DataFrame) -> pd.DataFrame:
+    """Una fila por artículo de cada par UNKNOWN que sí tiene casos en la Fase 2 (no concluyente, en revisión o
+    pendiente), con su enlace a PubMed y lo que respondió el modelo: para leerlos a mano. Los pares sin_evidencia no
+    tienen ningún artículo y no salen."""
+    sin = pares.loc[pares["Signo_par"] == SIGNO_DESCONOCIDO, ["Gen", "GO_ID", "Ruta_Nombre", "Direccion", "Estado_par"]]
+    cols = ["Gen", "GO_ID", "PMID", "Proceso", "Veredicto_LLM", "Confianza_modelo", "Estado", "Motivos", "Cita"]
+    df = sin.merge(casos.reindex(columns=cols), on=["Gen", "GO_ID"], how="inner")
+    df = df.merge(abstracts, on="PMID", how="left")
+    df["Enlace"] = df["PMID"].map(URL_PUBMED.format)
+    return df.reindex(columns=COLUMNAS_ABSTRACTS).sort_values(["GO_ID", "Gen", "PMID"], kind="mergesort") \
+        .reset_index(drop=True)
+
+
 def _fecha(ruta) -> str:
     return datetime.fromtimestamp(Path(ruta).stat().st_mtime).isoformat(timespec="seconds")
 
 
-def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Optional[Path]]) -> pd.DataFrame:
+def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Optional[Path]],
+            abstracts: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     filas = [("Estado_par", f"{e} {s}", int(n)) for (e, s), n in
              pares.groupby(["Estado_par", "Signo_par"]).size().items()]
+    if abstracts is not None:
+        filas.append(("Abstracts_sin_signo", "artículos (pares)",
+                      f"{len(abstracts)} ({abstracts[['Gen', 'GO_ID']].drop_duplicates().shape[0]})"))
     filas += [("Lectura", k, int(n)) for k, n in rutas["Lectura"].value_counts().sort_index().items()]
+    if (rutas["Lectura_log2FC"] != "").any():
+        filas += [("Lectura_log2FC", k, int(n)) for k, n in rutas["Lectura_log2FC"].value_counts().sort_index().items()]
+        filas.append(("Sensibilidad", "rutas Sensible_al_peso", int((rutas["Sensible_al_peso"] == "sí").sum())))
     filas += [("Entrada", k, f"{v} ({_fecha(v)})" if v else "no") for k, v in entradas.items()]
     filas += [("Parametro", k, str(getattr(config, k))) for k in
               ("ORGANISMOS_VALIDOS", "TIPOS_CELULARES_VALIDOS", "FACTOR_CONTEXTO", "CONFIANZA_POR_DEFECTO",
@@ -284,11 +338,11 @@ def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Option
 
 COLUMNAS_PAR = ["Gen", "GO_ID", "Ruta_Nombre", "Direccion", "Log2FC", "Signo_par", "Estado_par", "Motivos",
                 "Origen", "W_pos", "W_neg", "W_neutro", "n_PMIDs", "n_PMIDs_pos", "n_PMIDs_neg", "n_PMIDs_neutro",
-                "Votos", "Signo_revisar", "Contribucion", "Freno_retroalimentacion"]
+                "Votos", "PMIDs_consultados", "Signo_revisar", "Contribucion", "Freno_retroalimentacion"]
 
 
 def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None):
-    """Entradas -> (Por_par, Por_ruta, Resumen)."""
+    """Entradas -> (Por_par, Por_ruta, Resumen, Abstracts_sin_signo)."""
     f2 = leer_hojas(fase2, COLUMNAS_FASE2)
     f1 = leer_hojas(fase1, COLUMNAS_FASE1)
     triaje, igs = f1["Triaje_polaridad"], f1["Inmunoglobulinas"]
@@ -298,16 +352,24 @@ def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None
     fc = leer_log2fc(log2fc, direcciones) if log2fc else None
     pares = tabla_pares(triaje, igs, casos, fc)
     rutas = tabla_rutas(pares, fc is not None)
+    abstracts = tabla_abstracts_sin_signo(pares, casos, leer_abstracts(fase1))
     res = resumen(pares, rutas, {"Fase 1": Path(fase1), "Fase 2": Path(fase2),
-                                 "log2FC": Path(log2fc) if log2fc else None})
-    return pares[COLUMNAS_PAR], rutas, res
+                                 "log2FC": Path(log2fc) if log2fc else None}, abstracts)
+    return pares[COLUMNAS_PAR], rutas, res, abstracts
 
 
-def escribir(pares: pd.DataFrame, rutas: pd.DataFrame, res: pd.DataFrame, ruta=config.FICHERO_SCORING) -> Path:
+def escribir(pares: pd.DataFrame, rutas: pd.DataFrame, res: pd.DataFrame, abstracts: Optional[pd.DataFrame] = None,
+             ruta=config.FICHERO_SCORING) -> Path:
     ruta = Path(ruta)
     ruta.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(ruta) as w:
         rutas.to_excel(w, sheet_name="Por_ruta", index=False)
         pares.to_excel(w, sheet_name="Por_par", index=False)
         res.to_excel(w, sheet_name="Resumen", index=False)
+        if abstracts is not None:
+            abstracts.to_excel(w, sheet_name="Abstracts_sin_signo", index=False)
+            hoja, col = w.sheets["Abstracts_sin_signo"], COLUMNAS_ABSTRACTS.index("PMID") + 1
+            for fila, url in enumerate(abstracts["Enlace"], start=2):  # el PMID se abre en PubMed con un clic
+                celda = hoja.cell(row=fila, column=col)
+                celda.hyperlink, celda.style = url, "Hyperlink"
     return ruta

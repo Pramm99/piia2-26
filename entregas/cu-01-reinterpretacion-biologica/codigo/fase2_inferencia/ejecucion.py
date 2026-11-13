@@ -13,9 +13,10 @@ A cada modelo se le envían solo las preguntas del grupo que le faltan; cada una
 Una pregunta que el modelo se salta queda pendiente; si la salida se corta por max_completion_tokens, la lista
 se parte en dos y se repite.
 
-Con solo_respaldo=True el secundario no se usa para contrastar: solo recibe las preguntas que el principal no ha
-respondido (cupo agotado) o respondió con un JSON que no vale (resultados.elegir). Así el cupo diario de Groq se
-reserva para los fallos de Gemini; una ejecución posterior sin la opción completa el contraste.
+El secundario es solo un respaldo (solo_respaldo=True, por defecto; decisión del 2026-11-12): recibe y aporta
+únicamente las preguntas que el principal no ha respondido (cupo agotado) o respondió con un JSON que no vale
+(resultados.elegir). Una respuesta suya que esté en el registro para una pregunta que el principal sí respondió
+no se usa. Con solo_respaldo=False (opción --contraste) responde a todo y se contrastan los dos modelos.
 
 El resumen cuenta los tokens de cada modelo, incluidos los servidos de la caché del proveedor y los de
 razonamiento, cuando el proveedor los da (`usage.prompt_tokens_details.cached_tokens`,
@@ -59,7 +60,7 @@ def _sumar_tokens(resumen: Resumen, modelo: str, meta: Dict) -> None:
 
 
 def ejecutar(prompts: Sequence[PromptLLM], clientes: Sequence, registro: Optional[Registro] = None,
-             cada: int = 25, solo_respaldo: bool = False) -> (List[ResultadoCaso], Resumen):
+             cada: int = 25, solo_respaldo: bool = True) -> (List[ResultadoCaso], Resumen):
     """prompts: preguntas sueltas de una sola versión del prompt; se envían por gen.
     clientes: objetos con `.cfg` (nombre, presupuesto_llamada) y `.completar(lista)` (ClienteOpenAICompatible
     o ClienteSimulado)."""
@@ -95,7 +96,7 @@ def _ejecutar_por_gen(preguntas: Sequence[PromptLLM], clientes: Sequence, regist
                       cada: int, solo_respaldo: bool = False) -> (List[ResultadoCaso], Resumen):
     resumen, agotados = Resumen(), set()
     principal = clientes[0].cfg.nombre
-    # Con solo_respaldo, el secundario solo hace falta donde el principal no tiene una respuesta válida
+    # Como respaldo, el secundario solo hace falta donde el principal no tiene una respuesta válida
     hace_falta = (lambda p, cli: cli.cfg.nombre == principal or not _principal_valido(p, principal, registro))         if solo_respaldo else (lambda p, cli: True)
     resumen.reutilizadas = sum(clave(p, c.cfg.nombre) in registro for p in preguntas for c in clientes)
     faltan_a_alguno = [p for p in preguntas if any(clave(p, c.cfg.nombre) not in registro for c in clientes)]
@@ -120,7 +121,8 @@ def _ejecutar_por_gen(preguntas: Sequence[PromptLLM], clientes: Sequence, regist
     for p in preguntas:
         res = ResultadoCaso(p)
         for cli in clientes:
-            linea = registro.get(clave(p, cli.cfg.nombre))
+            # Como respaldo, el secundario no cuenta donde el principal respondió, aunque esté en el registro
+            linea = registro.get(clave(p, cli.cfg.nombre)) if hace_falta(p, cli) else None
             res.salidas[cli.cfg.nombre] = validar_respuesta(p, linea["respuesta_cruda"]) if linea else None
             resumen.pendientes += linea is None and hace_falta(p, cli)
         resultados.append(res)

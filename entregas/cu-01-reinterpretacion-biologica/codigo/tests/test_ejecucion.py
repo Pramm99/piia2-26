@@ -60,11 +60,24 @@ def test_solo_respaldo_el_secundario_solo_recibe_lo_que_falla(tmp_path):
     assert all(r.salidas["secundario"] is None for r in resultados if r.prompt.gen == "CD7")
 
 
-def test_sin_solo_respaldo_el_secundario_contrasta_todo(tmp_path):
+def test_con_contraste_el_secundario_responde_a_todo(tmp_path):
     secundario = ClienteSimulado("secundario", _responder)
     ejecutar(_preguntas_dos_genes(), [ClienteSimulado("principal", _responder), secundario],
-             Registro(tmp_path / "r.jsonl"), cada=0)
+             Registro(tmp_path / "r.jsonl"), cada=0, solo_respaldo=False)
     assert secundario.llamadas == 2
+
+
+def test_por_defecto_el_secundario_es_solo_respaldo(tmp_path):
+    """Aunque el registro tenga respuestas del secundario (de una ejecución con contraste), no se usan donde el
+    principal respondió: no hay contraste ni llamadas al secundario."""
+    registro = Registro(tmp_path / "r.jsonl")
+    clientes = [ClienteSimulado("principal", _responder), ClienteSimulado("secundario", _responder)]
+    ejecutar(_preguntas_dos_genes(), clientes, registro, cada=0, solo_respaldo=False)
+    secundario = ClienteSimulado("secundario", _responder)
+    resultados, resumen = ejecutar(_preguntas_dos_genes(), [ClienteSimulado("principal", _responder), secundario],
+                                   Registro(tmp_path / "r.jsonl"), cada=0)
+    assert secundario.llamadas == 0 and resumen.pendientes == 0
+    assert all(r.salidas["secundario"] is None and r.salidas["principal"]["signo"] == "+1" for r in resultados)
 
 
 def test_pregunta_saltada_queda_pendiente(tmp_path):

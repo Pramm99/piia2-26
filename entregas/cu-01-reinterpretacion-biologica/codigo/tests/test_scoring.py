@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from fase3_scoring import config
-from fase3_scoring.nps import calcular, escribir, peso
+from fase3_scoring.nps import calcular, escribir, leer_log2fc, peso
 
 HUMANO, RATON = ("human", "NK"), ("mouse", "NK")
 
@@ -20,13 +20,15 @@ def par(gen, go, destino="LLM", lista="Activada", signo_go=None, ruta="ruta"):
             "Destino": destino}
 
 
-def entradas(tmp_path, pares, casos, igs=()):
+def entradas(tmp_path, pares, casos, igs=(), con_abstract=None):
     """Escribe los Excels de las Fases 1 y 2 con lo mínimo que lee el scoring."""
     f1, f2 = tmp_path / "fase1.xlsx", tmp_path / "fase2.xlsx"
     cols_ig = ["Gen", "GO_ID", "Ruta_Nombre", "Estado_Original", "Signo"]
     with pd.ExcelWriter(f1) as w:
         pd.DataFrame(pares, columns=list(par("x", "y"))).to_excel(w, sheet_name="Triaje_polaridad", index=False)
         pd.DataFrame(list(igs), columns=cols_ig).to_excel(w, sheet_name="Inmunoglobulinas", index=False)
+        if con_abstract is not None:
+            pd.DataFrame(con_abstract).to_excel(w, sheet_name="Con_abstract", index=False)
     df = pd.DataFrame(casos, columns=list(caso("x", "y", "1", "+1")))
     with pd.ExcelWriter(f2) as w:
         df.drop(columns=["Organismo", "Tipo_celular"]).to_excel(w, sheet_name="Por_ruta", index=False)
@@ -37,7 +39,7 @@ def entradas(tmp_path, pares, casos, igs=()):
 
 def puntuar(tmp_path, pares, casos, igs=(), log2fc=None):
     f1, f2 = entradas(tmp_path, pares, casos, igs)
-    return calcular(f1, f2, log2fc)
+    return calcular(f1, f2, log2fc)[:3]
 
 
 def fila(df, gen, go="GO:A"):
@@ -155,12 +157,59 @@ def test_log2fc(tmp_path):
     pd.DataFrame({"Gen": ["D"], "log2FC": [-2.0]}).to_csv(fc, index=False)
     p, r, _ = puntuar(tmp_path, [par("D", "GO:A", lista="Suprimida"), par("E", "GO:A")],
                       [caso("D", "GO:A", "1", "+1"), caso("E", "GO:A", "2", "+1")], log2fc=fc)
-    assert fila(p, "D").Contribucion == -2.0 and fila(p, "D").Log2FC == -2.0
-    assert "sin_log2FC" in fila(p, "E").Motivos and r.iloc[0].Con_log2FC == "sí"
-    assert r.iloc[0].NPS == pytest.approx(round((-2 + 1) / 3, 3))
+    assert fila(p, "D").Contribucion == -1.0 and fila(p, "D").Log2FC == -2.0  # el NPS no pesa por log2FC
+    assert "sin_log2FC" in fila(p, "E").Motivos
+    assert r.iloc[0].NPS == 0.0 and r.iloc[0].NPS_log2FC == pytest.approx(round((-2 + 1) / 3, 3))
     pd.DataFrame({"Gen": ["D"], "log2FC": [1.5]}).to_csv(fc, index=False)
     with pytest.raises(ValueError, match="D"):
         puntuar(tmp_path, [par("D", "GO:A", lista="Suprimida")], [], log2fc=fc)
+
+
+def test_log2fc_solo_cambia_la_sensibilidad(tmp_path):
+    """Tabla de expresión diferencial tal cual (gen en la primera columna, log2FoldChange). Dos genes up que
+    activan con |log2FC| 1 y uno down que activa con |log2FC| 4: el NPS (peso igual) lee activada y el
+    NPS_log2FC, inhibida, así que la ruta sale Sensible_al_peso."""
+    fc = tmp_path / "deseq2.xlsx"
+    pd.DataFrame({"baseMean": [50.0, 40.0, 3.0], "log2FoldChange": [1.0, 1.0, -4.0], "padj": [0.01] * 3},
+                 index=["A", "B", "C"]).to_excel(fc)
+    pares = [par("A", "GO:A"), par("B", "GO:A"), par("C", "GO:A", lista="Suprimida")]
+    votos = [caso(g, "GO:A", str(i), "+1") for i, g in enumerate("ABC", 1)]
+    _, r, res = puntuar(tmp_path, pares, votos, log2fc=fc)
+    f = r.iloc[0]
+    assert (f.NPS, f.Lectura) == (0.333, "activada")
+    assert (f.NPS_log2FC, f.Lectura_log2FC, f.Sensible_al_peso) == (-0.333, "inhibida", "sí")
+    assert res[res.Apartado == "Sensibilidad"].Valor.iloc[0] == 1
+    _, r, _ = puntuar(tmp_path, pares, votos)
+    assert (r.iloc[0].Lectura_log2FC, r.iloc[0].Sensible_al_peso) == ("", "") and pd.isna(r.iloc[0].NPS_log2FC)
+
+
+@pytest.mark.skipif(not config.FICHERO_LOG2FC.exists(), reason="hace falta la tabla de log2FC de CIMUS")
+def test_tabla_de_log2fc_de_cimus():
+    """Los 224 genes de las dos listas tienen log2FC y ninguno contradice su lista (si no, ValueError)."""
+    direcciones = {}
+    for fichero, d in (("NK_rutas_activadas_GO.xlsx", 1), ("NK_rutas_suprimidas_GO.xlsx", -1)):
+        for genes in pd.read_excel(config.DIR_CODIGO / "tools_cimus" / fichero)["geneID"].dropna():
+            direcciones.update({g.upper(): d for g in str(genes).split("/")})
+    fc = leer_log2fc(config.FICHERO_LOG2FC, direcciones)
+    assert not set(direcciones) - set(fc)
+
+
+def test_abstracts_de_los_pares_sin_signo(tmp_path):
+    """Los artículos de un par UNKNOWN con evidencia salen en Abstracts_sin_signo con su enlace a PubMed, título y
+    abstract; los de un par resuelto o sin_evidencia, no. Por_par lista todos los PMIDs consultados."""
+    from openpyxl import load_workbook
+    pares = [par("U", "GO:A"), par("R", "GO:A"), par("S", "GO:A", destino="sin_evidencia")]
+    casos = [caso("U", "GO:A", "11", "UNKNOWN", estado="no_concluyente", motivos="baja_confianza"),
+             caso("R", "GO:A", "21", "+1"), caso("R", "GO:A", "22", "UNKNOWN", estado="no_concluyente")]
+    textos = [{"PMID": p, "Titulo": f"Titulo {p}", "Abstract": f"Abstract {p}"} for p in ("11", "21", "22")]
+    f1, f2 = entradas(tmp_path, pares, casos, con_abstract=textos)
+    p, _, res, a = calcular(f1, f2)
+    assert list(a["Gen"]) == ["U"] and a.iloc[0].PMID == "11" and a.iloc[0].Abstract == "Abstract 11"
+    assert a.iloc[0].Enlace == "https://pubmed.ncbi.nlm.nih.gov/11/" and a.iloc[0].Motivos == "baja_confianza"
+    assert fila(p, "R").PMIDs_consultados == "21; 22" and fila(p, "S").PMIDs_consultados == ""
+    hoja = load_workbook(escribir(p, *calcular(f1, f2)[1:], ruta=tmp_path / "s.xlsx"))["Abstracts_sin_signo"]
+    assert hoja.cell(row=2, column=6).hyperlink.target == "https://pubmed.ncbi.nlm.nih.gov/11/"
+    assert res[res.Apartado == "Abstracts_sin_signo"].Valor.iloc[0] == "1 (1)"
 
 
 @pytest.mark.parametrize("hoja, columna", [("Por_ruta", None), ("Por_ruta", "Confianza_final")])
@@ -187,14 +236,14 @@ def test_determinista_y_sin_red(tmp_path, monkeypatch):
     monkeypatch.setattr(socket, "create_connection", sin_red)
     f1, f2 = entradas(tmp_path, RUTA, VOTOS)
     a, b = escribir(*calcular(f1, f2), tmp_path / "a.xlsx"), escribir(*calcular(f1, f2), tmp_path / "b.xlsx")
-    for hoja in ("Por_ruta", "Por_par", "Resumen"):
+    for hoja in ("Por_ruta", "Por_par", "Resumen", "Abstracts_sin_signo"):
         pd.testing.assert_frame_equal(pd.read_excel(a, sheet_name=hoja), pd.read_excel(b, sheet_name=hoja))
 
 
 @pytest.mark.skipif(not (config.FICHERO_FASE1.exists() and config.FICHERO_FASE2.exists()),
                     reason="hacen falta las salidas reales de las Fases 1 y 2")
 def test_recuento_completo_con_las_salidas_reales():
-    p, r, _ = calcular()
+    p, r, *_ = calcular()
     triaje = pd.read_excel(config.FICHERO_FASE1, sheet_name=["Triaje_polaridad", "Inmunoglobulinas"])
     total = pd.concat(triaje.values())
     assert len(p) == len(total) and len(r) == total["GO_ID"].nunique()

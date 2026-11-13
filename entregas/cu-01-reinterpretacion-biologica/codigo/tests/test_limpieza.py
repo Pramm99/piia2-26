@@ -4,7 +4,7 @@ import pytest
 from abstracts import limpiar_texto
 from fase2_inferencia.limpieza import forma_comparacion, limpiar_abstract, normalizar_pmid, segmentar_frases
 from fase2_inferencia.respuesta import verificar_cita
-from relevancia import menciona_gen, patron_gen
+from relevancia import menciona_gen, nombres_utiles, patron_gen
 
 ABSTRACT = ("Human K12-Fc stimulated the up-regulation of CD25, CD54, and CD69 on human NK cells. "
             "NF-κB activation required IL-4Rα and CD70 binding.")
@@ -92,6 +92,47 @@ def test_mencion_por_palabra_completa():
     assert not menciona_gen("binding of CD70 to cells", p)
     assert menciona_gen("expression of CD-7 on T cells", p)
     assert not menciona_gen("expression of cd7 on T cells", p)  # todo en minúsculas no cuenta
+
+
+def test_mencion_con_guion_pegado_a_otra_palabra():
+    """El guion que une el gen a una palabra corriente no lo esconde, y el guion interno del símbolo sigue valiendo."""
+    p = patron_gen("CXCR3")
+    assert menciona_gen("Inhibition of CXCR3-mediated chemotaxis", p)
+    assert menciona_gen("treated with anti-CXCR3 antibody", p)
+    assert not menciona_gen("binding of CXCR30-mediated signals", p)  # palabra entera: CXCR3 ≠ CXCR30
+    assert menciona_gen("IL-4R-dependent signalling", patron_gen("IL4R"))
+    assert menciona_gen("blocking with HVEM-Ig", patron_gen("TNFRSF14", alias=("HVEM",)))
+    assert menciona_gen("genes including Mx1, 2,5-OAS1 and IFIT1", patron_gen("OAS1"))
+    assert not menciona_gen("cxcr3-mediated chemotaxis", p)  # todo en minúsculas sigue sin contar
+
+
+def test_mencion_con_griegas():
+    """Las griegas valen como la letra del símbolo de HGNC: IκBζ = IKBZ, PKCθ = PKCQ, CD3ε = CD3E."""
+    assert menciona_gen("via IκBζ modulation", patron_gen("NFKBIZ", alias=("IKBZ",)))
+    assert menciona_gen("IkappaBzeta augments IFN-γ", patron_gen("NFKBIZ", alias=("IKBZ",)))
+    assert menciona_gen("PKCθ is recruited to the synapse", patron_gen("PRKCQ", alias=("PKCQ",)))
+    assert menciona_gen("CD3ε chain", patron_gen("CD3E"))
+    # Variantes tipográficas y mayúsculas griegas: no rompen el filtro y valen como la letra normal
+    assert menciona_gen("CD3ϵ chain and PKCϑ, ϰB, ϐ", patron_gen("CD3E"))
+    assert menciona_gen("IΚBΖ levels", patron_gen("NFKBIZ", alias=("IKBZ",)))
+
+
+def test_mencion_por_nombre_de_proteina():
+    """Los nombres de la proteína cuentan como frase (griegas como palabra, «1alpha» = «1-alpha»), salvo los genéricos,
+    las siglas de una palabra (LIGHT) y los que comparten dos genes."""
+    utiles = nombres_utiles({
+        "CCL3": ["C-C motif chemokine 3", "Macrophage inflammatory protein 1-alpha", "MIP-1-alpha"],
+        "CTNNB1": ["Catenin beta-1", "Beta-catenin"], "FURIN": ["Furin", "Paired basic amino acid residue-cleaving enzyme"],
+        "CXCR6": ["C-X-C chemokine receptor type 6", "G protein-coupled receptor"], "TNFSF14": ["LIGHT"],
+        "GENA": ["Shared alpha protein"], "GENB": ["Shared alpha protein"]})
+    assert utiles["TNFSF14"] == () and utiles["GENA"] == () and "g protein coupled receptor" not in utiles["CXCR6"]
+    p = lambda g: patron_gen(g, proteinas=utiles[g])
+    assert menciona_gen("macrophage inflammatory protein-1alpha induces chemotaxis", p("CCL3"))
+    assert menciona_gen("MIP-1α levels rose", p("CCL3"))
+    assert menciona_gen("stabilization of β-catenin induces migration", p("CTNNB1"))
+    assert menciona_gen("the cellular protease furin cleaves the spike", p("FURIN"))
+    assert not menciona_gen("G protein-coupled receptor signalling", p("CXCR6"))
+    assert not menciona_gen("exposure to light", patron_gen("TNFSF14", proteinas=utiles["TNFSF14"]))
 
 
 def test_mencion_por_alias_y_nombre_completo():

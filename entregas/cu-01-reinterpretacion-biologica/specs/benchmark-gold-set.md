@@ -41,7 +41,7 @@ Un procedimiento de evaluación reproducible que permita elegir los modelos de p
    **Limitación:** como esos anotadores son modelos de lenguaje, parecidos a los evaluados, el acierto medido puede estar inflado frente al de un experto humano; las cifras se leen con esa cautela.
 3. **Ejecución del benchmark:** `evaluar_gold.py ejecutar` hace que cada candidato responda a todas las preguntas del *gold set* con el prompt y el validador de producción (spec de inferencia). Las preguntas se envían por gen, troceadas con el presupuesto por llamada de cada modelo. Por eso la agrupación del mensaje puede variar entre modelos, aunque cada pregunta y su huella son idénticas. En producción sí es común, porque se usa el presupuesto más pequeño de la pareja. Las preguntas se construyen a partir de las dos listas de CIMUS.
 
-   Candidatos evaluados (2026-11-10, registro en `codigo/data/benchmark/`): `gemini-3.5-flash-lite` y `groq-gpt-oss-120b`, con 100 de 100 respuestas cada uno. Las preguntas que ya estaban registradas con el mismo prompt se reutilizaron: Gemini solo llamó para los 35 casos *down* (22 llamadas, una por gen), y gpt-oss hizo 60 llamadas sin cortes por el límite diario (163 K tokens). `qwen3.8-27b` está descartado (ADR-005).
+   Candidatos evaluados (2026-11-10, registro en `codigo/data/benchmark/`): `gemini-3.5-flash-lite` y `groq-gpt-oss-120b`, con 100 de 100 respuestas cada uno. Llamadas y tokens de cada modelo, en `informe_gold.txt`. `qwen3.8-27b` está descartado (ADR-005).
 4. **Informe de resultados:** `evaluar_gold.py informe` vuelve a validar las respuestas crudas del registro, **sin llamar a ningún modelo**, y las compara con las etiquetas. La etiqueta `NO_EFFECT` cuenta como `neutro` y `NO_CLEAR_EFFECT`, como `UNKNOWN`. Por cada modelo calcula:
    * **Exactitud:** porcentaje de casos en que la clase del sistema coincide con la etiqueta.
    * **Precisión de las respuestas dadas:** de los casos en que el sistema no da `UNKNOWN` (`+1`, `-1` o `neutro`), cuántos coinciden con la etiqueta.
@@ -50,15 +50,15 @@ Un procedimiento de evaluación reproducible que permita elegir los modelos de p
    * **Matriz de confusión** 4×4 (`+1`, `-1`, `neutro`, `UNKNOWN`).
    * **JSON válido**, **citas verificadas** y **acuerdo con `Polaridad_GO`** en los casos que la tienen.
    * **Llamadas, latencia media por llamada, tiempo total y tokens** (entrada y salida).
-   * **Calibración del porcentaje de seguridad**, sobre los veredictos que da cada modelo (acierto = misma clase que la etiqueta), por separado para `confianza_modelo` (la que declara el modelo) y `confianza_final` (corregida con el tipo de evidencia, la frase citada y el acuerdo con el otro modelo; ADR-003):
+   * **Calibración del porcentaje de seguridad**, sobre los signos que da cada modelo, es decir, los que no quedan en `UNKNOWN` (acierto = misma clase que la etiqueta), por separado para `confianza_modelo` (la que declara el modelo) y `confianza_final` (corregida con el tipo de evidencia, la frase citada y el acuerdo con el otro modelo; ADR-003):
      * **tabla de fiabilidad** por tramos (0-49, 50-69, 70-89 y 90-100): número de signos, confianza media y acierto. Si está bien calibrada, las respuestas con un 80 % aciertan un 80 %;
      * **ECE** (error de calibración esperado): la diferencia media, ponderada por tramo, entre la confianza y el acierto;
      * **AUROC** de la confianza frente al acierto: la probabilidad de que un signo correcto tenga más confianza que uno erróneo (0,5 = no separa);
-     * **curva riesgo-cobertura:** para cada umbral (0, 50, 60, 70, 80 y 90), cuántos signos quedan por encima y qué precisión tienen. De ella salió `UMBRAL_VEREDICTO = 80` (2026-11-10).
+     * **curva riesgo-cobertura:** para cada umbral (0, 50, 60, 70, 80 y 90), cuántos signos quedan por encima y qué precisión tienen. Como se calcula sobre los signos que ya han pasado el umbral (o la regla de GO), indica qué pasaría con un umbral más alto. `UMBRAL_VEREDICTO = 80` se fijó el 2026-11-10 (ADR-003).
 
-     Para `confianza_final` se usa como otro modelo el de la pareja de producción: Gemini con gpt-oss y al revés. La calibración es orientativa (40 signos de Gemini y 34 de gpt-oss). Los factores de `confianza_final` se fijaron en una prueba anterior, con otro prompt (ADR-003), así que este benchmark los mide en respuestas que no se usaron para fijarlos.
+     Para `confianza_final` se usa como otro modelo el de la pareja de producción: Gemini con gpt-oss y al revés. La calibración es orientativa (40 signos de Gemini y 34 de gpt-oss). Los factores de `confianza_final` no se ajustaron con este *gold set* (ADR-003), así que el benchmark los mide en respuestas que no se usaron para fijarlos.
 
-   Cada métrica se acompaña de su **intervalo de confianza al 95 %** calculado por *bootstrap* (2.000 remuestreos, semilla fija), y se reporta el **acuerdo entre anotadores** (kappa de Cohen) sobre los casos dobles. El informe aplica la misma regla de GO que producción: un veredicto con cita verificada que coincide con la `Polaridad_GO` del caso se acepta aunque su confianza no llegue al umbral. La `Polaridad_GO` es la de la primera ruta del caso con signo (`ruta_go` y `factor_ruta_go`), no la de cada ruta.
+   La exactitud, la precisión, la cobertura y el recall de `UNKNOWN` se acompañan de su **intervalo de confianza al 95 %** calculado por *bootstrap* (2.000 remuestreos, semilla fija 7), y se reporta el **acuerdo entre anotadores** (kappa de Cohen) sobre los casos dobles. El informe aplica la misma regla de GO que producción: un veredicto con cita verificada que coincide con la `Polaridad_GO` del caso se acepta aunque su confianza no llegue al umbral. La `Polaridad_GO` es la de la primera ruta del caso con signo (`ruta_go` y `factor_ruta_go`), no la de cada ruta.
 
 **Uso** (desde `codigo/`):
 
@@ -91,13 +91,13 @@ El etiquetado a ciegas es imprescindible: si quien etiqueta ve la respuesta de u
 * **Coste cero:** todas las ejecuciones usan planes gratuitos o Ollama en local (ADR-005), y sus respuestas se guardan en el registro del [ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md), con el nombre exacto de cada modelo.
 
 ## Criterios de aceptación
-* [x] ✅ **Mantenimiento reproducible:** `seleccionar_gold.py` sobre la Fase 1 del 2026-11-09 rehace el *gold set* idéntico: no desaparece ningún caso y `gold_casos.jsonl` y `plantilla_etiquetado.jsonl` no cambian (comprobado el 2026-11-10). El sorteo con el que se montó ya no está en el código; queda en el historial de git.
+* [x] ✅ **Mantenimiento reproducible:** `seleccionar_gold.py` sobre la Fase 1 del 2026-11-09 rehace el *gold set* idéntico: no desaparece ningún caso y `gold_casos.jsonl` y `plantilla_etiquetado.jsonl` no cambian (comprobado el 2026-11-10).
 * [x] ✅ **Plantilla a ciegas:** la plantilla contiene el gen, sus otros nombres, el PMID, el proceso núcleo, el título y las frases del abstract, y **no** contiene `Polaridad_GO`, la dirección de scRNA-seq ni ninguna salida de modelo.
 * [x] ✅ ***Gold set* completo:** `gold.jsonl` tiene, para los 100 casos, `id`, `efecto` válido de las 4 clases, `motivo`, `id_frase`, `cita`, `confianza`, `nota` y `anotador`.
-* [x] ✅ **Acuerdo entre anotadores:** los 100 casos tienen las dos etiquetas registradas (`doble.jsonl`) y el informe incluye su kappa de Cohen (0,98 entre la etiqueta final y la segunda; en los 35 *down*, A y B coinciden con kappa 0,96).
+* [x] ✅ **Acuerdo entre anotadores:** los 100 casos tienen las dos etiquetas registradas (`doble.jsonl`) y el informe incluye su kappa de Cohen (0,98 entre la etiqueta final y la segunda); el 0,96 de A y B en los 35 *down* está en `evaluacion/etiquetas/LEEME.md`.
 * [x] ✅ **Casos de las rutas de genes *down*** en el *gold set*: 35 de 100, comprobados contra los Excels de CIMUS.
 * [x] ✅ **Cobertura de la evaluación:** cada candidato tiene una respuesta registrada para el 100 % de los casos (Gemini y gpt-oss: 100 de 100).
-* [x] ✅ **Informe completo:** para cada modelo evaluado, el informe incluye todas las métricas de la parte 4 con su intervalo de confianza al 95 % y la matriz de confusión (`informe_gold.txt`, Gemini y gpt-oss).
+* [x] ✅ **Informe completo:** para cada modelo evaluado, el informe incluye todas las métricas de la parte 4, el intervalo de confianza al 95 % de la exactitud, la precisión, la cobertura y el recall de `UNKNOWN`, y la matriz de confusión (`informe_gold.txt`, Gemini y gpt-oss).
 * [x] ✅ **Calibración en el informe:** `evaluar_gold.py informe` añade, por modelo, la tabla de fiabilidad, el ECE, el AUROC y la curva riesgo-cobertura de `confianza_modelo` y `confianza_final`, a partir del registro y sin llamar a los modelos.
 * [x] ✅ **Reproducibilidad del informe:** regenerar el informe a partir del registro, sin ninguna llamada nueva, da un texto idéntico a `informe_gold.txt` (comprobado el 2026-11-11).
 * [x] ✅ **Decisión documentada:** el ADR-005 recoge el modelo principal (Gemini 3.5 Flash-Lite, decidido el 2026-11-10) y el secundario (gpt-oss-120b, confirmado el 2026-11-11).

@@ -15,7 +15,8 @@ codigo/
 │   ├── main.py                    #   (hecho) Orquesta la Fase 1 en orden.
 │   ├── config.py                  #   (hecho) Rutas (entrada: los Excels de tools_cimus/), URLs, umbrales y opciones
 │   │                              #   de filtrado; lee NCBI_EMAIL y NCBI_API_KEY de codigo/.env.
-│   ├── red.py                     #   (hecho) Sesión HTTP con reintentos y descarga atómica del OBO y el GAF.
+│   ├── red.py                     #   (hecho) Sesión HTTP con reintentos, descarga atómica del OBO y el GAF y
+│   │                              #   aviso de progreso (porcentaje y tiempo) de las descargas largas.
 │   ├── entrada_excel.py           #   (hecho) [1] Lectura de las dos listas de rutas (.xlsx o .csv) -> pares (gen,
 │   │                              #   ruta) con Estado_Original; ValueError si falta una columna, antes de la red.
 │   ├── grafo_go.py                #   (hecho) [2] Grafo GO, propagación al subárbol con profundidad y signo.
@@ -28,11 +29,14 @@ codigo/
 │   ├── fuentes/                   #   (hecho) [3, 6] Clientes de las fuentes externas:
 │   │   ├── generif.py             #     MyGene.info (alias, nombre y GeneRIF).
 │   │   ├── europepmc.py           #     Búsqueda dirigida en Europe PMC.
+│   │   ├── gene2pubmed.py         #     NCBI gene2pubmed + MeSH de la ruta (tabla_go_mesh.tsv).
 │   │   ├── uniprot.py             #     Función de las inmunoglobulinas (UniProt Swiss-Prot).
+│   │   ├── nombres.py             #     Nombres de la proteína (UniProt y MyGene), solo para el filtro de mención.
 │   │   └── cache.py               #     Escritura atómica de las cachés JSON.
 │   ├── abstracts.py               #   (hecho) [7] Europe PMC + NCBI con caché de abstracts en crudo y limpiar_texto.
 │   ├── salida.py                  #   (hecho) [8] Embudo por consola y Excel de la Fase 1 (7 hojas).
-│   └── fase1_dataset_abstracts.xlsx  # Salida de la Fase 1 y entrada de la Fase 2 (no se versiona).
+│   ├── tabla_go_mesh.tsv          #   Ruta GO -> consulta MeSH para gene2pubmed (hecha a mano, versionada; #31).
+│   └── fase1_dataset_abstracts.xlsx  # Salida de la Fase 1 y entrada de las Fases 2 y 3 (no se versiona).
 │
 ├── fase2_inferencia/              # FASE 2 · Inferencia (specs limpieza e inferencia-llm, ADR-003/004/005)
 │   │                              #   Se ejecuta desde codigo/ con: python -m fase2_inferencia ejecutar
@@ -58,10 +62,12 @@ codigo/
 │
 ├── fase3_scoring/                 # FASE 3 · Scoring (spec scoring-net-pathway-score) [15]
 │   │                              #   Se ejecuta desde codigo/ con: python -m fase3_scoring
-│   ├── nps.py                     #   (hecho) Votos ponderados por artículo -> signo del par -> NPS de cada ruta;
-│   │                              #   fase3_scoring.xlsx (Por_ruta, Por_par, Resumen).
-│   ├── config.py                  #   (hecho) Pesos de contexto, minoría de conflicto y umbrales de lectura
-│   │                              #   (provisionales).
+│   ├── nps.py                     #   (hecho) Votos ponderados por artículo -> signo del par -> NPS de cada ruta
+│   │                              #   (todos los genes pesan igual) y NPS_log2FC de sensibilidad
+│   │                              #   (Sensible_al_peso); fase3_scoring.xlsx (Por_ruta, Por_par, Resumen,
+│   │                              #   Abstracts_sin_signo con enlace a PubMed).
+│   ├── config.py                  #   (hecho) Rutas de entrada (incluida la tabla de log2FC), pesos de contexto,
+│   │                              #   minoría de conflicto y umbrales de lectura (provisionales).
 │   └── __init__.py / __main__.py  #   (hecho) API del paquete y línea de comandos.
 │
 ├── evaluacion/                    # BENCHMARK [16] (spec benchmark-gold-set, ADR-005)
@@ -93,18 +99,14 @@ codigo/
 │   └── fixtures/                  #   OBO y GAF mínimos, listas de CIMUS y respuestas HTTP grabadas (texto, sin
 │                                  #   Excels: los .xlsx de entrada se escriben en una carpeta temporal).
 │
-├── tools_cimus/                   # Material de CIMUS: Excels de rutas enriquecidas (los únicos .xlsx versionados)
-│                                  #   y su script de análisis.
+├── tools_cimus/                   # Material de CIMUS: rutas enriquecidas (los únicos .xlsx versionados)
+│                                  #   y tabla de log2FC (NK_cells_DESeq2_results.xlsx, no se sube).
 ├── data/                          # Ficheros locales, ignorados por git (ADR-004):
 │                                  #   go-basic.obo, goa_human.gaf.gz, cachés (cache_abstracts.json,
-│                                  #   cache_mygene.json, cache_epmc_busquedas.json, cache_uniprot.json,
+│                                  #   cache_mygene.json, cache_epmc_busquedas.json, cache_uniprot.json, cache_nombres_proteina.json, cache_gene2pubmed.json,
 │                                  #   hgnc_inmunoglobulinas.json), respuestas_llm.jsonl, llamadas_llm.jsonl,
 │                                  #   fase2_resultados.xlsx, fase3_scoring.xlsx y los registros del benchmark.
-├── requirements.txt               # Dependencias de Python: requests, pandas, openpyxl (y pytest para las pruebas).
+├── requirements.txt               # Dependencias de Python: requests, pandas, openpyxl (y pytest y pytest-cov para las pruebas).
 ├── .env.example                   # Nombres de las claves (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY,
 │                                  #   NCBI_EMAIL, NCBI_API_KEY), vacíos.
 └── .env                           # Las claves reales. Solo en local: está en .gitignore y NUNCA se sube.
-
-Eliminados (siguen en el historial de git):
-  - ApiREST_OFICIAL.py             # Prototipo inicial contra AmiGO/GOlr (descartado en el ADR-002).
-  - consultar_gen.py               # Primera versión de la Fase 2 con Groq y llama3-8b-8192; sustituida por cliente.py.
