@@ -5,8 +5,9 @@ gen suele ser un descendiente de la ruta del Excel) y, para «(positive/negative
 X. Texto y vocabulario se normalizan igual: minúsculas, sin puntuación, NK = natural killer y sin plural.
 
 El gen se busca por símbolo, alias o nombre completo, como palabra entera y sin guiones ni espacios
-internos, con las griegas como letra (IL-4Rα = IL-4Ralpha = IL4RA; CD7 ≠ CD70). Un símbolo o alias escrito
-todo en minúsculas no cuenta: muchos alias son palabras corrientes (ACP5 = TRAP, «trap»; TNFSF14 = LIGHT).
+internos, con las griegas como letra (IL-4Rα = IL-4Ralpha = IL4RA; IκBζ = IKBZ; CD7 ≠ CD70). Un guion que une el
+gen a una palabra corriente no lo esconde («CXCR3-mediated», «anti-CD7»). Un símbolo o alias escrito todo en
+minúsculas no cuenta: muchos alias son palabras corrientes (ACP5 = TRAP, «trap»; TNFSF14 = LIGHT).
 """
 import re
 from collections import defaultdict
@@ -57,8 +58,11 @@ def ngramas(texto):
     return {p[i:i + n] for n in range(1, MAX_PALABRAS + 1) for i in range(len(p) - n + 1)}
 
 
+# Con la letra que usa HGNC en los símbolos (PRKCQ = PKCθ, NFKBIZ = IκBζ). «eta» no se incluye: es la sigla de un
+# alias real (ETA = EDNRA) y aparece dentro de muchas palabras.
 _GRIEGAS = [("alpha", "a"), ("α", "a"), ("beta", "b"), ("β", "b"), ("gamma", "g"), ("γ", "g"),
-            ("delta", "d"), ("δ", "d"), ("kappa", "k"), ("κ", "k")]
+            ("delta", "d"), ("δ", "d"), ("epsilon", "e"), ("ε", "e"), ("zeta", "z"), ("ζ", "z"),
+            ("theta", "q"), ("θ", "q"), ("kappa", "k"), ("κ", "k"), ("lambda", "l"), ("λ", "l")]
 MIN_ALIAS = 3  # alias más cortos (p. ej. "P1") dan demasiados falsos positivos
 
 
@@ -85,12 +89,20 @@ def patron_gen(simbolo, alias=(), nombre=""):
     return simbolos, completo
 
 
+_GUION_MINUSCULAS = re.compile(r"(?<=\b[a-z])-|-(?=[a-z])|(?<=[a-z]{2})-")  # «IL-4R-dependent», «anti-CD7»
+
+
 def menciona_gen(texto, patron):
-    """True si el texto nombra al gen como palabra entera (CD7 ≠ CD70), por símbolo, alias o nombre."""
+    """True si el texto nombra al gen como palabra entera (CD7 ≠ CD70), por símbolo, alias o nombre.
+    Se mira el texto con los guiones quitados (IL-4R = IL4R), con los guiones como espacio («HVEM-Ig», «2,5-OAS1») y
+    con espacio solo en los que tocan una palabra en minúsculas («IL-4R-dependent», «anti-CD7»): así el guion no
+    pega el gen a la palabra de al lado."""
     simbolos, completo = patron
-    if simbolos and any(m.group() != m.group().lower()
-                        for m in simbolos.finditer(" ".join(_forma_gen(p) for p in texto.split()))):
-        return True
+    if simbolos:
+        for variante in (texto, texto.replace("-", " "), _GUION_MINUSCULAS.sub(" ", texto)):
+            if any(m.group() != m.group().lower()
+                   for m in simbolos.finditer(" ".join(_forma_gen(p) for p in variante.split()))):
+                return True
     return bool(completo and completo.search(_plano(texto)))
 
 

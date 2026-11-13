@@ -94,6 +94,26 @@ def test_mencion_por_palabra_completa():
     assert not menciona_gen("expression of cd7 on T cells", p)  # todo en minúsculas no cuenta
 
 
+def test_mencion_con_guion_pegado_a_otra_palabra():
+    """El guion que une el gen a una palabra corriente no lo esconde, y el guion interno del símbolo sigue valiendo."""
+    p = patron_gen("CXCR3")
+    assert menciona_gen("Inhibition of CXCR3-mediated chemotaxis", p)
+    assert menciona_gen("treated with anti-CXCR3 antibody", p)
+    assert not menciona_gen("binding of CXCR30-mediated signals", p)  # palabra entera: CXCR3 ≠ CXCR30
+    assert menciona_gen("IL-4R-dependent signalling", patron_gen("IL4R"))
+    assert menciona_gen("blocking with HVEM-Ig", patron_gen("TNFRSF14", alias=("HVEM",)))
+    assert menciona_gen("genes including Mx1, 2,5-OAS1 and IFIT1", patron_gen("OAS1"))
+    assert not menciona_gen("cxcr3-mediated chemotaxis", p)  # todo en minúsculas sigue sin contar
+
+
+def test_mencion_con_griegas():
+    """Las griegas valen como la letra del símbolo de HGNC: IκBζ = IKBZ, PKCθ = PKCQ, CD3ε = CD3E."""
+    assert menciona_gen("via IκBζ modulation", patron_gen("NFKBIZ", alias=("IKBZ",)))
+    assert menciona_gen("IkappaBzeta augments IFN-γ", patron_gen("NFKBIZ", alias=("IKBZ",)))
+    assert menciona_gen("PKCθ is recruited to the synapse", patron_gen("PRKCQ", alias=("PKCQ",)))
+    assert menciona_gen("CD3ε chain", patron_gen("CD3E"))
+
+
 def test_mencion_por_alias_y_nombre_completo():
     p = patron_gen("TNFRSF10A", alias=("DR4",), nombre="TNF receptor superfamily member 10a")
     assert menciona_gen("DR4 triggers apoptosis", p)
