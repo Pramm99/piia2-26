@@ -27,7 +27,7 @@ Hacen falta dos terminales.
 python fase4_frontend/api_puente.py
 ```
 
-Escucha en `http://127.0.0.1:8000` y carga las 352 rutas de los Excels de CIMUS (`codigo/tools_cimus/`).
+Escucha en `http://127.0.0.1:8000`.
 
 **Interfaz** (desde `codigo/fase4_frontend/`):
 
@@ -39,10 +39,15 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
 
 ## 3. Uso
 
-1. Busca la ruta por GO_ID, nombre o gen y márcala. Se ve con sus genes sobreexpresados (*upregulated*) e
-   infraexpresados (*downregulated*): una ruta que está en las dos listas de CIMUS se ejecuta con todos sus genes.
-2. Pulsa **Ejecutar GO:…** y confirma. La barra muestra la fase en curso.
-3. Al terminar aparece el resultado, explicado en lenguaje llano:
+1. Sube los Excels de rutas (columnas `ID`, `Description` y `geneID`). No hay nada precargado. Hay un hueco para el
+   de **rutas sobreexpresadas (upregulated)** y otro para el de **rutas infraexpresadas (downregulated)**; vale con
+   uno o con los dos. Solo hay un Excel por lista a la vez: **Cambiar** sube otro en su lugar (el anterior se olvida)
+   y **Quitar** lo elimina. Los de CIMUS están en `codigo/tools_cimus/` (`NK_rutas_activadas_GO.xlsx` y
+   `NK_rutas_suprimidas_GO.xlsx`).
+2. Busca la ruta por GO_ID, nombre o gen y márcala. Se ve con sus genes sobreexpresados e infraexpresados: una ruta
+   que está en los dos Excels se ejecuta con todos sus genes.
+3. Pulsa **Ejecutar GO:…** y confirma. La barra muestra la fase en curso.
+4. Al terminar aparece el resultado, explicado en lenguaje llano:
    * arriba, el veredicto: si la ruta está activada, inhibida, mixta o sin evidencia suficiente, la escala del NPS
      con sus tres zonas, cuántos genes la sostienen (con evidencia directa de Gene Ontology o por artículos, y cuántos
      débiles), cuántos tendrían que cambiar para perder la lectura y los genes repartidos en «empujan hacia activada»,
@@ -54,12 +59,9 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
      y por qué. Al pulsarla se ven sus artículos (título con enlace a PubMed, conclusión, confianza y la frase citada);
    * el botón **Descargar Excel de la Fase 3**.
 
-Para trabajar con otros Excels de CIMUS (columnas `ID`, `Description` y `geneID`) están **Subir rutas sobreexpresadas
-(upregulated)** y **Subir rutas infraexpresadas (downregulated)**: cada uno sustituye los genes de su lista.
-
 ## 4. Qué hace el puente
 
-* **Fase 1** con los dos Excels de CIMUS reducidos a la ruta elegida.
+* **Fase 1** con los Excels subidos reducidos a la ruta elegida.
 * **Fase 2** con Gemini como principal y gpt-oss solo como respaldo (ADR-005). Usa el registro de siempre
   (`codigo/data/respuestas_llm.jsonl`): lo que ya se preguntó no se vuelve a pedir. Si el cupo se agota, las preguntas
   quedan `pendiente` y la interfaz lo avisa; basta con volver a ejecutar la ruta más tarde.

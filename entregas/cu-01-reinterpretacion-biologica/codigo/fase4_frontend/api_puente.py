@@ -3,10 +3,10 @@
 Desde codigo/: python fase4_frontend/api_puente.py (escucha en http://127.0.0.1:8000).
 
   GET  /salud           -> {"ok": true}
-  GET  /rutas           -> rutas de los dos Excels de CIMUS (tools_cimus/), juntadas por GO_ID
   POST /ejecutar-ruta   -> {"GO_ID", "Descripcion", "Genes_up", "Genes_down"}: lanza las tres fases seguidas
   GET  /estado          -> fase en curso y, al terminar, el resultado (Por_ruta, Por_par y el Excel de la Fase 3)
 
+Las rutas no se precargan: la persona sube en el frontend sus Excels y se envían los genes de la ruta elegida.
 La ejecución va en un hilo y el frontend consulta /estado, porque en frío tarda unos minutos. Solo hay una a la
 vez. Cada ruta escribe sus ficheros en codigo/data/frontend/<GO_ID>/, así que no pisa las salidas del Excel
 completo; las cachés de la Fase 1 y el registro de respuestas del LLM (codigo/data/) son los de siempre, de modo
@@ -33,7 +33,6 @@ sys.path.insert(0, str(CODIGO_DIR / "fase1_ingesta"))  # la Fase 1 usa imports p
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import config as f1_config  # noqa: E402
 import entrada_excel  # noqa: E402
 import main as f1_main  # noqa: E402
 import salida as f1_salida  # noqa: E402
@@ -55,18 +54,6 @@ _estado = {"estado": "libre"}  # libre | ejecutando | terminado | error
 def _actualizar(**cambios):
     with _cerrojo:
         _estado.update(cambios)
-
-
-def rutas_cimus():
-    """Rutas de los dos Excels de CIMUS juntadas por GO_ID (una ruta puede estar en las dos listas)."""
-    rutas = {}
-    for lista, fichero in (("Genes_up", f1_config.EXCEL_ACTIVADAS), ("Genes_down", f1_config.EXCEL_SUPRIMIDAS)):
-        for _, fila in entrada_excel.leer_tabla(fichero).iterrows():
-            go_id = str(fila["ID"]).strip()
-            r = rutas.setdefault(go_id, {"GO_ID": go_id, "Descripcion": str(fila["Description"]).strip(),
-                                         "Genes_up": "", "Genes_down": ""})
-            r[lista] = str(fila["geneID"]).strip()
-    return sorted(rutas.values(), key=lambda r: r["GO_ID"])
 
 
 def _fase1(carpeta: Path, ruta: dict) -> Path:
@@ -230,11 +217,6 @@ class ManejadorPuente(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/salud":
             self._responder_json(200, {"ok": True})
-        elif self.path == "/rutas":
-            try:
-                self._responder_json(200, {"ok": True, "rutas": rutas_cimus()})
-            except Exception as exc:
-                self._responder_json(500, {"ok": False, "error": f"No se pudieron leer los Excels de CIMUS: {exc}"})
         elif self.path == "/estado":
             with _cerrojo:
                 self._responder_json(200, dict(_estado))

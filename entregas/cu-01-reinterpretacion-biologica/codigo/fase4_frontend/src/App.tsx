@@ -58,7 +58,13 @@ const descargarBase64Excel = (b64: string, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-// Una ruta GO de CIMUS: puede estar en las dos listas (sobreexpresadas y infraexpresadas)
+// Un Excel subido de una de las dos listas (columnas ID, Description y geneID). Solo hay uno por lista.
+interface ExcelLista {
+  nombre: string;
+  filas: { GO_ID: string; Descripcion: string; geneID: string }[];
+}
+
+// Una ruta GO de los Excels subidos: puede estar en las dos listas (sobreexpresadas y infraexpresadas)
 interface Ruta {
   GO_ID: string;
   Descripcion: string;
@@ -387,8 +393,8 @@ const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribut
 export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
 
-  const [rutas, setRutas] = useState<Ruta[]>([]);
-  const [origenRutas, setOrigenRutas] = useState<string>('');
+  const [excelUp, setExcelUp] = useState<ExcelLista | null>(null);
+  const [excelDown, setExcelDown] = useState<ExcelLista | null>(null);
   const [search, setSearch] = useState('');
   const [seleccion, setSeleccion] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState(false);
@@ -414,19 +420,6 @@ export default function App() {
     const id = setInterval(check, 5000);
     return () => clearInterval(id);
   }, []);
-
-  // Al conectar, se cargan las rutas de los Excels de CIMUS (codigo/tools_cimus/), si no se ha subido otro
-  useEffect(() => {
-    if (!backendOnline || rutas.length > 0) return;
-    fetch(`${API_URL}/rutas`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d.ok) throw new Error(d.error);
-        setRutas(d.rutas);
-        setOrigenRutas('Excels de CIMUS (codigo/tools_cimus/)');
-      })
-      .catch((err) => setFeedback({ type: 'err', msg: mensaje(err) }));
-  }, [backendOnline, rutas.length]);
 
   // Mientras se ejecuta, se consulta al puente qué fase va por
   useEffect(() => {
@@ -459,6 +452,18 @@ export default function App() {
     return () => clearInterval(id);
   }, [isRunning]);
 
+  // Las rutas salen de los Excels subidos, juntadas por GO_ID
+  const rutas = useMemo(() => {
+    const base: Record<string, Ruta> = {};
+    ([['Genes_up', excelUp], ['Genes_down', excelDown]] as const).forEach(([campo, excel]) => {
+      excel?.filas.forEach((f) => {
+        base[f.GO_ID] = base[f.GO_ID] || { GO_ID: f.GO_ID, Descripcion: f.Descripcion, Genes_up: '', Genes_down: '' };
+        base[f.GO_ID][campo] = f.geneID;
+      });
+    });
+    return Object.values(base).sort((a, b) => a.GO_ID.localeCompare(b.GO_ID));
+  }, [excelUp, excelDown]);
+
   const filtradas = useMemo(() => {
     const q = search.toLowerCase();
     return rutas.filter(
@@ -477,8 +482,10 @@ export default function App() {
     [resultado, rutaRes]
   );
 
-  // Excel de CIMUS (ID, Description, geneID) de una de las dos listas: sustituye los genes de esa lista
-  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>, campo: 'Genes_up' | 'Genes_down') => {
+  const NOMBRE_LISTA = { up: 'rutas sobreexpresadas (upregulated)', down: 'rutas infraexpresadas (downregulated)' };
+
+  // Excel de una de las dos listas (ID, Description, geneID). Sustituye por completo al anterior de esa lista.
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>, lista: 'up' | 'down') => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -489,22 +496,26 @@ export default function App() {
       if (!rows.length || !('ID' in rows[0]) || !('Description' in rows[0]) || !('geneID' in rows[0])) {
         throw new Error('El Excel debe contener las columnas obligatorias: ID, Description y geneID.');
       }
-      const base: Record<string, Ruta> = {};
-      rutas.forEach((r) => (base[r.GO_ID] = { ...r, [campo]: '' }));
-      rows.forEach((r) => {
-        const id = String(r.ID || '').trim();
-        if (!id) return;
-        base[id] = base[id] || { GO_ID: id, Descripcion: String(r.Description || '').trim(), Genes_up: '', Genes_down: '' };
-        base[id][campo] = String(r.geneID || '').trim();
-      });
-      setRutas(Object.values(base).filter((r) => r.Genes_up || r.Genes_down).sort((a, b) => a.GO_ID.localeCompare(b.GO_ID)));
-      const lista = campo === 'Genes_up' ? 'rutas sobreexpresadas (upregulated)' : 'rutas infraexpresadas (downregulated)';
-      setOrigenRutas((prev) => `${prev} · ${lista}: ${file.name}`);
+      const filas = rows
+        .map((r) => ({ GO_ID: String(r.ID || '').trim(), Descripcion: String(r.Description || '').trim(), geneID: String(r.geneID || '').trim() }))
+        .filter((f) => f.GO_ID && f.geneID);
+      const anterior = lista === 'up' ? excelUp : excelDown;
+      (lista === 'up' ? setExcelUp : setExcelDown)({ nombre: file.name, filas });
       setSeleccion(null);
-      setFeedback({ type: 'ok', msg: `${rows.length} ${lista} leídas de ${file.name}. Elige una ruta y ejecútala.` });
+      setFeedback({
+        type: 'ok',
+        msg: `${filas.length} ${NOMBRE_LISTA[lista]} leídas de ${file.name}${anterior ? ` (sustituye a ${anterior.nombre})` : ''}. Elige una ruta y ejecútala.`,
+      });
     } catch (err) {
       setFeedback({ type: 'err', msg: mensaje(err) });
     }
+  };
+
+  const quitarExcel = (lista: 'up' | 'down') => {
+    const excel = lista === 'up' ? excelUp : excelDown;
+    (lista === 'up' ? setExcelUp : setExcelDown)(null);
+    setSeleccion(null);
+    if (excel) setFeedback({ type: 'info', msg: `Quitado ${excel.nombre} (${NOMBRE_LISTA[lista]}).` });
   };
 
   const ejecutarRuta = async () => {
@@ -533,7 +544,47 @@ export default function App() {
     }
   };
 
-  const botonSubir: React.CSSProperties = { padding: '7px 14px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#f8fafc', fontSize: '12px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' };
+  const botonSubir: React.CSSProperties = { padding: '6px 12px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#1e293b', color: '#f8fafc', fontSize: '12px', fontWeight: 500, cursor: isRunning ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: isRunning ? 0.5 : 1 };
+
+  // Hueco de una lista: sin Excel, el botón para subirlo; con Excel, su nombre, «Cambiar» y «Quitar»
+  const huecoExcel = (lista: 'up' | 'down') => {
+    const excel = lista === 'up' ? excelUp : excelDown;
+    const color = lista === 'up' ? '#6ee7b7' : '#fda4af';
+    const entrada = (
+      <input type="file" accept=".xlsx,.xls,.csv" disabled={isRunning} onChange={(e) => handleExcelUpload(e, lista)} style={{ display: 'none' }} />
+    );
+    return (
+      <div style={{ flex: '1 1 340px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${excel ? color : '#334155'}`, backgroundColor: '#020617' }}>
+        <span style={{ fontSize: '12px', fontWeight: 'bold', color, minWidth: '230px' }}>
+          {lista === 'up' ? '▲ Rutas sobreexpresadas (upregulated)' : '▼ Rutas infraexpresadas (downregulated)'}
+        </span>
+        {excel ? (
+          <>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#e2e8f0', flex: 1, minWidth: 0 }} title={excel.nombre}>
+              <FileSpreadsheet size={14} color={color} />
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{excel.nombre}</span>
+              <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>· {excel.filas.length} rutas</span>
+            </span>
+            <label style={botonSubir} title="Subir otro Excel en lugar de este">
+              {entrada}
+              <UploadCloud size={14} color={color} />
+              <span>Cambiar</span>
+            </label>
+            <button disabled={isRunning} onClick={() => quitarExcel(lista)} style={{ ...botonSubir, color: '#fda4af' }} title="Quitar este Excel">
+              <X size={14} />
+              <span>Quitar</span>
+            </button>
+          </>
+        ) : (
+          <label style={botonSubir}>
+            {entrada}
+            <UploadCloud size={14} color={color} />
+            <span>Subir Excel</span>
+          </label>
+        )}
+      </div>
+    );
+  };
 
   // Explicación del NPS con los números de la ruta
   const explicacionNPS = (r: PathwayResult) => {
@@ -609,24 +660,11 @@ export default function App() {
                 <span>Elige la ruta que quieres ejecutar</span>
               </h2>
               <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
-                Marca una ruta y confirma: se ejecutan seguidas las Fases 1, 2 y 3 con sus genes sobreexpresados e infraexpresados.
-                {origenRutas && <> Rutas de: <strong style={{ color: '#cbd5e1' }}>{origenRutas}</strong>.</>}
+                Sube un Excel de rutas sobreexpresadas, uno de infraexpresadas o los dos (columnas ID, Description y geneID). Marca una ruta y confirma: se ejecutan seguidas las Fases 1, 2 y 3 con sus genes de las dos listas.
               </p>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-              <label style={botonSubir} title="Excel de CIMUS con las rutas sobreexpresadas, upregulated (columnas ID, Description y geneID)">
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleExcelUpload(e, 'Genes_up')} style={{ display: 'none' }} />
-                <UploadCloud size={15} color="#6ee7b7" />
-                <span>Subir rutas sobreexpresadas (upregulated)</span>
-              </label>
-
-              <label style={botonSubir} title="Excel de CIMUS con las rutas infraexpresadas, downregulated (columnas ID, Description y geneID)">
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleExcelUpload(e, 'Genes_down')} style={{ display: 'none' }} />
-                <UploadCloud size={15} color="#fda4af" />
-                <span>Subir rutas infraexpresadas (downregulated)</span>
-              </label>
-
               <button
                 disabled={isRunning || !rutaSel}
                 onClick={() => setConfirmando(true)}
@@ -648,6 +686,12 @@ export default function App() {
                 <span>{isRunning ? `Ejecutando... (${segundos} s)` : rutaSel ? `Ejecutar ${rutaSel.GO_ID}` : 'Elige una ruta'}</span>
               </button>
             </div>
+          </div>
+
+          {/* UN EXCEL POR LISTA */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+            {huecoExcel('up')}
+            {huecoExcel('down')}
           </div>
 
           {/* BARRA DE PROGRESO (fase real que informa el puente) */}
@@ -703,7 +747,7 @@ export default function App() {
                 {rutas.length === 0 && (
                   <tr>
                     <td colSpan={5} style={{ padding: '14px', color: '#64748b', textAlign: 'center' }}>
-                      {backendOnline ? 'Cargando las rutas de CIMUS...' : 'Arranca el puente (api_puente.py) para cargar las rutas de CIMUS, o sube un Excel.'}
+                      Sube el Excel de rutas sobreexpresadas, el de infraexpresadas o los dos para ver aquí sus rutas.
                     </td>
                   </tr>
                 )}
