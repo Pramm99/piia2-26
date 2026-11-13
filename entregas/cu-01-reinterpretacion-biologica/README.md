@@ -67,7 +67,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Ingesta de evidencias** ([ADR-002](decisions/adr-002-europe-pmc-api.md)):
   - PMIDs de las anotaciones de Gene Ontology (fichero GAF), propagando cada ruta a todo su subárbol de términos.
-  - Para los pares sin _abstract_ en el GAF, PMIDs de **NCBI GeneRIF** (vía MyGene.info) y de una búsqueda dirigida en **Europe PMC**.
+  - Para los pares sin _abstract_ en el GAF, PMIDs de **NCBI GeneRIF** (vía MyGene.info), de una búsqueda dirigida en **Europe PMC** y, para los que siguen vacíos, de **NCBI gene2pubmed + MeSH** de la ruta.
   - Descarga del título y el _abstract_ desde **Europe PMC**, con **NCBI** como respaldo.
   - Las **inmunoglobulinas** (lista de HGNC) se apartan como neutras, con la función de la Ig completa según **UniProt**.
   - Un **triaje del signo GO** acepta sin LLM los pares cuya polaridad curada basta y cierra como `UNKNOWN` los que no tienen ningún _abstract_.
@@ -170,8 +170,8 @@ entregas/cu-01-reinterpretacion-biologica/
 │
 └── codigo/                        # Código fuente:
     ├── fase1_ingesta/                 # Fase 1: ingesta (GO, GAF, inmunoglobulinas, triaje del signo GO,
-    │   │                              #   GeneRIF y Europe PMC, abstracts) y Excel de salida.
-    │   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, UniProt y su caché.
+    │   │                              #   GeneRIF, Europe PMC y gene2pubmed + MeSH, abstracts) y Excel de salida.
+    │   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, gene2pubmed, UniProt y su caché.
     ├── fase2_inferencia/              # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
     ├── fase3_scoring/                 # Fase 3: signo de cada par (gen, ruta) y Net Pathway Score de cada ruta.
     ├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.

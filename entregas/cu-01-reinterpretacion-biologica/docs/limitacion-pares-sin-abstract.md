@@ -8,33 +8,34 @@
 La Fase 2 decide el signo de cada par leyendo abstracts de PubMed. Si un par no tiene ningún abstract,
 no hay texto que leer ni cita que verificar. Por eso **no se puede enviar al LLM**.
 
-La Fase 1 busca abstracts en tres fuentes, en cascada:
+La Fase 1 busca abstracts en cuatro fuentes, en cascada:
 
 1. **GO GAF:** los PMIDs de las anotaciones del gen a la ruta o a cualquier término de su subárbol.
 2. **NCBI GeneRIF:** frases curadas sobre el gen, a través de MyGene.info.
 3. **Europe PMC dirigida:** el gen y un término de la ruta en la misma frase.
+4. **NCBI gene2pubmed + MeSH:** los artículos que NCBI liga al gen con el MeSH de la ruta y «Humans» (§ 3).
 
 Aun así, en la ejecución completa sobre los Excels de CIMUS (ejecución de referencia de la Fase 1, 2026-11-13)
-quedan sin evidencia **642 de 3.069 pares** (21 %, sin contar las inmunoglobulinas), que afectan a 123 genes y
-252 rutas. Las columnas son las dos listas de CIMUS: rutas de genes *up* («activadas») y de genes *down*
+quedan sin evidencia **310 de 3.069 pares** (10 %, sin contar las inmunoglobulinas), que afectan a 89 genes y
+154 rutas. Las columnas son las dos listas de CIMUS: rutas de genes *up* («activadas») y de genes *down*
 («suprimidas»).
 
 | | Activadas | Suprimidas | Total |
 |---|---|---|---|
-| Pares sin ningún abstract | 466 (de 2.386) | 176 (de 683) | 642 |
-| `anotado_sin_PMID`: el gen solo está en la ruta por anotaciones GO sin artículo | 265 | 122 | 387 |
-| `sin_anotacion_GAF`: el gen no tiene anotación a la ruta en el GAF actual | 201 | 54 | 255 |
+| Pares sin ningún abstract | 202 (de 2.386) | 108 (de 683) | 310 |
+| `anotado_sin_PMID`: el gen solo está en la ruta por anotaciones GO sin artículo | 133 | 74 | 207 |
+| `sin_anotacion_GAF`: el gen no tiene anotación a la ruta en el GAF actual | 69 | 34 | 103 |
 | `PMID_sin_abstract`: el par tiene PMIDs, pero ninguno tiene abstract en PubMed | 0 | 0 | 0 |
-| Con signo GO (solo como pista; ver § 2) | 97 | 38 | 135 |
+| Con signo GO (solo como pista; ver § 2) | 45 | 22 | 67 |
 
 La tercera causa existe en el código, pero en esta ejecución no aparece: las fuentes externas encontraron otro
 abstract para todos los pares cuyos PMIDs no lo tenían.
 
 Códigos de evidencia de las anotaciones de esos pares:
-- IEA (electrónica): 226
-- ISS (por similitud, casi siempre heredada de ratón, rata o vaca): 196
-- IBA (filogenética): 93
-- TAS de Reactome (la referencia es un ID de Reactome, no un PMID): 14
+- IEA (electrónica): 134
+- ISS (por similitud, casi siempre heredada de ratón, rata o vaca): 105
+- IBA (filogenética): 39
+- TAS de Reactome (la referencia es un ID de Reactome, no un PMID): 12
 
 Un par puede tener varias de estas anotaciones.
 
@@ -78,7 +79,7 @@ Opciones descartadas:
   verificar como cita.
 - **Usar la `Pista_GO` como resultado.** Ese signo sale de IEA, ISS o IBA, que es justo lo que el triaje no acepta.
 
-## 3. Posible resolución para reducir los 642
+## 3. Resolución de los pares sin abstract: gene2pubmed + MeSH
 
 La investigación «Bases gratuitas para pares sin PMID» se probó con los 12 genes que no tenían ningún PMID en la
 ejecución del 2026-11-08: juntando todas las fuentes, hubo evidencia humana aceptable para 6 de ellos (unos 8 de
@@ -112,7 +113,7 @@ Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
   - En una primera lectura de esos 26, solo unos 10 tratan del gen en el proceso (alrededor del 40 %, frente a
     unos 8 de cada 10 de GeneRIF y Europe PMC). Falta confirmarlo con una lectura a mano.
   - Para que rinda hace falta una tabla GO → MeSH hecha a mano.
-- **Piloto con la tabla GO → MeSH hecha a mano (2026-11-13), sobre los 642 pares de la Fase 1 actual:**
+- **Piloto con la tabla GO → MeSH hecha a mano (2026-11-13), sobre los 642 pares que quedaban sin evidencia antes de integrarlo:**
   - La tabla cubre las 252 rutas: 134 con un MeSH equivalente (confianza alta), 86 con una combinación de célula y
     proceso (media), 28 con una aproximación amplia (baja) y 4 sin MeSH porque son demasiado generales. «Regulation
     of X» se mapea como X. Las 139 consultas se comprobaron en PubMed sin avisos.
@@ -120,8 +121,12 @@ Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
   - **Precisión en una muestra de 30 pares: 16 tratan del gen en el proceso (53 %; 60 % con los dudosos)**, por debajo
     del listón del § 4. Los fallos no dependen de la confianza del mapeo: son artículos que NCBI liga al gen pero en
     los que el gen es solo un marcador o un locus de asociación (biomarcadores, GWAS, metilación).
-  - La tabla, las consultas y la muestra valorada están en `research_notes`, fuera del repositorio, hasta que se decida
-    si se integra (#31).
+  - Exigir además el gen y un término de la ruta en la misma frase, como en Europe PMC, deja solo 1 par: estos pares
+    son precisamente los que esa búsqueda no resolvió, porque los autores no usan el vocabulario de GO.
+  - **Decisión (2026-11-13): se integra como tercera fuente externa** (`fuentes/gene2pubmed.py`), con la tabla en
+    `codigo/fase1_ingesta/tabla_go_mesh.tsv` (hecha a mano; falta que la revise una persona) y como mucho 3 artículos
+    por par, los más recientes que nombran el gen. Con 3 en vez de 10, los 326 pares siguen ganando abstract y las
+    preguntas nuevas al LLM bajan de unas 1.150 a unas 630.
 
 ### Qué no se resolverá
 
@@ -136,7 +141,7 @@ Para estos pares, lo correcto es el UNKNOWN actual con su `Detalle`, no forzar u
 
 ## 4. Cómo medirlo
 
-Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 642 pares y medir dos cosas:
+Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 310 pares y medir dos cosas:
 
 1. **Cobertura:** cuántos pares pasan de `sin_evidencia` a tener un abstract.
 2. **Precisión:** en una muestra de unos 30 pares por etapa, leída a mano, si el abstract trata del gen en el
@@ -144,7 +149,9 @@ Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 642 pares 
 
 Una etapa solo se queda si su precisión es comparable a la de GeneRIF y Europe PMC (en las revisiones manuales
 de 2026-11-08, unos 8 de cada 10 abstracts trataban del gen en el proceso). Si no la alcanza, sus PMIDs pasan
-a revisión humana en vez de ir directamente al LLM.
+a revisión humana en vez de ir directamente al LLM, salvo que el propio LLM sirva de filtro: es el caso de
+gene2pubmed + MeSH, porque sus fallos son artículos donde el gen es solo marcador o asociación, que el LLM ya
+deja en `UNKNOWN` (`marcador_correlacion`, `contexto_ajeno`).
 
 Para gene2pubmed + MeSH, el piloto del § 3 da, con la tabla hecha a mano, una cobertura del 51 % de los pares y una
-precisión del 53 %, por debajo de ese listón.
+precisión del 53 %, por debajo de ese listón; se integró con el LLM como filtro y un tope de 3 artículos por par.

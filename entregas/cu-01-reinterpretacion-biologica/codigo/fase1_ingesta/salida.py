@@ -35,7 +35,7 @@ def imprimir_embudo(pares, base, con, pmids, df_abs):
     print(f"Pares de entrada .............. {len(pares)}")
     gaf = base[base["Fuente"] == "GOA"]
     print(f"Pares con >=1 PMID en GAF ..... {len(_pares(gaf))}")
-    print(f"Pares con PMID externo ........ {len(_pares(base[base['Fuente'] != 'GOA']))}  (GeneRIF / Europe PMC)")
+    print(f"Pares con PMID externo ........ {len(_pares(base[base['Fuente'] != 'GOA']))}  (GeneRIF / Europe PMC / gene2pubmed)")
     print(f"  de ellos, alcanzados por regulación ... {len(_pares(gaf[gaf['Tipo_relacion'].str.contains('regulates')]))}")
     print(f"  de ellos, con polaridad GO (+1/-1) .... {len(_pares(gaf[gaf['Polaridad_GO'].isin(['+1', '-1'])]))}")
     print(f"Pares con >=1 abstract ........ {len(_pares(con))}  (solo de fuentes externas: "

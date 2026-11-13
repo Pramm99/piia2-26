@@ -1,0 +1,253 @@
+GO_ID	Ruta_Nombre	Consulta_MeSH	Confianza	Nota	Pares_sin_evidencia
+GO:0001773	myeloid dendritic cell activation	"Dendritic Cells"[mh]	media	MeSH no tiene la activación de células dendríticas	2
+GO:0001774	microglial cell activation	"Microglia"[mh]	media		1
+GO:0001906	cell killing	"Cytotoxicity, Immunologic"[mh]	media	«cell killing» incluye otras formas de muerte	1
+GO:0001909	leukocyte mediated cytotoxicity	"Cytotoxicity, Immunologic"[mh]	alta		2
+GO:0001961	positive regulation of cytokine-mediated signaling pathway	"Cytokines"[mh] AND "Signal Transduction"[mh]	baja		1
+GO:0002053	positive regulation of mesenchymal cell proliferation	"Mesenchymal Stem Cells"[mh] AND "Cell Proliferation"[mh]	media		3
+GO:0002218	activation of innate immune response	"Immunity, Innate"[mh]	alta		4
+GO:0002220	innate immune response activating cell surface receptor signaling pathway	"Receptors, Pattern Recognition"[mh]	alta		2
+GO:0002221	pattern recognition receptor signaling pathway	"Receptors, Pattern Recognition"[mh]	alta		3
+GO:0002224	toll-like receptor signaling pathway	"Toll-Like Receptors"[mh]	alta		2
+GO:0002237	response to molecule of bacterial origin	("Lipopolysaccharides"[mh] OR "Pathogen-Associated Molecular Pattern Molecules"[mh])	media		3
+GO:0002263	cell activation involved in immune response	("Lymphocyte Activation"[mh] OR "Macrophage Activation"[mh] OR "Neutrophil Activation"[mh])	media	activación de leucocitos: linfocitos, macrófagos o neutrófilos	15
+GO:0002269	leukocyte activation involved in inflammatory response	("Lymphocyte Activation"[mh] OR "Macrophage Activation"[mh] OR "Neutrophil Activation"[mh]) AND "Inflammation"[mh]	media		1
+GO:0002274	myeloid leukocyte activation	("Macrophage Activation"[mh] OR "Neutrophil Activation"[mh])	media		3
+GO:0002275	myeloid cell activation involved in immune response	("Macrophage Activation"[mh] OR "Neutrophil Activation"[mh])	media		4
+GO:0002279	mast cell activation involved in immune response	"Mast Cells"[mh]	media		1
+GO:0002285	lymphocyte activation involved in immune response	"Lymphocyte Activation"[mh]	alta		9
+GO:0002286	T cell activation involved in immune response	"T-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	alta		8
+GO:0002287	alpha-beta T cell activation involved in immune response	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Lymphocyte Activation"[mh]	media		6
+GO:0002292	T cell differentiation involved in immune response	"T-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		9
+GO:0002293	alpha-beta T cell differentiation involved in immune response	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Cell Differentiation"[mh]	media		9
+GO:0002294	CD4-positive, alpha-beta T cell differentiation involved in immune response	"CD4-Positive T-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		9
+GO:0002313	mature B cell differentiation involved in immune response	"B-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		2
+GO:0002320	lymphoid progenitor cell differentiation	"Lymphoid Progenitor Cells"[mh] AND "Cell Differentiation"[mh]	alta		3
+GO:0002361	CD4-positive, CD25-positive, alpha-beta regulatory T cell differentiation	"T-Lymphocytes, Regulatory"[mh] AND "Cell Differentiation"[mh]	alta		1
+GO:0002366	leukocyte activation involved in immune response	("Lymphocyte Activation"[mh] OR "Macrophage Activation"[mh] OR "Neutrophil Activation"[mh])	media	activación de leucocitos: linfocitos, macrófagos o neutrófilos	15
+GO:0002367	cytokine production involved in immune response	"Cytokines"[mh]	media		2
+GO:0002370	natural killer cell cytokine production	"Killer Cells, Natural"[mh] AND "Cytokines"[mh]	alta		1
+GO:0002407	dendritic cell chemotaxis	"Dendritic Cells"[mh] AND "Chemotaxis"[mh]	alta		1
+GO:0002429	immune response-activating cell surface receptor signaling pathway	"Receptors, Immunologic"[mh] AND "Signal Transduction"[mh]	media		7
+GO:0002440	production of molecular mediator of immune response	("Cytokines"[mh] OR "Antibody Formation"[mh])	baja		1
+GO:0002443	leukocyte mediated immunity	"Immunity, Cellular"[mh]	media		7
+GO:0002444	myeloid leukocyte mediated immunity	("Macrophages"[mh] OR "Neutrophils"[mh] OR "Mast Cells"[mh]) AND "Immunity, Innate"[mh]	baja		1
+GO:0002448	mast cell mediated immunity	"Mast Cells"[mh]	media		1
+GO:0002449	lymphocyte mediated immunity	"Lymphocytes"[mh] AND ("Immunity, Cellular"[mh] OR "Immunity, Humoral"[mh])	media		4
+GO:0002456	T cell mediated immunity	"T-Lymphocytes"[mh] AND "Immunity, Cellular"[mh]	alta		1
+GO:0002460	adaptive immune response based on somatic recombination of immune receptors built from immunoglobulin superfamily domains	"Adaptive Immunity"[mh]	alta		4
+GO:0002478	antigen processing and presentation of exogenous peptide antigen	"Antigen Presentation"[mh]	media	sin distinguir el antígeno exógeno	3
+GO:0002495	antigen processing and presentation of peptide antigen via MHC class II	"Antigen Presentation"[mh] AND "Histocompatibility Antigens Class II"[mh]	alta		3
+GO:0002504	antigen processing and presentation of peptide or polysaccharide antigen via MHC class II	"Antigen Presentation"[mh] AND "Histocompatibility Antigens Class II"[mh]	alta		3
+GO:0002520	immune system development	("Hematopoiesis"[mh] OR "Thymus Gland"[mh])	baja	«immune system development» no tiene término propio	4
+GO:0002688	regulation of leukocyte chemotaxis	"Chemotaxis, Leukocyte"[mh]	alta		1
+GO:0002690	positive regulation of leukocyte chemotaxis	"Chemotaxis, Leukocyte"[mh]	alta		1
+GO:0002695	negative regulation of leukocyte activation	("Lymphocyte Activation"[mh] OR "Macrophage Activation"[mh] OR "Neutrophil Activation"[mh])	media	activación de leucocitos: linfocitos, macrófagos o neutrófilos	2
+GO:0002696	positive regulation of leukocyte activation	("Lymphocyte Activation"[mh] OR "Macrophage Activation"[mh] OR "Neutrophil Activation"[mh])	media	activación de leucocitos: linfocitos, macrófagos o neutrófilos	1
+GO:0002697	regulation of immune effector process	("Immunity, Cellular"[mh] OR "Cytotoxicity, Immunologic"[mh])	baja	«immune effector process» es muy amplio	5
+GO:0002699	positive regulation of immune effector process	("Immunity, Cellular"[mh] OR "Cytotoxicity, Immunologic"[mh])	baja	«immune effector process» es muy amplio	1
+GO:0002700	regulation of production of molecular mediator of immune response	("Cytokines"[mh] OR "Antibody Formation"[mh])	baja		1
+GO:0002703	regulation of leukocyte mediated immunity	"Immunity, Cellular"[mh]	media		1
+GO:0002705	positive regulation of leukocyte mediated immunity	"Immunity, Cellular"[mh]	media		1
+GO:0002706	regulation of lymphocyte mediated immunity	"Lymphocytes"[mh] AND ("Immunity, Cellular"[mh] OR "Immunity, Humoral"[mh])	media		1
+GO:0002708	positive regulation of lymphocyte mediated immunity	"Lymphocytes"[mh] AND ("Immunity, Cellular"[mh] OR "Immunity, Humoral"[mh])	media		1
+GO:0002709	regulation of T cell mediated immunity	"T-Lymphocytes"[mh] AND "Immunity, Cellular"[mh]	alta		1
+GO:0002718	regulation of cytokine production involved in immune response	"Cytokines"[mh]	media		2
+GO:0002719	negative regulation of cytokine production involved in immune response	"Cytokines"[mh]	media		1
+GO:0002726	positive regulation of T cell cytokine production	"T-Lymphocytes"[mh] AND "Cytokines"[mh]	alta		2
+GO:0002727	regulation of natural killer cell cytokine production	"Killer Cells, Natural"[mh] AND "Cytokines"[mh]	alta		1
+GO:0002758	innate immune response-activating signaling pathway	"Immunity, Innate"[mh] AND "Signal Transduction"[mh]	media		4
+GO:0002768	immune response-regulating cell surface receptor signaling pathway	"Receptors, Immunologic"[mh] AND "Signal Transduction"[mh]	media		7
+GO:0002822	regulation of adaptive immune response based on somatic recombination of immune receptors built from immunoglobulin superfamily domains	"Adaptive Immunity"[mh]	alta		2
+GO:0002828	regulation of type 2 immune response	"Th2 Cells"[mh]	media		1
+GO:0002830	positive regulation of type 2 immune response	"Th2 Cells"[mh]	media		1
+GO:0002833	positive regulation of response to biotic stimulus		sin_mesh	demasiado general (respuesta a estímulo biótico)	1
+GO:0006882	intracellular zinc ion homeostasis	"Zinc"[mh] AND "Homeostasis"[mh]	alta		4
+GO:0006898	receptor-mediated endocytosis	"Endocytosis"[mh] AND "Receptors, Cell Surface"[mh]	media		3
+GO:0006959	humoral immune response	"Immunity, Humoral"[mh]	alta		1
+GO:0007159	leukocyte cell-cell adhesion	"Leukocytes"[mh] AND "Cell Adhesion"[mh]	alta		4
+GO:0007229	integrin-mediated signaling pathway	"Integrins"[mh] AND "Signal Transduction"[mh]	alta		3
+GO:0007249	canonical NF-kappaB signal transduction	"NF-kappa B"[mh] AND "Signal Transduction"[mh]	media		3
+GO:0008347	glial cell migration	"Neuroglia"[mh] AND "Cell Movement"[mh]	alta		4
+GO:0009615	response to virus	"Virus Diseases"[mh]	baja		1
+GO:0010038	response to metal ion	"Metals"[mh]	baja		2
+GO:0010273	detoxification of copper ion	"Copper"[mh]	media		5
+GO:0010464	regulation of mesenchymal cell proliferation	"Mesenchymal Stem Cells"[mh] AND "Cell Proliferation"[mh]	media		3
+GO:0010720	positive regulation of cell development		sin_mesh	demasiado general (desarrollo celular en general)	2
+GO:0010818	T cell chemotaxis	"T-Lymphocytes"[mh] AND "Chemotaxis, Leukocyte"[mh]	alta		2
+GO:0010819	regulation of T cell chemotaxis	"T-Lymphocytes"[mh] AND "Chemotaxis, Leukocyte"[mh]	alta		1
+GO:0010820	positive regulation of T cell chemotaxis	"T-Lymphocytes"[mh] AND "Chemotaxis, Leukocyte"[mh]	alta		1
+GO:0016032	viral process	("Virus Replication"[mh] OR "Virus Internalization"[mh])	media		1
+GO:0016064	immunoglobulin mediated immune response	("Antibody Formation"[mh] OR "Immunity, Humoral"[mh])	media		4
+GO:0016486	peptide hormone processing	"Peptide Hormones"[mh] AND "Protein Processing, Post-Translational"[mh]	alta		1
+GO:0019058	viral life cycle	"Virus Replication"[mh]	media		1
+GO:0019724	B cell mediated immunity	"B-Lymphocytes"[mh] AND "Immunity, Humoral"[mh]	alta		4
+GO:0019730	antimicrobial humoral response	"Antimicrobial Peptides"[mh]	media		1
+GO:0019882	antigen processing and presentation	"Antigen Presentation"[mh]	alta		1
+GO:0019884	antigen processing and presentation of exogenous antigen	"Antigen Presentation"[mh]	media	sin distinguir el antígeno exógeno	3
+GO:0019886	antigen processing and presentation of exogenous peptide antigen via MHC class II	"Antigen Presentation"[mh] AND "Histocompatibility Antigens Class II"[mh]	alta		3
+GO:0022409	positive regulation of cell-cell adhesion	"Cell Adhesion"[mh]	media		1
+GO:0022604	regulation of cell morphogenesis	"Cell Shape"[mh]	baja		3
+GO:0030098	lymphocyte differentiation	"Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		3
+GO:0030183	B cell differentiation	"B-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		2
+GO:0030217	T cell differentiation	"T-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		2
+GO:0030593	neutrophil chemotaxis	"Neutrophils"[mh] AND "Chemotaxis, Leukocyte"[mh]	alta		2
+GO:0030595	leukocyte chemotaxis	"Chemotaxis, Leukocyte"[mh]	alta		2
+GO:0030888	regulation of B cell proliferation	"B-Lymphocytes"[mh] AND "Cell Proliferation"[mh]	alta		2
+GO:0031294	lymphocyte costimulation	"Lymphocyte Activation"[mh]	baja	la coestimulación no tiene término propio	1
+GO:0031295	T cell costimulation	"T-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	baja	la coestimulación no tiene término propio	1
+GO:0031589	cell-substrate adhesion	"Cell-Matrix Junctions"[mh]	media		1
+GO:0031623	receptor internalization	"Endocytosis"[mh] AND "Receptors, Cell Surface"[mh]	media		4
+GO:0032350	regulation of hormone metabolic process	"Hormones"[mh]	baja		1
+GO:0032353	negative regulation of hormone biosynthetic process	"Hormones"[mh]	baja		2
+GO:0032496	response to lipopolysaccharide	"Lipopolysaccharides"[mh]	alta		3
+GO:0032609	type II interferon production	"Interferon-gamma"[mh]	alta		3
+GO:0032615	interleukin-12 production	"Interleukin-12"[mh]	alta		2
+GO:0032633	interleukin-4 production	"Interleukin-4"[mh]	alta		2
+GO:0032649	regulation of type II interferon production	"Interferon-gamma"[mh]	alta		3
+GO:0032655	regulation of interleukin-12 production	"Interleukin-12"[mh]	alta		2
+GO:0032673	regulation of interleukin-4 production	"Interleukin-4"[mh]	alta		2
+GO:0032689	negative regulation of type II interferon production	"Interferon-gamma"[mh]	alta		2
+GO:0032695	negative regulation of interleukin-12 production	"Interleukin-12"[mh]	alta		1
+GO:0032753	positive regulation of interleukin-4 production	"Interleukin-4"[mh]	alta		1
+GO:0032943	mononuclear cell proliferation	"Leukocytes, Mononuclear"[mh] AND "Cell Proliferation"[mh]	alta		1
+GO:0034340	response to type I interferon	"Interferon Type I"[mh]	alta		1
+GO:0034694	response to prostaglandin	"Prostaglandins"[mh]	media		1
+GO:0035050	embryonic heart tube development	"Heart/embryology"[mh]	media		3
+GO:0035455	response to interferon-alpha	"Interferon-alpha"[mh]	alta		1
+GO:0035456	response to interferon-beta	"Interferon-beta"[mh]	alta		1
+GO:0035710	CD4-positive, alpha-beta T cell activation	"CD4-Positive T-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	alta		3
+GO:0036336	dendritic cell migration	"Dendritic Cells"[mh] AND "Cell Movement"[mh]	alta		1
+GO:0038061	non-canonical NF-kappaB signal transduction	"NF-kappa B"[mh] AND "Signal Transduction"[mh]	media		2
+GO:0042088	T-helper 1 type immune response	"Th1 Cells"[mh]	alta		3
+GO:0042093	T-helper cell differentiation	"T-Lymphocytes, Helper-Inducer"[mh] AND "Cell Differentiation"[mh]	alta		2
+GO:0042100	B cell proliferation	"B-Lymphocytes"[mh] AND "Cell Proliferation"[mh]	alta		3
+GO:0042113	B cell activation	"B-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	alta		3
+GO:0042445	hormone metabolic process	"Hormones"[mh]	baja		2
+GO:0042492	gamma-delta T cell differentiation	"Receptors, Antigen, T-Cell, gamma-delta"[mh] AND "Cell Differentiation"[mh]	media		2
+GO:0042742	defense response to bacterium	"Bacterial Infections"[mh] AND "Immunity, Innate"[mh]	media		4
+GO:0043011	myeloid dendritic cell differentiation	"Dendritic Cells"[mh] AND "Cell Differentiation"[mh]	alta		2
+GO:0043122	regulation of canonical NF-kappaB signal transduction	"NF-kappa B"[mh] AND "Signal Transduction"[mh]	media		2
+GO:0043123	positive regulation of canonical NF-kappaB signal transduction	"NF-kappa B"[mh] AND "Signal Transduction"[mh]	media		1
+GO:0043244	regulation of protein-containing complex disassembly		sin_mesh	demasiado general (desensamblaje de complejos proteicos)	3
+GO:0043299	leukocyte degranulation	"Cell Degranulation"[mh]	alta		2
+GO:0043300	regulation of leukocyte degranulation	"Cell Degranulation"[mh]	alta		1
+GO:0043303	mast cell degranulation	"Mast Cells"[mh] AND "Cell Degranulation"[mh]	alta		1
+GO:0043304	regulation of mast cell degranulation	"Mast Cells"[mh] AND "Cell Degranulation"[mh]	alta		1
+GO:0043367	CD4-positive, alpha-beta T cell differentiation	"CD4-Positive T-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		4
+GO:0043368	positive T cell selection	"Clonal Selection, Antigen-Mediated"[mh] AND "Thymus Gland"[mh]	media		5
+GO:0043370	regulation of CD4-positive, alpha-beta T cell differentiation	"CD4-Positive T-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		4
+GO:0043372	positive regulation of CD4-positive, alpha-beta T cell differentiation	"CD4-Positive T-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		3
+GO:0043547	positive regulation of GTPase activity	"GTP Phosphohydrolases"[mh]	baja		2
+GO:0045055	regulated exocytosis	"Exocytosis"[mh]	alta		2
+GO:0045058	T cell selection	"Clonal Selection, Antigen-Mediated"[mh] AND "Thymus Gland"[mh]	media		4
+GO:0045063	T-helper 1 cell differentiation	"Th1 Cells"[mh] AND "Cell Differentiation"[mh]	alta		3
+GO:0045088	regulation of innate immune response	"Immunity, Innate"[mh]	alta		1
+GO:0045089	positive regulation of innate immune response	"Immunity, Innate"[mh]	alta		1
+GO:0045580	regulation of T cell differentiation	"T-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		3
+GO:0045582	positive regulation of T cell differentiation	"T-Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		2
+GO:0045619	regulation of lymphocyte differentiation	"Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		1
+GO:0045621	positive regulation of lymphocyte differentiation	"Lymphocytes"[mh] AND "Cell Differentiation"[mh]	alta		1
+GO:0045622	regulation of T-helper cell differentiation	"T-Lymphocytes, Helper-Inducer"[mh] AND "Cell Differentiation"[mh]	alta		1
+GO:0045662	negative regulation of myoblast differentiation	"Myoblasts"[mh] AND "Cell Differentiation"[mh]	alta		1
+GO:0046006	regulation of activated T cell proliferation	"T-Lymphocytes"[mh] AND "Cell Proliferation"[mh] AND "Lymphocyte Activation"[mh]	media		2
+GO:0046007	negative regulation of activated T cell proliferation	"T-Lymphocytes"[mh] AND "Cell Proliferation"[mh] AND "Lymphocyte Activation"[mh]	media		2
+GO:0046629	gamma-delta T cell activation	"Receptors, Antigen, T-Cell, gamma-delta"[mh] AND "Lymphocyte Activation"[mh]	media		3
+GO:0046631	alpha-beta T cell activation	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Lymphocyte Activation"[mh]	media		9
+GO:0046632	alpha-beta T cell differentiation	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Cell Differentiation"[mh]	media		9
+GO:0046634	regulation of alpha-beta T cell activation	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Lymphocyte Activation"[mh]	media		4
+GO:0046635	positive regulation of alpha-beta T cell activation	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Lymphocyte Activation"[mh]	media		2
+GO:0046636	negative regulation of alpha-beta T cell activation	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Lymphocyte Activation"[mh]	media		1
+GO:0046637	regulation of alpha-beta T cell differentiation	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Cell Differentiation"[mh]	media		5
+GO:0046638	positive regulation of alpha-beta T cell differentiation	"Receptors, Antigen, T-Cell, alpha-beta"[mh] AND "Cell Differentiation"[mh]	media		4
+GO:0046643	regulation of gamma-delta T cell activation	"Receptors, Antigen, T-Cell, gamma-delta"[mh] AND "Lymphocyte Activation"[mh]	media		2
+GO:0046651	lymphocyte proliferation	"Lymphocytes"[mh] AND "Cell Proliferation"[mh]	alta		1
+GO:0046686	response to cadmium ion	"Cadmium"[mh]	alta		1
+GO:0046688	response to copper ion	"Copper"[mh]	media		1
+GO:0046885	regulation of hormone biosynthetic process	"Hormones"[mh]	baja		2
+GO:0048247	lymphocyte chemotaxis	"Lymphocytes"[mh] AND "Chemotaxis, Leukocyte"[mh]	alta		2
+GO:0048262	determination of dorsal/ventral asymmetry	"Body Patterning"[mh]	media		2
+GO:0048263	determination of dorsal identity	"Body Patterning"[mh]	media		2
+GO:0048485	sympathetic nervous system development	"Sympathetic Nervous System/growth and development"[mh]	alta		3
+GO:0048534	hematopoietic or lymphoid organ development	("Hematopoiesis"[mh] OR "Lymphoid Tissue"[mh])	media		5
+GO:0048821	erythrocyte development	"Erythropoiesis"[mh]	alta		3
+GO:0048872	homeostasis of number of cells	"Cell Count"[mh] AND "Homeostasis"[mh]	baja		9
+GO:0050673	epithelial cell proliferation	"Epithelial Cells"[mh] AND "Cell Proliferation"[mh]	alta		2
+GO:0050678	regulation of epithelial cell proliferation	"Epithelial Cells"[mh] AND "Cell Proliferation"[mh]	alta		1
+GO:0050679	positive regulation of epithelial cell proliferation	"Epithelial Cells"[mh] AND "Cell Proliferation"[mh]	alta		1
+GO:0050798	activated T cell proliferation	"T-Lymphocytes"[mh] AND "Cell Proliferation"[mh] AND "Lymphocyte Activation"[mh]	media		2
+GO:0050851	antigen receptor-mediated signaling pathway	("Receptors, Antigen, T-Cell"[mh] OR "Receptors, Antigen, B-Cell"[mh]) AND "Signal Transduction"[mh]	alta		1
+GO:0050852	T cell receptor signaling pathway	"Receptors, Antigen, T-Cell"[mh] AND "Signal Transduction"[mh]	alta		1
+GO:0050853	B cell receptor signaling pathway	"Receptors, Antigen, B-Cell"[mh] AND "Signal Transduction"[mh]	alta		1
+GO:0050863	regulation of T cell activation	"T-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	alta		2
+GO:0050866	negative regulation of cell activation	("Lymphocyte Activation"[mh] OR "Macrophage Activation"[mh] OR "Neutrophil Activation"[mh])	baja	«cell activation» es más amplio que leucocitos	2
+GO:0050867	positive regulation of cell activation	("Lymphocyte Activation"[mh] OR "Macrophage Activation"[mh] OR "Neutrophil Activation"[mh])	baja	«cell activation» es más amplio que leucocitos	1
+GO:0050868	negative regulation of T cell activation	"T-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	alta		1
+GO:0050870	positive regulation of T cell activation	"T-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	alta		1
+GO:0050900	leukocyte migration	"Leukocytes"[mh] AND "Cell Movement"[mh]	alta		1
+GO:0051251	positive regulation of lymphocyte activation	"Lymphocyte Activation"[mh]	alta		1
+GO:0060326	cell chemotaxis	"Chemotaxis"[mh]	alta		2
+GO:0060562	epithelial tube morphogenesis	"Epithelium"[mh] AND "Morphogenesis"[mh]	baja		4
+GO:0060760	positive regulation of response to cytokine stimulus	"Cytokines"[mh] AND "Signal Transduction"[mh]	baja		1
+GO:0060993	kidney morphogenesis	"Kidney/embryology"[mh]	media		4
+GO:0061180	mammary gland epithelium development	"Mammary Glands, Human/growth and development"[mh]	media		3
+GO:0061326	renal tubule development	("Kidney Tubules/embryology"[mh] OR "Kidney Tubules/growth and development"[mh])	media		4
+GO:0061470	T follicular helper cell differentiation	"T Follicular Helper Cells"[mh] AND "Cell Differentiation"[mh]	alta		1
+GO:0061687	detoxification of inorganic compound	"Metals"[mh] AND "Inactivation, Metabolic"[mh]	media		6
+GO:0061900	glial cell activation	"Neuroglia"[mh]	baja		2
+GO:0070098	chemokine-mediated signaling pathway	"Chemokines"[mh] AND "Signal Transduction"[mh]	alta		3
+GO:0070227	lymphocyte apoptotic process	"Lymphocytes"[mh] AND "Apoptosis"[mh]	alta		2
+GO:0070228	regulation of lymphocyte apoptotic process	"Lymphocytes"[mh] AND "Apoptosis"[mh]	alta		1
+GO:0070661	leukocyte proliferation	"Leukocytes"[mh] AND "Cell Proliferation"[mh]	alta		1
+GO:0070670	response to interleukin-4	"Interleukin-4"[mh]	alta		1
+GO:0071248	cellular response to metal ion	"Metals"[mh]	baja		3
+GO:0071280	cellular response to copper ion	"Copper"[mh]	media		1
+GO:0071353	cellular response to interleukin-4	"Interleukin-4"[mh]	alta		1
+GO:0071621	granulocyte chemotaxis	"Granulocytes"[mh] AND "Chemotaxis, Leukocyte"[mh]	alta		2
+GO:0071674	mononuclear cell migration	"Leukocytes, Mononuclear"[mh] AND "Cell Movement"[mh]	alta		1
+GO:0071675	regulation of mononuclear cell migration	"Leukocytes, Mononuclear"[mh] AND "Cell Movement"[mh]	alta		1
+GO:0071887	leukocyte apoptotic process	"Leukocytes"[mh] AND "Apoptosis"[mh]	alta		2
+GO:0072080	nephron tubule development	("Kidney Tubules/embryology"[mh] OR "Kidney Tubules/growth and development"[mh])	media		4
+GO:0072539	T-helper 17 cell differentiation	"Th17 Cells"[mh] AND "Cell Differentiation"[mh]	alta		3
+GO:0072676	lymphocyte migration	"Lymphocytes"[mh] AND "Cell Movement"[mh]	alta		1
+GO:0072678	T cell migration	"T-Lymphocytes"[mh] AND "Cell Movement"[mh]	alta		1
+GO:0090287	regulation of cellular response to growth factor stimulus	"Intercellular Signaling Peptides and Proteins"[mh] AND "Signal Transduction"[mh]	baja		8
+GO:0090713	immunological memory process	"Immunologic Memory"[mh]	alta		2
+GO:0097028	dendritic cell differentiation	"Dendritic Cells"[mh] AND "Cell Differentiation"[mh]	alta		2
+GO:0097191	extrinsic apoptotic signaling pathway	"Apoptosis"[mh] AND ("Receptors, Tumor Necrosis Factor"[mh] OR "fas Receptor"[mh])	media		5
+GO:0097194	execution phase of apoptosis	"Apoptosis"[mh] AND "Caspases"[mh]	media		1
+GO:0097305	response to alcohol	"Ethanol"[mh]	media	«alcohol» incluye otros alcoholes	6
+GO:0097396	response to interleukin-17	"Interleukin-17"[mh]	alta		3
+GO:0097398	cellular response to interleukin-17	"Interleukin-17"[mh]	alta		3
+GO:0097501	stress response to metal ion	"Metals"[mh]	baja		6
+GO:0097529	myeloid leukocyte migration	"Myeloid Cells"[mh] AND "Cell Movement"[mh]	media		1
+GO:0097530	granulocyte migration	"Granulocytes"[mh] AND "Cell Movement"[mh]	alta		2
+GO:0140131	positive regulation of lymphocyte chemotaxis	"Lymphocytes"[mh] AND "Chemotaxis, Leukocyte"[mh]	alta		1
+GO:0150076	neuroinflammatory response	"Neuroinflammatory Diseases"[mh]	media		2
+GO:1900076	regulation of cellular response to insulin stimulus	("Insulin Resistance"[mh] OR "Insulin"[mh])	media		2
+GO:1901623	regulation of lymphocyte chemotaxis	"Lymphocytes"[mh] AND "Chemotaxis, Leukocyte"[mh]	alta		1
+GO:1901654	response to ketone	"Ketones"[mh]	baja		4
+GO:1901655	cellular response to ketone	"Ketones"[mh]	baja		5
+GO:1901879	regulation of protein depolymerization		sin_mesh	demasiado general (despolimerización de proteínas)	2
+GO:1902105	regulation of leukocyte differentiation	"Leukocytes"[mh] AND "Cell Differentiation"[mh]	alta		3
+GO:1903037	regulation of leukocyte cell-cell adhesion	"Leukocytes"[mh] AND "Cell Adhesion"[mh]	alta		4
+GO:1903038	negative regulation of leukocyte cell-cell adhesion	"Leukocytes"[mh] AND "Cell Adhesion"[mh]	alta		1
+GO:1903039	positive regulation of leukocyte cell-cell adhesion	"Leukocytes"[mh] AND "Cell Adhesion"[mh]	alta		1
+GO:1903706	regulation of hemopoiesis	"Hematopoiesis"[mh]	alta		2
+GO:1903708	positive regulation of hemopoiesis	"Hematopoiesis"[mh]	alta		2
+GO:1905517	macrophage migration	"Macrophages"[mh] AND "Cell Movement"[mh]	alta		1
+GO:1990169	stress response to copper ion	"Copper"[mh]	media		5
+GO:1990266	neutrophil migration	"Neutrophils"[mh] AND "Cell Movement"[mh]	alta		2
+GO:1990868	response to chemokine	"Chemokines"[mh]	media		3
+GO:1990869	cellular response to chemokine	"Chemokines"[mh]	media		3
+GO:2000106	regulation of leukocyte apoptotic process	"Leukocytes"[mh] AND "Apoptosis"[mh]	alta		2
+GO:2000107	negative regulation of leukocyte apoptotic process	"Leukocytes"[mh] AND "Apoptosis"[mh]	alta		1
+GO:2000401	regulation of lymphocyte migration	"Lymphocytes"[mh] AND "Cell Movement"[mh]	alta		1
+GO:2000403	positive regulation of lymphocyte migration	"Lymphocytes"[mh] AND "Cell Movement"[mh]	alta		1
+GO:2000508	regulation of dendritic cell chemotaxis	"Dendritic Cells"[mh] AND "Chemotaxis"[mh]	alta		1
+GO:2000514	regulation of CD4-positive, alpha-beta T cell activation	"CD4-Positive T-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	alta		2
+GO:2000516	positive regulation of CD4-positive, alpha-beta T cell activation	"CD4-Positive T-Lymphocytes"[mh] AND "Lymphocyte Activation"[mh]	alta		3
+GO:2000563	positive regulation of CD4-positive, alpha-beta T cell proliferation	"CD4-Positive T-Lymphocytes"[mh] AND "Cell Proliferation"[mh]	alta		1
+GO:2001233	regulation of apoptotic signaling pathway	"Apoptosis"[mh]	media		3
+GO:2001236	regulation of extrinsic apoptotic signaling pathway	"Apoptosis"[mh] AND ("Receptors, Tumor Necrosis Factor"[mh] OR "fas Receptor"[mh])	media		3
+GO:2001238	positive regulation of extrinsic apoptotic signaling pathway	"Apoptosis"[mh] AND ("Receptors, Tumor Necrosis Factor"[mh] OR "fas Receptor"[mh])	media		3
