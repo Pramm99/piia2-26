@@ -20,13 +20,15 @@ def par(gen, go, destino="LLM", lista="Activada", signo_go=None, ruta="ruta"):
             "Destino": destino}
 
 
-def entradas(tmp_path, pares, casos, igs=()):
+def entradas(tmp_path, pares, casos, igs=(), con_abstract=None):
     """Escribe los Excels de las Fases 1 y 2 con lo mínimo que lee el scoring."""
     f1, f2 = tmp_path / "fase1.xlsx", tmp_path / "fase2.xlsx"
     cols_ig = ["Gen", "GO_ID", "Ruta_Nombre", "Estado_Original", "Signo"]
     with pd.ExcelWriter(f1) as w:
         pd.DataFrame(pares, columns=list(par("x", "y"))).to_excel(w, sheet_name="Triaje_polaridad", index=False)
         pd.DataFrame(list(igs), columns=cols_ig).to_excel(w, sheet_name="Inmunoglobulinas", index=False)
+        if con_abstract is not None:
+            pd.DataFrame(con_abstract).to_excel(w, sheet_name="Con_abstract", index=False)
     df = pd.DataFrame(casos, columns=list(caso("x", "y", "1", "+1")))
     with pd.ExcelWriter(f2) as w:
         df.drop(columns=["Organismo", "Tipo_celular"]).to_excel(w, sheet_name="Por_ruta", index=False)
@@ -37,7 +39,7 @@ def entradas(tmp_path, pares, casos, igs=()):
 
 def puntuar(tmp_path, pares, casos, igs=(), log2fc=None):
     f1, f2 = entradas(tmp_path, pares, casos, igs)
-    return calcular(f1, f2, log2fc)
+    return calcular(f1, f2, log2fc)[:3]
 
 
 def fila(df, gen, go="GO:A"):
@@ -192,6 +194,24 @@ def test_tabla_de_log2fc_de_cimus():
     assert not set(direcciones) - set(fc)
 
 
+def test_abstracts_de_los_pares_sin_signo(tmp_path):
+    """Los artículos de un par UNKNOWN con evidencia salen en Abstracts_sin_signo con su enlace a PubMed, título y
+    abstract; los de un par resuelto o sin_evidencia, no. Por_par lista todos los PMIDs consultados."""
+    from openpyxl import load_workbook
+    pares = [par("U", "GO:A"), par("R", "GO:A"), par("S", "GO:A", destino="sin_evidencia")]
+    casos = [caso("U", "GO:A", "11", "UNKNOWN", estado="no_concluyente", motivos="baja_confianza"),
+             caso("R", "GO:A", "21", "+1"), caso("R", "GO:A", "22", "UNKNOWN", estado="no_concluyente")]
+    textos = [{"PMID": p, "Titulo": f"Titulo {p}", "Abstract": f"Abstract {p}"} for p in ("11", "21", "22")]
+    f1, f2 = entradas(tmp_path, pares, casos, con_abstract=textos)
+    p, _, res, a = calcular(f1, f2)
+    assert list(a["Gen"]) == ["U"] and a.iloc[0].PMID == "11" and a.iloc[0].Abstract == "Abstract 11"
+    assert a.iloc[0].Enlace == "https://pubmed.ncbi.nlm.nih.gov/11/" and a.iloc[0].Motivos == "baja_confianza"
+    assert fila(p, "R").PMIDs_consultados == "21; 22" and fila(p, "S").PMIDs_consultados == ""
+    hoja = load_workbook(escribir(p, *calcular(f1, f2)[1:], ruta=tmp_path / "s.xlsx"))["Abstracts_sin_signo"]
+    assert hoja.cell(row=2, column=6).hyperlink.target == "https://pubmed.ncbi.nlm.nih.gov/11/"
+    assert res[res.Apartado == "Abstracts_sin_signo"].Valor.iloc[0] == "1 (1)"
+
+
 @pytest.mark.parametrize("hoja, columna", [("Por_ruta", None), ("Por_ruta", "Confianza_final")])
 def test_entrada_incompleta(tmp_path, hoja, columna):
     f1, f2 = entradas(tmp_path, RUTA, VOTOS)
@@ -216,14 +236,14 @@ def test_determinista_y_sin_red(tmp_path, monkeypatch):
     monkeypatch.setattr(socket, "create_connection", sin_red)
     f1, f2 = entradas(tmp_path, RUTA, VOTOS)
     a, b = escribir(*calcular(f1, f2), tmp_path / "a.xlsx"), escribir(*calcular(f1, f2), tmp_path / "b.xlsx")
-    for hoja in ("Por_ruta", "Por_par", "Resumen"):
+    for hoja in ("Por_ruta", "Por_par", "Resumen", "Abstracts_sin_signo"):
         pd.testing.assert_frame_equal(pd.read_excel(a, sheet_name=hoja), pd.read_excel(b, sheet_name=hoja))
 
 
 @pytest.mark.skipif(not (config.FICHERO_FASE1.exists() and config.FICHERO_FASE2.exists()),
                     reason="hacen falta las salidas reales de las Fases 1 y 2")
 def test_recuento_completo_con_las_salidas_reales():
-    p, r, _ = calcular()
+    p, r, *_ = calcular()
     triaje = pd.read_excel(config.FICHERO_FASE1, sheet_name=["Triaje_polaridad", "Inmunoglobulinas"])
     total = pd.concat(triaje.values())
     assert len(p) == len(total) and len(r) == total["GO_ID"].nunique()

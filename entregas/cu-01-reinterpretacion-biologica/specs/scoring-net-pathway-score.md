@@ -76,13 +76,14 @@ Además:
 * **Cobertura:** `Cobertura = n_resueltos / n_total`, donde `n_resueltos` incluye los neutros y `n_total` todos los pares de la ruta, también las inmunoglobulinas y los `sin_evidencia`.
 
 ### Salida
-`codigo/data/fase3_scoring.xlsx`, con tres hojas:
+`codigo/data/fase3_scoring.xlsx`, con cuatro hojas:
 
 | Hoja | Una fila por | Columnas |
 |---|---|---|
 | `Por_ruta` | término GO | `GO_ID`, `Ruta_Nombre`, `Listas` (activadas / suprimidas / ambas), `NPS`, `NPS_con_revisar`, `Lectura`, `NPS_log2FC`, `Lectura_log2FC`, `Sensible_al_peso` (sí/no; vacías sin log2FC), `n_total`, `n_activan` (c > 0), `n_inhiben` (c < 0), `n_neutros`, `n_revisar`, `n_no_concluyente`, `n_sin_evidencia`, `n_pendiente`, `Cobertura`, `Fraccion_neutros`, `Genes_activan`, `Genes_inhiben`, `Genes_revisar`. |
-| `Por_par` | par (gen, ruta) | `Gen`, `GO_ID`, `Ruta_Nombre`, `Direccion` (up/down), `Log2FC`, `Signo_par`, `Estado_par`, `Motivos`, `Origen` (`GO`, `LLM`, `Ig`, `ninguno`), `W_pos`, `W_neg`, `W_neutro`, `n_PMIDs`, `n_PMIDs_pos`, `n_PMIDs_neg`, `n_PMIDs_neutro`, `Votos`, `Signo_revisar`, `Contribucion`, `Freno_retroalimentacion`. |
-| `Resumen` | — | Recuentos por estado, por lectura y por `Lectura_log2FC`, número de rutas `Sensible_al_peso`, ficheros de entrada con su fecha de modificación y valores de los parámetros usados. |
+| `Por_par` | par (gen, ruta) | `Gen`, `GO_ID`, `Ruta_Nombre`, `Direccion` (up/down), `Log2FC`, `Signo_par`, `Estado_par`, `Motivos`, `Origen` (`GO`, `LLM`, `Ig`, `ninguno`), `W_pos`, `W_neg`, `W_neutro`, `n_PMIDs`, `n_PMIDs_pos`, `n_PMIDs_neg`, `n_PMIDs_neutro`, `Votos`, `PMIDs_consultados` (todos los artículos que la Fase 2 leyó para el par, también los que no votaron), `Signo_revisar`, `Contribucion`, `Freno_retroalimentacion`. |
+| `Abstracts_sin_signo` | artículo de un par `UNKNOWN` con evidencia | `Gen`, `GO_ID`, `Ruta_Nombre`, `Direccion`, `Estado_par`, `PMID` (enlace a PubMed), `Enlace`, `Proceso`, `Veredicto_LLM`, `Confianza_modelo`, `Estado`, `Motivos`, `Cita`, `Titulo` y `Abstract`. Son los artículos de los pares sin signo que sí tienen casos en la Fase 2 (no concluyentes, en revisión o pendientes), para leerlos a mano; los `sin_evidencia` no tienen artículo y no salen. El título y el abstract salen de la hoja `Con_abstract` de la Fase 1. |
+| `Resumen` | — | Recuentos por estado, por lectura y por `Lectura_log2FC`, número de rutas `Sensible_al_peso`, artículos y pares de `Abstracts_sin_signo`, ficheros de entrada con su fecha de modificación y valores de los parámetros usados. |
 
 Las rutas se ordenan por `|NPS|` descendente y, a igualdad, por `GO_ID`; los pares, por `GO_ID` y `Gen`.
 
@@ -135,4 +136,5 @@ Las pruebas están en `codigo/tests/test_scoring.py`, con tablas sintéticas y s
 * [x] ✅ **Tabla de CIMUS** (`tests/test_scoring.py::test_tabla_de_log2fc_de_cimus`, que se salta si falta el fichero): los 224 genes de las dos listas tienen log2FC y ninguno contradice su lista.
 * [x] ✅ **Entrada incompleta** (`tests/test_scoring.py::test_entrada_incompleta`): sin la hoja `Por_ruta` (o sin la columna `Confianza_final`), `ValueError` que nombra lo que falta.
 * [x] ✅ **Determinismo y ausencia de red** (`tests/test_scoring.py::test_determinista_y_sin_red`): dos ejecuciones con las mismas entradas dan las mismas hojas celda a celda; la prueba bloquea `socket.socket` y `socket.create_connection` y no falla.
+* [x] ✅ **Abstracts de los pares sin signo** (`tests/test_scoring.py::test_abstracts_de_los_pares_sin_signo`): el artículo de un par `UNKNOWN` con un caso `no_concluyente` sale en `Abstracts_sin_signo` con su título, su abstract, sus motivos y el PMID enlazado a `https://pubmed.ncbi.nlm.nih.gov/<PMID>/`; los de un par resuelto o `sin_evidencia`, no. `PMIDs_consultados` de un par con un voto `+1` y un caso `UNKNOWN` lista los dos PMIDs.
 * [x] ✅ **Recuento completo** (`tests/test_scoring.py::test_recuento_completo_con_las_salidas_reales`, que se salta si faltan las salidas): con las salidas de las Fases 1 y 2 de `config.py`, `Por_par` tiene una fila por cada par del Excel de la Fase 1 y `Por_ruta` una por cada término GO distinto. Con la Fase 1 completa del 2026-11-09 son 3.172 pares (103 de inmunoglobulinas) y 352 rutas (`codigo/data/fase3_scoring.xlsx`); la prueba no fija esas cifras.

@@ -61,7 +61,8 @@ codigo/
 │   │                              #   Se ejecuta desde codigo/ con: python -m fase3_scoring
 │   ├── nps.py                     #   (hecho) Votos ponderados por artículo -> signo del par -> NPS de cada ruta
 │   │                              #   (todos los genes pesan igual) y NPS_log2FC de sensibilidad
-│   │                              #   (Sensible_al_peso); fase3_scoring.xlsx (Por_ruta, Por_par, Resumen).
+│   │                              #   (Sensible_al_peso); fase3_scoring.xlsx (Por_ruta, Por_par, Resumen,
+│   │                              #   Abstracts_sin_signo con enlace a PubMed).
 │   ├── config.py                  #   (hecho) Rutas de entrada (incluida la tabla de log2FC), pesos de contexto,
 │   │                              #   minoría de conflicto y umbrales de lectura (provisionales).
 │   └── __init__.py / __main__.py  #   (hecho) API del paquete y línea de comandos.

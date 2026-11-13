@@ -279,7 +279,7 @@ def test_fases_2_y_3_sobre_la_salida_de_la_fase1(fase1, tmp_path, monkeypatch):
         unido = por_ruta.merge(direccion, on=["Gen", "GO_ID"], how="left")
         assert len(unido) == len(por_ruta) and unido["Estado_Original"].notna().all()
 
-        pares, rutas, _ = calcular(f1, tmp_path / "fase2.xlsx")
+        pares, rutas, *_ = calcular(f1, tmp_path / "fase2.xlsx")
         assert set(rutas["GO_ID"]) == {"GO:9000001", "GO:9000010", "GO:9000020"}
         assert set(pares.loc[pares["Gen"].isin(IGS), "Signo_par"]) == {"neutro"}
     finally:

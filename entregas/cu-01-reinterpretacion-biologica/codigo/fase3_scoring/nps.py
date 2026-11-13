@@ -12,6 +12,8 @@ fases anteriores.
      resueltos con signo ±1; todos los genes pesan igual. Los neutros no entran (se informan como Fraccion_neutros).
      Con el log2FC de CIMUS se calcula además NPS_log2FC = Σ c·|log2FC| / Σ |log2FC| como sensibilidad: las rutas
      cuya lectura cambia llevan Sensible_al_peso.
+  4. Para leer a mano lo que quedó sin signo: la hoja Abstracts_sin_signo da cada artículo de los pares UNKNOWN que sí
+     tienen evidencia (enlace a PubMed, título, abstract y lo que respondió el modelo).
 """
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +37,7 @@ COLUMNAS_FASE2 = {"Por_ruta": ("Gen", "GO_ID", "PMID", "Proceso_ID", "Signo_ruta
                   "Preguntas": ("Gen", "PMID", "Proceso_ID", "Organismo", "Tipo_celular")}
 COLUMNAS_FASE1 = {"Triaje_polaridad": ("Gen", "GO_ID", "Ruta_Nombre", "Estado_Original", "Signo_GO", "Destino"),
                   "Inmunoglobulinas": ("Gen", "GO_ID", "Ruta_Nombre", "Estado_Original")}
+URL_PUBMED = "https://pubmed.ncbi.nlm.nih.gov/{}/"
 
 
 def leer_hojas(ruta, columnas: Dict[str, Tuple[str, ...]]) -> Dict[str, pd.DataFrame]:
@@ -77,6 +80,19 @@ def leer_log2fc(ruta, direcciones: Dict[str, int]) -> Dict[str, float]:
             raise ValueError(f"log2FC de {gen} ({fc}) contradice su lista ({'up' if d > 0 else 'down'})")
         valores[gen] = float(fc)
     return valores
+
+
+def leer_abstracts(ruta) -> pd.DataFrame:
+    """Título y abstract de cada PMID (hoja Con_abstract de la Fase 1). Es opcional: sin la hoja, tabla vacía."""
+    vacio = pd.DataFrame(columns=["PMID", "Titulo", "Abstract"])
+    if "Con_abstract" not in pd.ExcelFile(ruta).sheet_names:
+        return vacio
+    df = pd.read_excel(ruta, sheet_name="Con_abstract")
+    if not {"PMID", "Titulo", "Abstract"} <= set(df.columns):
+        return vacio
+    df = df[["PMID", "Titulo", "Abstract"]].copy()
+    df["PMID"] = df["PMID"].map(normalizar_pmid)
+    return df.drop_duplicates("PMID")
 
 
 def normalizar_signo(v) -> str:
@@ -205,6 +221,9 @@ def tabla_pares(triaje: pd.DataFrame, igs: pd.DataFrame, casos: pd.DataFrame,
     for c in ("n_PMIDs", "n_PMIDs_pos", "n_PMIDs_neg", "n_PMIDs_neutro"):
         df[c] = df[c].astype(float).fillna(0).astype(int)
     df["Votos"] = df["Votos"].fillna("")
+    # Todos los artículos que la Fase 2 leyó para el par, también los que no votaron (UNKNOWN, revisar, pendiente)
+    consultados = casos.groupby(["Gen", "GO_ID"])["PMID"].agg(lambda s: "; ".join(sorted(set(map(str, s)))))
+    df["PMIDs_consultados"] = [consultados.get((g, go), "") for g, go in zip(df["Gen"], df["GO_ID"])]
     df["Direccion"] = df["Estado_Original"].map({"Activada": "up", "Suprimida": "down"})
     d = df["Estado_Original"].map(DIRECCION)
     if log2fc is not None:
@@ -278,13 +297,34 @@ def tabla_rutas(pares: pd.DataFrame, con_log2fc: bool) -> pd.DataFrame:
         .drop(columns="_o").reset_index(drop=True)
 
 
+COLUMNAS_ABSTRACTS = ["Gen", "GO_ID", "Ruta_Nombre", "Direccion", "Estado_par", "PMID", "Enlace", "Proceso",
+                      "Veredicto_LLM", "Confianza_modelo", "Estado", "Motivos", "Cita", "Titulo", "Abstract"]
+
+
+def tabla_abstracts_sin_signo(pares: pd.DataFrame, casos: pd.DataFrame, abstracts: pd.DataFrame) -> pd.DataFrame:
+    """Una fila por artículo de cada par UNKNOWN que sí tiene casos en la Fase 2 (no concluyente, en revisión o
+    pendiente), con su enlace a PubMed y lo que respondió el modelo: para leerlos a mano. Los pares sin_evidencia no
+    tienen ningún artículo y no salen."""
+    sin = pares.loc[pares["Signo_par"] == SIGNO_DESCONOCIDO, ["Gen", "GO_ID", "Ruta_Nombre", "Direccion", "Estado_par"]]
+    cols = ["Gen", "GO_ID", "PMID", "Proceso", "Veredicto_LLM", "Confianza_modelo", "Estado", "Motivos", "Cita"]
+    df = sin.merge(casos.reindex(columns=cols), on=["Gen", "GO_ID"], how="inner")
+    df = df.merge(abstracts, on="PMID", how="left")
+    df["Enlace"] = df["PMID"].map(URL_PUBMED.format)
+    return df.reindex(columns=COLUMNAS_ABSTRACTS).sort_values(["GO_ID", "Gen", "PMID"], kind="mergesort") \
+        .reset_index(drop=True)
+
+
 def _fecha(ruta) -> str:
     return datetime.fromtimestamp(Path(ruta).stat().st_mtime).isoformat(timespec="seconds")
 
 
-def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Optional[Path]]) -> pd.DataFrame:
+def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Optional[Path]],
+            abstracts: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     filas = [("Estado_par", f"{e} {s}", int(n)) for (e, s), n in
              pares.groupby(["Estado_par", "Signo_par"]).size().items()]
+    if abstracts is not None:
+        filas.append(("Abstracts_sin_signo", "artículos (pares)",
+                      f"{len(abstracts)} ({abstracts[['Gen', 'GO_ID']].drop_duplicates().shape[0]})"))
     filas += [("Lectura", k, int(n)) for k, n in rutas["Lectura"].value_counts().sort_index().items()]
     if (rutas["Lectura_log2FC"] != "").any():
         filas += [("Lectura_log2FC", k, int(n)) for k, n in rutas["Lectura_log2FC"].value_counts().sort_index().items()]
@@ -298,11 +338,11 @@ def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Option
 
 COLUMNAS_PAR = ["Gen", "GO_ID", "Ruta_Nombre", "Direccion", "Log2FC", "Signo_par", "Estado_par", "Motivos",
                 "Origen", "W_pos", "W_neg", "W_neutro", "n_PMIDs", "n_PMIDs_pos", "n_PMIDs_neg", "n_PMIDs_neutro",
-                "Votos", "Signo_revisar", "Contribucion", "Freno_retroalimentacion"]
+                "Votos", "PMIDs_consultados", "Signo_revisar", "Contribucion", "Freno_retroalimentacion"]
 
 
 def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None):
-    """Entradas -> (Por_par, Por_ruta, Resumen)."""
+    """Entradas -> (Por_par, Por_ruta, Resumen, Abstracts_sin_signo)."""
     f2 = leer_hojas(fase2, COLUMNAS_FASE2)
     f1 = leer_hojas(fase1, COLUMNAS_FASE1)
     triaje, igs = f1["Triaje_polaridad"], f1["Inmunoglobulinas"]
@@ -312,16 +352,24 @@ def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None
     fc = leer_log2fc(log2fc, direcciones) if log2fc else None
     pares = tabla_pares(triaje, igs, casos, fc)
     rutas = tabla_rutas(pares, fc is not None)
+    abstracts = tabla_abstracts_sin_signo(pares, casos, leer_abstracts(fase1))
     res = resumen(pares, rutas, {"Fase 1": Path(fase1), "Fase 2": Path(fase2),
-                                 "log2FC": Path(log2fc) if log2fc else None})
-    return pares[COLUMNAS_PAR], rutas, res
+                                 "log2FC": Path(log2fc) if log2fc else None}, abstracts)
+    return pares[COLUMNAS_PAR], rutas, res, abstracts
 
 
-def escribir(pares: pd.DataFrame, rutas: pd.DataFrame, res: pd.DataFrame, ruta=config.FICHERO_SCORING) -> Path:
+def escribir(pares: pd.DataFrame, rutas: pd.DataFrame, res: pd.DataFrame, abstracts: Optional[pd.DataFrame] = None,
+             ruta=config.FICHERO_SCORING) -> Path:
     ruta = Path(ruta)
     ruta.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(ruta) as w:
         rutas.to_excel(w, sheet_name="Por_ruta", index=False)
         pares.to_excel(w, sheet_name="Por_par", index=False)
         res.to_excel(w, sheet_name="Resumen", index=False)
+        if abstracts is not None:
+            abstracts.to_excel(w, sheet_name="Abstracts_sin_signo", index=False)
+            hoja, col = w.sheets["Abstracts_sin_signo"], COLUMNAS_ABSTRACTS.index("PMID") + 1
+            for fila, url in enumerate(abstracts["Enlace"], start=2):  # el PMID se abre en PubMed con un clic
+                celda = hoja.cell(row=fila, column=col)
+                celda.hyperlink, celda.style = url, "Hyperlink"
     return ruta
