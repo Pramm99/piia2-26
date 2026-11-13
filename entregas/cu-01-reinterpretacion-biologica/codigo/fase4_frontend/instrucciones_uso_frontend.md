@@ -64,6 +64,18 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
      cambios (**Deshacer mis cambios** los quita). Los cambios no se guardan ni pasan al Excel: una nueva ejecución
      vuelve al resultado automático;
    * el botón **Descargar Excel de la Fase 3** (siempre el resultado automático).
+5. **Excel de resultados (Fase 3).** Para ir juntando varias rutas en un mismo Excel:
+   * **Abrir Excel** pone uno vacío o uno con rutas ya buscadas, y **Crear Excel nuevo** empieza uno. Si ya habías
+     ejecutado una ruta, se añade en ese momento (así se completa un Excel al que le faltaba).
+   * Cada ruta que se ejecuta se añade sola: una fila en la hoja `Rutas` y sus genes en la hoja `Genes`. Si la ruta ya
+     estaba, se actualiza. Las demás hojas del Excel no se tocan. Se guarda el resultado automático, sin los cambios
+     de «Tu criterio».
+   * En Chrome y Edge los cambios se escriben directamente en el fichero elegido; en otros navegadores hay que pulsar
+     **Descargar**.
+   * **Limpiar Excel** (pide confirmación) borra todas sus rutas para empezar de cero; **Quitar** deja de usarlo sin
+     borrarlo, y el icono de papelera de una fila quita solo esa ruta.
+   * La vista previa muestra cada ruta con su lectura, una barra del NPS, los genes que activan e inhiben, la fecha y,
+     al pulsarla, sus genes en colores (verde: empuja hacia activada; rojo: hacia inhibida; gris: no cuenta).
 
 ## 4. Qué hace el puente
 

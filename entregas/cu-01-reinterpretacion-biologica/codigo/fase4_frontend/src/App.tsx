@@ -16,32 +16,10 @@ import {
   Sun,
   X
 } from 'lucide-react';
+import { colorLectura, formatoNPS, loadXLSX, mensaje } from './comun';
+import ExcelResultados from './ExcelResultados';
 
 const API_URL = 'http://127.0.0.1:8000';
-
-// Lo mínimo de SheetJS que se usa (se carga desde el CDN solo si se sube un Excel)
-interface LibXLSX {
-  read: (data: ArrayBuffer, opts: { type: 'array' }) => { SheetNames: string[]; Sheets: Record<string, unknown> };
-  utils: { sheet_to_json: (hoja: unknown) => Record<string, unknown>[] };
-}
-type VentanaConXLSX = Window & { XLSX?: LibXLSX };
-
-const mensaje = (err: unknown) => (err instanceof Error ? err.message : String(err));
-
-const loadXLSX = (): Promise<LibXLSX> => {
-  return new Promise((resolve, reject) => {
-    const w = window as VentanaConXLSX;
-    if (w.XLSX) {
-      resolve(w.XLSX);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    script.onload = () => resolve((window as VentanaConXLSX).XLSX as LibXLSX);
-    script.onerror = () => reject(new Error('No se pudo cargar la librería XLSX'));
-    document.head.appendChild(script);
-  });
-};
 
 const descargarBase64Excel = (b64: string, filename: string) => {
   const byteCharacters = atob(b64);
@@ -148,11 +126,6 @@ interface Resultado {
 }
 
 const genes = (s: string) => s.split('/').map((g) => g.trim()).filter(Boolean);
-
-const formatoNPS = (v: number | null | undefined) =>
-  v === null || v === undefined ? 'N/A' : v > 0 ? `+${v.toFixed(2)}` : v.toFixed(2).replace('-', '−');
-
-const colorLectura = (l: string) => (l === 'activada' ? 'var(--c-34d399)' : l === 'inhibida' ? 'var(--c-f87171)' : 'var(--c-fbbf24)');
 
 // Umbrales de lectura de la Fase 3 (fase3_scoring/config.py)
 const UMBRAL_NPS = 0.33;
@@ -879,6 +852,9 @@ export default function App() {
             </table>
           </div>
         </section>
+
+        {/* FASE 3: EXCEL QUE ACUMULA LAS RUTAS EJECUTADAS */}
+        <ExcelResultados resultado={resultado} />
 
         {/* RESULTADO DE LA RUTA: UNA TARJETA POR FASE Y EL DESGLOSE POR GEN */}
         <section style={{ backgroundColor: 'var(--c-0f172a)', border: '1px solid var(--c-1e293b)', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
