@@ -202,7 +202,31 @@ const calculoPeso = (v: Voto) => {
   return factores.length ? `${coma(v.Peso)} (${confianza} × ${factores.join(' × ')})` : `${coma(v.Peso)} (${confianza})`;
 };
 
-const PesoEvidencia = ({ g }: { g: GeneContribution }) => {
+// Códigos de evidencia experimental de GO (los únicos con los que se acepta el signo sin el LLM)
+const EVIDENCIA_GO_TEXTO: Record<string, string> = {
+  EXP: 'experimento', IDA: 'ensayo directo', IMP: 'fenotipo de un mutante', IGI: 'interacción genética',
+  IPI: 'interacción física', IEP: 'patrón de expresión', HTP: 'experimento de alto rendimiento',
+  HDA: 'ensayo directo de alto rendimiento', HMP: 'mutantes de alto rendimiento', HGI: 'interacción genética de alto rendimiento',
+  HEP: 'expresión de alto rendimiento',
+};
+
+const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
+  if (g.Signo_par === 'neutro') {
+    return <span style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.05em', color: '#94a3b8', backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px' }}>NEUTRO</span>;
+  }
+  if (g.Origen === 'GO') {
+    // El signo GO no se pondera: se acepta entero porque lo respalda una anotación experimental cercana a la ruta
+    const codigos = (d?.GO?.Evidencias || '').split('|').filter(Boolean);
+    const color = g.Signo_par === '+1' ? '#2dd4bf' : '#fb7185';
+    return (
+      <div style={{ minWidth: '120px' }} title={codigos.map((c) => `${c}: ${EVIDENCIA_GO_TEXTO[c] || c}`).join(' · ')}>
+        <div style={{ width: '120px', height: '6px', borderRadius: '3px', backgroundColor: color }} />
+        <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '3px' }}>
+          Gene Ontology{codigos.length > 0 && <> ({codigos.join(', ')})</>}: experimental, no se pondera
+        </div>
+      </div>
+    );
+  }
   if (g.Origen !== 'LLM') return <span style={{ color: '#475569' }}>—</span>;
   const pos = Number(g.W_pos || 0);
   const neg = Number(g.W_neg || 0);
@@ -698,7 +722,7 @@ export default function App() {
                             </td>
                             <td style={{ padding: '9px', fontWeight: 'bold', color: c > 0 ? '#34d399' : c < 0 ? '#f87171' : '#64748b' }}>{efectoTexto(c)}</td>
                             <td style={{ padding: '9px', color: '#94a3b8' }}>{fuenteTexto(g, d)}</td>
-                            <td style={{ padding: '9px' }}><PesoEvidencia g={g} /></td>
+                            <td style={{ padding: '9px' }}><PesoEvidencia g={g} d={d} /></td>
                             <td style={{ padding: '9px', color: '#cbd5e1' }}>{motivos(g.Motivos).join(' ') || (g.Origen === 'LLM' ? 'Los artículos coinciden.' : '')}</td>
                           </tr>
                           {abiertoGen && (
@@ -707,7 +731,9 @@ export default function App() {
                               <td colSpan={7} style={{ padding: '4px 9px 14px 9px' }}>
                                 {d?.GO && g.Origen === 'GO' && (
                                   <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '8px' }}>
-                                    Anotación curada de Gene Ontology (evidencia {d.GO.Evidencias || '—'})
+                                    Anotación curada de Gene Ontology con evidencia experimental ({(d.GO.Evidencias || '—').split('|').map((c) => `${c}: ${EVIDENCIA_GO_TEXTO[c] || c}`).join(', ')}).
+                                    El signo se acepta entero, sin pesar artículos, porque la anotación es experimental, está a 2 pasos o menos de la ruta en GO y no es de otro tipo celular ni indirecta
+                                    {d.GO.PMIDs.length > 0 && <>. Artículos de la anotación</>}
                                     {d.GO.PMIDs.length > 0 && <>: {d.GO.PMIDs.map((p, i) => <React.Fragment key={p}>{i > 0 && ', '}<a href={`https://pubmed.ncbi.nlm.nih.gov/${p}/`} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>PMID {p}</a></React.Fragment>)}</>}.
                                   </div>
                                 )}
