@@ -44,7 +44,7 @@ Al concluir el proyecto, queremos disponer de un **MVP funcional, reproducible y
 
 - Tome como entrada los resultados de enriquecimiento funcional en Gene Ontology que proporciona CIMUS para los genes diferencialmente expresados en células NK de tumores de laringe y faringe: las dos listas, la de genes _up_ y la de genes _down_.
 
-- Determine el signo funcional de **cada par gen–ruta** de esas listas (3.172 pares de 224 genes en la ejecución del 2026-11-09), para poder resolver las rutas ambiguas.
+- Determine el signo funcional de **cada par gen–ruta** de esas listas (3.172 pares de 224 genes en la ejecución del 2026-11-13), para poder resolver las rutas ambiguas.
 
 - Recupere la evidencia curada de Gene Ontology y los _abstracts_ que la respaldan mediante APIs abiertas y gratuitas, y los procese con dos modelos de lenguaje gratuitos con justificación literal verificada (citas trazables).
 

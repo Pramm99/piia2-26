@@ -1,6 +1,6 @@
 # Limitación: pares (gen, ruta) sin ningún abstract
 
-> Estado: **vigente**. Cifras de la ejecución de referencia de la Fase 1 del 2026-11-09. Afecta a la Fase 1 (ingesta) y a cómo la Fase 2 y el Net Pathway Score
+> Estado: **vigente**. Cifras de la ejecución de referencia de la Fase 1 del 2026-11-13. Afecta a la Fase 1 (ingesta) y a cómo la Fase 2 y el Net Pathway Score
 > tratan estos pares. Código: `codigo/fase1_ingesta/polaridad.py` (`cerrar_sin_evidencia`).
 
 ## 1. El problema
@@ -14,25 +14,25 @@ La Fase 1 busca abstracts en tres fuentes, en cascada:
 2. **NCBI GeneRIF:** frases curadas sobre el gen, a través de MyGene.info.
 3. **Europe PMC dirigida:** el gen y un término de la ruta en la misma frase.
 
-Aun así, en la ejecución completa sobre los Excels de CIMUS (ejecución de referencia de la Fase 1, 2026-11-09)
-quedan sin evidencia **668 de 3.069 pares** (22 %, sin contar las inmunoglobulinas), que afectan a 124 genes y
-261 rutas. Las columnas son las dos listas de CIMUS: rutas de genes *up* («activadas») y de genes *down*
+Aun así, en la ejecución completa sobre los Excels de CIMUS (ejecución de referencia de la Fase 1, 2026-11-13)
+quedan sin evidencia **658 de 3.069 pares** (21 %, sin contar las inmunoglobulinas), que afectan a 124 genes y
+259 rutas. Las columnas son las dos listas de CIMUS: rutas de genes *up* («activadas») y de genes *down*
 («suprimidas»).
 
 | | Activadas | Suprimidas | Total |
 |---|---|---|---|
-| Pares sin ningún abstract | 488 (de 2.386) | 180 (de 683) | 668 |
-| `anotado_sin_PMID`: el gen solo está en la ruta por anotaciones GO sin artículo | 272 | 123 | 395 |
-| `sin_anotacion_GAF`: el gen no tiene anotación a la ruta en el GAF actual | 216 | 57 | 273 |
+| Pares sin ningún abstract | 480 (de 2.386) | 178 (de 683) | 658 |
+| `anotado_sin_PMID`: el gen solo está en la ruta por anotaciones GO sin artículo | 266 | 122 | 388 |
+| `sin_anotacion_GAF`: el gen no tiene anotación a la ruta en el GAF actual | 214 | 56 | 270 |
 | `PMID_sin_abstract`: el par tiene PMIDs, pero ninguno tiene abstract en PubMed | 0 | 0 | 0 |
-| Con signo GO (solo como pista; ver § 2) | 100 | 38 | 138 |
+| Con signo GO (solo como pista; ver § 2) | 98 | 38 | 136 |
 
 La tercera causa existe en el código, pero en esta ejecución no aparece: las fuentes externas encontraron otro
 abstract para todos los pares cuyos PMIDs no lo tenían.
 
 Códigos de evidencia de las anotaciones de esos pares:
-- IEA (electrónica): 234
-- ISS (por similitud, casi siempre heredada de ratón, rata o vaca): 200
+- IEA (electrónica): 227
+- ISS (por similitud, casi siempre heredada de ratón, rata o vaca): 196
 - IBA (filogenética): 93
 - TAS de Reactome (la referencia es un ID de Reactome, no un PMID): 14
 
@@ -70,7 +70,7 @@ Estos pares se cierran de forma determinista en la Fase 1 y nunca generan prompt
 **Excepción: pares `aceptar_GO` sin abstract.** Si el triaje ya había aceptado el signo GO de un par (una anotación
 experimental con PMID, a poca profundidad) y ese PMID no tiene abstract, el par no se cierra como `UNKNOWN`: sale
 con `Resultado` = el signo GO, `Estado = resuelto_GO` y `Motivo = aceptar_GO`, porque su signo no depende de leer
-el abstract. En la ejecución del 2026-11-09 no hay ningún caso así.
+el abstract. En la ejecución del 2026-11-13 no hay ningún caso así.
 
 Opciones descartadas:
 - **Enviar al LLM la función general del gen** (UniProt o el resumen de NCBI) en lugar del abstract. El texto no
@@ -78,11 +78,11 @@ Opciones descartadas:
   verificar como cita.
 - **Usar la `Pista_GO` como resultado.** Ese signo sale de IEA, ISS o IBA, que es justo lo que el triaje no acepta.
 
-## 3. Posible resolución para reducir los 668
+## 3. Posible resolución para reducir los 658
 
 La investigación «Bases gratuitas para pares sin PMID» se probó con los 12 genes que no tenían ningún PMID en la
 ejecución del 2026-11-08: juntando todas las fuentes, hubo evidencia humana aceptable para 6 de ellos (unos 8 de
-sus 33 pares). El equipo decidió probar sobre los 668 pares la fuente más precisa de esa prueba, gene2pubmed +
+sus 33 pares). El equipo decidió probar sobre los pares sin evidencia la fuente más precisa de esa prueba, gene2pubmed +
 MeSH (#31). Sería una etapa más de `pmid_externos.py`, gratuita, sobre abstracts de PubMed y compatible con una
 Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
 
@@ -98,12 +98,12 @@ Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
 
   Ejemplo: `BCL2A1[tiab] AND "Apoptosis"[MeSH]`.
 - **Requisito:** una **tabla ruta GO → MeSH**, que no está publicada. Hay que construirla una vez para las rutas
-  afectadas (261, o menos si se agrupan por ancestro común). Se guardaría como un TSV versionado junto al código,
+  afectadas (259, o menos si se agrupan por ancestro común). Se guardaría como un TSV versionado junto al código,
   con una persona revisándola.
 - **Alcance en la prueba:** 3 de los 12 genes (ACP5, BCL2A1, MAP2K3).
 - **Coste:** unas 2 peticiones por gen y ruta, con caché. Sin clave de NCBI, el límite es de 3 por segundo;
   con `NCBI_API_KEY`, de 10 por segundo.
-- **Piloto sobre los 668 pares (2026-11-13), con el MeSH buscado de forma automática** (nombre de la ruta, sus
+- **Piloto sobre los 668 pares de la Fase 1 del 2026-11-09 (hecho el 2026-11-13), con el MeSH buscado de forma automática** (nombre de la ruta, sus
   sinónimos, el proceso núcleo y, si no, el primer resultado de una búsqueda libre):
   - Solo 81 de las 261 rutas tienen MeSH, y 72 de ellas por la búsqueda libre, que suele fallar
     («T cell differentiation» → *Interleukin-5*, «B cell proliferation» → *Antigens, CD19*).
@@ -126,7 +126,7 @@ Para estos pares, lo correcto es el UNKNOWN actual con su `Detalle`, no forzar u
 
 ## 4. Cómo medirlo
 
-Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 668 pares y medir dos cosas:
+Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 658 pares y medir dos cosas:
 
 1. **Cobertura:** cuántos pares pasan de `sin_evidencia` a tener un abstract.
 2. **Precisión:** en una muestra de unos 30 pares por etapa, leída a mano, si el abstract trata del gen en el

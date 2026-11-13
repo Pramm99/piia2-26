@@ -41,10 +41,10 @@ Un módulo de ingesta (Fase 1, `codigo/fase1_ingesta/`, `python codigo/fase1_ing
 
    Las tres primeras hojas llevan además la columna `Destino` del triaje.
 
-Cifras de la ejecución completa del 2026-11-09:
-* **Entrada y triaje:** 3.172 pares de entrada, de los que 103 son de inmunoglobulinas. Destinos: 332 `aceptar_GO`, 2.003 `LLM`, 66 `LLM_y_revision` y 668 `sin_evidencia`.
-* **PMIDs:** 1.547 pares con PMID en el GAF y 855 con PMID externo.
-* **Salida:** 1.420 PMIDs únicos y 5.014 filas en `Con_abstract`.
+Cifras de la ejecución completa del 2026-11-13:
+* **Entrada y triaje:** 3.172 pares de entrada, de los que 103 son de inmunoglobulinas. Destinos: 332 `aceptar_GO`, 2.013 `LLM`, 66 `LLM_y_revision` y 658 `sin_evidencia`.
+* **PMIDs:** 1.547 pares con PMID en el GAF y 865 con PMID externo.
+* **Salida:** 1.463 PMIDs únicos y 5.092 filas en `Con_abstract`.
 
 ## Por qué
 El análisis transcriptómico a nivel de célula única clasifica los genes diferencialmente expresados en listas independientes sobreexpresadas (*Up*) e infraexpresadas (*Down*). Las bases de datos convencionales catalogan los genes de forma cualitativa (presencia o ausencia en la ruta), provocando que una misma ruta aparezca enriquecida en ambos sentidos sin explicar el efecto neto.
@@ -100,7 +100,7 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
   * una variable de entorno tiene prioridad sobre el fichero;
   * sin fichero ni variable, el valor es `None` (`tests/test_fase1.py`);
   * `git check-ignore codigo/.env` confirma que no se versiona.
-* [x] ✅ **Resolución gen–ruta → PMID:** Para el par de referencia (`CD7`, `GO:0002443` *leukocyte mediated immunity*), la salida contiene el `PMID` `10652336`, anotado en el término descendiente `GO:0002726` con evidencia `IDA` y `Polaridad_GO = +1`. Ninguna fila de la hoja `Con_abstract` contiene un `PMID` no numérico. (El par, comprobado en la ejecución del 2026-11-09; el PMID numérico, `tests/test_fase1_e2e.py::test_con_abstract_fuentes_y_limpieza`.)
+* [x] ✅ **Resolución gen–ruta → PMID:** Para el par de referencia (`CD7`, `GO:0002443` *leukocyte mediated immunity*), la salida contiene el `PMID` `10652336`, anotado en el término descendiente `GO:0002726` con evidencia `IDA` y `Polaridad_GO = +1`. Ninguna fila de la hoja `Con_abstract` contiene un `PMID` no numérico. (El par, comprobado en la ejecución del 2026-11-13; el PMID numérico, `tests/test_fase1_e2e.py::test_con_abstract_fuentes_y_limpieza`.)
 * [x] ✅ **Composición de la polaridad en el grafo:** Para un término alcanzado a través de una única relación `negatively_regulates`, `Polaridad_GO` es `-1`; a través de dos relaciones `negatively_regulates` encadenadas, es `+1`; si el término se alcanza por caminos de signo opuesto, es `conflicto`. (`tests/test_fase1.py::test_polaridad_compuesta_por_el_grafo`, con un OBO mínimo.)
 * [x] ✅ **Inmunoglobulinas:** los pares de genes de inmunoglobulina (p. ej. IGKC, IGHM) aparecen en la hoja `Inmunoglobulinas` con signo `neutro` y no aparecen en `Con_abstract`; IGFBP7, que empieza por «IG» pero no es una inmunoglobulina, no se aparta. (`tests/test_fase1_e2e.py::test_inmunoglobulinas_neutras_y_fuera_de_con_abstract`.)
 * [x] ✅ **Triaje:** cada par de la entrada que no es inmunoglobulina tiene exactamente un `Destino` en `Triaje_polaridad`, y todo par sin ninguna fila en `Con_abstract` tiene una fila en `Sin_evidencia` con su causa y `Destino = sin_evidencia`, salvo los `aceptar_GO`: su signo no depende del abstract, así que conservan `aceptar_GO` y salen en `Sin_evidencia` con el signo GO, `Estado = resuelto_GO` y `Motivo = aceptar_GO` ([limitación de pares sin abstract](../docs/limitacion-pares-sin-abstract.md)). (`tests/test_fase1_e2e.py::test_triaje_un_destino_por_par`, `::test_pares_sin_abstract_cerrados_con_su_causa` y `::test_aceptar_go_sin_abstract_conserva_el_signo_go`.)

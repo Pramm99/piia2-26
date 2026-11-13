@@ -35,7 +35,7 @@ Las cachés desechables se escriben de forma atómica (fichero temporal y renomb
 2. **Las respuestas del LLM no son reproducibles volviendo a llamar:** temperatura 0 no garantiza salidas idénticas, y los modelos de los planes gratuitos cambian o desaparecen (el modelo `llama3-8b-8192` previsto inicialmente ya no está disponible). El registro es la única forma de conservar lo que respondió cada modelo.
 3. **Auditoría:** los casos marcados como `revisar` (ADR-003) deben poder revisarse con la respuesta original de cada modelo.
 4. **Lo que el ADR-001 quería evitar era la infraestructura**, no los ficheros: sin servidores de bases de datos, sin contenedores y sin esquemas que migrar. Los ficheros locales mantienen esa portabilidad: basta con clonar el repositorio.
-5. **JSONL es suficiente para el volumen:** con la Fase 1 del 2026-11-09 hay 1.694 preguntas (1.123 de las rutas de genes *up* y 571 de las de genes *down*). Con dos modelos son unas 3.400 líneas en `respuestas_llm.jsonl` y unos cientos de llamadas por modelo. Se lee con `pandas.read_json(..., lines=True)` y se puede inspeccionar con cualquier editor.
+5. **JSONL es suficiente para el volumen:** con la Fase 1 del 2026-11-13 hay 1.749 preguntas (1.168 de las rutas de genes *up* y 581 de las de genes *down*). Con dos modelos son unas 3.500 líneas en `respuestas_llm.jsonl` y unos cientos de llamadas por modelo. Se lee con `pandas.read_json(..., lines=True)` y se puede inspeccionar con cualquier editor.
 
 Aceptamos los compromisos asociados: el registro crece con cada cambio de prompt (las respuestas antiguas se conservan con su huella) y no hay consultas complejas; los análisis se hacen cargando el fichero en `pandas`.
 
