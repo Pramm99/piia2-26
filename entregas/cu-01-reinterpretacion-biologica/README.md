@@ -93,6 +93,8 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Entrenamiento o Fine-Tuning de modelos propios:** No se entrenarán clasificadores BERT biomédicos desde cero ni se ajustarán pesos de LLMs. Se usan modelos ya preentrenados, vía API externa o en local.
 
+- **Limpieza de la lista de rutas de entrada:** No se agrupan ni se eliminan las rutas redundantes del enriquecimiento (p. ej. «X», «regulation of X» y «positive regulation of X»). Cada Excel de entrada puede traer rutas distintas y redundancias nuevas, así que esa limpieza es un paso previo al proyecto: el pipeline procesa la lista tal como llega, y cada término GO se puntúa por separado.
+
 - **Texto completo de los artículos:** Solo se descargan el título y el _abstract_ de PubMed. No se descarga ningún artículo completo, ni de acceso abierto ni de pago.
 
 - **Modelado biológico no lineal / combinatorio:** No se contemplan interacciones génicas de orden superior complejas (efectos epistáticos o condicionales no lineales); el score se fundamenta en una agregación mecanicista sumativa y transparente.
