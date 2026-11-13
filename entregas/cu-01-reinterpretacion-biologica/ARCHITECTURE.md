@@ -7,7 +7,7 @@ El código vive en `codigo/`, dentro de esta misma carpeta del equipo (`entregas
 * **Fase 1, ingesta** (`codigo/fase1_ingesta/`, `python codigo/fase1_ingesta/main.py`): de las rutas enriquecidas a un Excel con las evidencias bibliográficas de cada par gen–ruta y un primer triaje del signo con Gene Ontology. **Implementada.**
 * **Fase 2, inferencia** (`codigo/fase2_inferencia/`; desde `codigo/`, `python -m fase2_inferencia ejecutar`): de cada evidencia a un signo funcional validado. **Implementada**, con Gemini 3.5 Flash-Lite como principal y gpt-oss-120b como secundario (ADR-005).
 * **Fase 3, scoring** (`codigo/fase3_scoring/`; desde `codigo/`, `python -m fase3_scoring`; [spec](specs/scoring-net-pathway-score.md)): de los signos por evidencia al *Net Pathway Score* de cada ruta. **Implementada**; sus umbrales son provisionales.
-* **Fase 4, frontend** (`codigo/fase4_frontend/`; [instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)): interfaz web para elegir **una ruta** de CIMUS y, tras confirmarlo, ejecutar seguidas las Fases 1, 2 y 3 a través de un puente HTTP local (`api_puente.py`). Muestra la lectura y el NPS de la ruta, la aportación de cada gen y el Excel de la Fase 3; cada ruta escribe en `codigo/data/frontend/<GO_ID>/` y reutiliza las cachés y el registro del LLM. **Implementada.**
+* **Fase 4, frontend** (`codigo/fase4_frontend/`; [instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)): interfaz web para ejecutar **una ruta** de principio a fin. Se suben los Excels de rutas sobreexpresadas e infraexpresadas (uno por lista; no hay nada precargado), se elige una ruta y, tras confirmarlo, el puente HTTP local (`api_puente.py`) ejecuta seguidas las Fases 1, 2 y 3. Muestra el veredicto de la ruta con la escala del NPS, una tarjeta por fase y la tabla gen a gen en lenguaje llano (artículos con su cita, tipo de evidencia, peso de cada voto y hacia dónde se inclinaba el LLM cuando no hay conclusión). Una persona experta puede cambiar a mano el signo de un gen (columna «Tu criterio»): la lectura se recalcula en pantalla con las reglas de la Fase 3 y el cambio no se guarda. El «Excel de resultados» acumula las rutas ejecutadas (hojas `Rutas` y `Genes`). Cada ruta escribe en `codigo/data/frontend/<GO_ID>/` y reutiliza las cachés y el registro del LLM. **Implementada.**
 
 ## Diagrama
 
@@ -57,6 +57,12 @@ flowchart TD
 
     B1["16. Benchmark<br/>codigo/evaluacion"]
 
+    subgraph F4["Fase 4 · Frontend · codigo/fase4_frontend"]
+        W1["17. Interfaz web<br/>src/App.tsx"]
+        W2["18. Puente HTTP local<br/>api_puente.py"]
+        W3["19. Excel de resultados<br/>src/ExcelResultados.tsx"]
+    end
+
     CIMUS --> E1
     GOF --> E2
     GOF --> E4
@@ -94,6 +100,13 @@ flowchart TD
     DEG -.->|"log2FC (solo sensibilidad)"| S1
     S1 --> SCO
 
+    W1 -->|"ruta elegida (genes up y down)"| W2
+    W2 -->|"Excels reducidos a la ruta"| E1
+    W2 -.->|"Fases 2 y 3 de esa ruta"| S1
+    S1 -->|"resultado de la ruta"| W2
+    W2 -->|"veredicto, genes, artículos y votos"| W1
+    W1 -->|"cada ruta ejecutada"| W3
+
     B1 -.->|"evalúa con el gold set"| L3
     B1 -.->|"calibra la confianza"| L5
 
@@ -103,6 +116,7 @@ flowchart TD
     class E1,E2,E3,E4,E5,E6,E7,E8 hecho
     class L1,L2,L3,L4,L5,L6,REG,RES,SCO hecho
     class S1,B1 hecho
+    class W1,W2,W3 hecho
 ```
 
 **Leyenda:** verde = implementado · amarillo = implementado en parte · rojo discontinuo = pendiente. Las flechas discontinuas indican lectura o escritura de ficheros y evaluación.
@@ -141,6 +155,14 @@ El orden de ejecución es el de `main.py`.
 |---|---|---|---|
 | 15 | **Agregación y Net Pathway Score** (`fase3_scoring/nps.py`, `fase3_scoring/config.py`) | Agregar los signos de todos los PMIDs de cada par gen–ruta y combinarlos con la dirección del gen para obtener la contribución neta a la ruta, con el log2 Fold-Change como análisis de sensibilidad. Sin red ni LLM, determinista. | Hecho según [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md): voto ponderado por `Confianza_final` y contexto, conflicto a `revisar` si la minoría pesa ⅓ o más, y `NPS` = media de signo × dirección, con todos los genes con el mismo peso. Con la tabla de log2FC de CIMUS (`tools_cimus/NK_cells_DESeq2_results.xlsx`) calcula además `NPS_log2FC` y marca `Sensible_al_peso` en las 20 rutas cuya lectura cambia. Escribe `codigo/data/fase3_scoring.xlsx` (hojas `Por_ruta`, `Por_par`, `Resumen` y `Abstracts_sin_signo`, con los artículos de los pares sin signo enlazados a PubMed para leerlos a mano). |
 | 16 | **Benchmark** (`codigo/evaluacion/`, [spec](specs/benchmark-gold-set.md)) | Evaluar los candidatos sobre un *gold set* etiquetado a ciegas, medir la calibración de la confianza y elegir los modelos de producción. | Hecho: *gold set* de 100 casos (65 de genes *up* y 35 de genes *down*) etiquetado a ciegas por anotadores Claude con doble etiqueta. Gemini y gpt-oss están completos (100 de 100). |
+
+### Fase 4 · Frontend ([instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md))
+
+| # | Componente | Responsabilidad | Estado |
+|---|---|---|---|
+| 17 | **Interfaz web** (`codigo/fase4_frontend/src/App.tsx`, React + Vite) | Subir un Excel de rutas sobreexpresadas y otro de infraexpresadas (uno por lista, con «Cambiar» y «Quitar»), elegir una ruta y confirmarla. Mostrar el veredicto (lectura, escala del NPS, genes que la sostienen y cuántos tendrían que cambiar para perderla), una tarjeta por fase y la tabla gen a gen en lenguaje llano. La columna «Tu criterio» deja a una persona experta fijar el signo de un gen y recalcula la lectura en pantalla con las reglas de `fase3_scoring/nps.py`, sin guardar nada. Tema oscuro o claro. | Hecho. |
+| 18 | **Puente HTTP local** (`codigo/fase4_frontend/api_puente.py`) | `POST /ejecutar-ruta` lanza en un hilo las Fases 1 → 2 → 3 con los Excels reducidos a la ruta (sin tocar el código de las fases: redirige sus rutas de entrada y salida) y `GET /estado` informa de la fase en curso y del resultado. Devuelve, además de las hojas de la Fase 3, los artículos de cada gen con su cita, el tipo de evidencia, el peso de cada voto y lo que contestó el LLM. Una ruta a la vez; escribe en `codigo/data/frontend/<GO_ID>/`. | Hecho. |
+| 19 | **Excel de resultados** (`codigo/fase4_frontend/src/ExcelResultados.tsx`) | Acumular en un Excel elegido por la persona (vacío o con rutas ya buscadas) una fila por ruta ejecutada en la hoja `Rutas` y sus genes en `Genes`; si la ruta ya estaba, se actualiza. En Chrome y Edge escribe directamente en el fichero; en otros navegadores, con «Descargar». Limpiar, quitar una ruta y vista previa. | Hecho. |
 
 ## Flujo de principio a fin
 

@@ -133,6 +133,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
   | [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md) | Agregación de los artículos de cada par y *Net Pathway Score* de cada ruta (Fase 3). |
 
 - **Limitaciones conocidas:** [`docs/limitacion-pares-sin-abstract.md`](docs/limitacion-pares-sin-abstract.md) (pares gen–ruta sin ningún _abstract_).
+- **Interfaz web (Fase 4):** [`codigo/fase4_frontend/instrucciones_uso_frontend.md`](codigo/fase4_frontend/instrucciones_uso_frontend.md) (arranque, uso, Excel de resultados y criterio experto).
 - **KPIs:** [`docs/kpis.md`](docs/kpis.md) (tiempo, tokens, recursos y resultado para una ruta, para el Excel completo y a mano).
 - **Gestión de tareas:** [`DOR.md`](DOR.md) (cuándo una tarea puede empezar), [`DOD.md`](DOD.md) (cuándo está terminada) y [`TABLERO.md`](TABLERO.md) (ciclo del tablero, sistema de bloqueos y revisión en cada reunión). Plantillas de issue en [`docs/plantillas-issue/`](docs/plantillas-issue/).
 
@@ -175,7 +176,8 @@ entregas/cu-01-reinterpretacion-biologica/
     │   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, gene2pubmed, UniProt y su caché.
     ├── fase2_inferencia/              # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
     ├── fase3_scoring/                 # Fase 3: signo de cada par (gen, ruta) y Net Pathway Score de cada ruta.
-    ├── fase4_frontend/                # Fase 4: interfaz web (React + Vite) que ejecuta una ruta entera (Fases 1-3) a través de un puente HTTP local.
+    ├── fase4_frontend/                # Fase 4: interfaz web (React + Vite) que ejecuta una ruta entera (Fases 1-3) a través de un puente HTTP local
+    │                                  #   (api_puente.py), con criterio experto y Excel de resultados que acumula las rutas.
     ├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
     ├── tests/                         # Pruebas con pytest, sin red (python -m pytest desde codigo/).
     ├── tools_cimus/                   # Material de CIMUS: rutas enriquecidas (entrada de la Fase 1) y tabla de log2FC (sensibilidad de la Fase 3).
@@ -195,6 +197,7 @@ Desde esta carpeta (`entregas/cu-01-reinterpretacion-biologica/`), con Python 3 
 2. **Fase 1:** `python codigo/fase1_ingesta/main.py`. Lee los Excels de CIMUS (`codigo/tools_cimus/NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`) y escribe `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx`. Con el Excel completo, la primera ejecución descarga el OBO, el GAF y unos 33.900 _abstracts_ (casi una hora); con las cachés tarda unos minutos. Con una sola ruta, el recorrido completo de las tres fases tarda unos 2,4 min ([`docs/kpis.md`](docs/kpis.md)).
 3. **Fase 2:** desde `codigo/`, `python -m fase2_inferencia ejecutar`. Escribe `codigo/data/fase2_resultados.xlsx`. Si se agota el límite diario de un modelo, basta con volver a lanzar el mismo comando. Sin llamar a ningún modelo, `python -m fase2_inferencia CD7` muestra la primera llamada que se enviaría para un gen.
 4. **Fase 3:** desde `codigo/`, `python -m fase3_scoring`. Lee las salidas de las Fases 1 y 2 y escribe `codigo/data/fase3_scoring.xlsx` en unos segundos, sin red. Si existe `codigo/tools_cimus/NK_cells_DESeq2_results.xlsx`, lo usa solo para la sensibilidad (`NPS_log2FC`); un tercer argumento cambia ese fichero, o `ninguno` lo omite.
-5. **Benchmark:** desde `codigo/`, `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
-6. **Pruebas:** desde `codigo/`, `python -m pytest`. No usan la red ni las claves de `.env`.
+5. **Fase 4 (interfaz web):** desde `codigo/`, `python fase4_frontend/api_puente.py` (puente con las fases); y desde `codigo/fase4_frontend/`, `npm install` la primera vez y `npm run dev`, que abre la interfaz en `http://localhost:5173/`. Allí se suben los Excels de rutas, se elige una ruta y se ejecuta entera ([instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)).
+6. **Benchmark:** desde `codigo/`, `python evaluacion/evaluar_gold.py`, con el uso descrito en la [spec del benchmark](specs/benchmark-gold-set.md).
+7. **Pruebas:** desde `codigo/`, `python -m pytest`. No usan la red ni las claves de `.env`.
 

@@ -15,7 +15,7 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 | `codigo/fase1_ingesta/` | **Fase 1 · Ingesta.** Excels de CIMUS → pares → GAF de GO → PMIDs → abstracts → `fase1_dataset_abstracts.xlsx`. Usa imports planos (`import config`). |
 | `codigo/fase2_inferencia/` | **Fase 2 · Inferencia.** Preguntas (gen, PMID, proceso núcleo) → dos LLM → validación → contraste → `codigo/data/fase2_resultados.xlsx`. Es un paquete: se ejecuta con `python -m fase2_inferencia` desde `codigo/`. Lee la Fase 1 a través del puente `_fase1.py`. |
 | `codigo/fase3_scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m fase3_scoring` desde `codigo/`; los umbrales están en `fase3_scoring/config.py`. |
-| `codigo/fase4_frontend/` | **Fase 4 · Frontend.** Interfaz web (React + Vite) y `api_puente.py`, que ejecuta una ruta entera (Fases 1 → 2 → 3) y escribe en `codigo/data/frontend/<GO_ID>/` ([instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)). |
+| `codigo/fase4_frontend/` | **Fase 4 · Frontend.** Interfaz web (React + Vite: `src/App.tsx`, `src/ExcelResultados.tsx`, `src/comun.ts`; colores en `src/index.css`) y `api_puente.py`, que ejecuta una ruta entera (Fases 1 → 2 → 3) y escribe en `codigo/data/frontend/<GO_ID>/`. No toca el código de las fases: redirige sus rutas de entrada y salida ([instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)). |
 | `codigo/evaluacion/` | Benchmark: gold set, guía de etiquetado, `evaluar_gold.py`, `seleccionar_gold.py` y `buscar_neutros.py`. |
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
 | `codigo/tools_cimus/` | Entrada original de CIMUS: rutas enriquecidas (únicos Excels versionados) y tabla de log2FC (`NK_cells_DESeq2_results.xlsx`, se reparte dentro del equipo y no se sube). |
@@ -37,6 +37,8 @@ python -m fase2_inferencia ejecutar [principal] [secundario|ninguno] [gen] [GO] 
 python -m fase3_scoring [excel_fase1] [excel_fase2] [log2fc|ninguno]   # Fase 3, sin red (segundos)
 python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
+python fase4_frontend/api_puente.py     # Fase 4: puente con las fases (http://127.0.0.1:8000)
+cd fase4_frontend && npm install && npm run dev   # Fase 4: interfaz web (http://localhost:5173/)
 ```
 
 * **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta.
@@ -70,7 +72,7 @@ python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-se
 ## Cómo trabajar en este repositorio
 * **Idioma:** el código, los comentarios, la documentación y los commits van en español. Solo el prompt al LLM va en inglés.
 * **Estilo:** imita el código que lo rodea: nombres en español, docstrings cortas que dicen el *porqué*, sin capas de abstracción innecesarias. Los parámetros ajustables van en `fase1_ingesta/config.py`, `fase2_inferencia/esquema.py` (los modelos y sus límites, en `cliente.py:MODELOS`) o `fase3_scoring/config.py`, no repartidos por el código.
-* **Pruebas:** todo cambio de comportamiento lleva su prueba en `codigo/tests/`, sin red: las APIs se simulan con `monkeypatch` y los modelos con `ClienteSimulado`. `python -m pytest` tiene que pasar antes de cualquier commit.
+* **Pruebas:** todo cambio de comportamiento lleva su prueba en `codigo/tests/`, sin red: las APIs se simulan con `monkeypatch` y los modelos con `ClienteSimulado`. `python -m pytest` tiene que pasar antes de cualquier commit. En la Fase 4, además, `npx tsc -b` y `npx eslint src` desde `codigo/fase4_frontend/`.
 * **Specs:** los criterios de aceptación son verificables y llevan `[x] ✅` y la prueba que los cubre cuando se cumplen. Si cambias el comportamiento, actualiza la spec, el ADR y `ARCHITECTURE.md` en el mismo commit.
 * **Documentación:** describe solo el estado actual, sin versiones antiguas ni históricos. Las cifras de las Fases 1, 2 y 3 son las de la ejecución de referencia del 2026-11-13, indicando la fecha; las del *gold set* y el benchmark, de la Fase 1 del 2026-11-09.
 * **No toques una fase que no te han pedido:** un cambio en la Fase 1 altera el Excel del que dependen la Fase 2, el gold set y el benchmark.

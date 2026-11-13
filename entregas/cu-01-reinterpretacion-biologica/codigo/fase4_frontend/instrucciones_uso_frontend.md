@@ -1,8 +1,10 @@
 # Instrucciones de uso · Fase 4 (frontend)
 
-Interfaz web para ejecutar **una ruta** de principio a fin: se elige la ruta, se confirma y se ejecutan seguidas las
-Fases 1, 2 y 3. Al terminar muestra la lectura de la ruta (NPS), la aportación de cada gen y el Excel de la Fase 3.
-No se pueden lanzar las fases por separado: para eso está la línea de comandos (`AGENTS.md`).
+Interfaz web para ejecutar **una ruta** de principio a fin: se suben los Excels de rutas, se elige la ruta, se confirma
+y se ejecutan seguidas las Fases 1, 2 y 3. Al terminar muestra el veredicto de la ruta (NPS), cómo se llegó a él y la
+aportación de cada gen; una persona experta puede corregir el signo de un gen en pantalla, y el «Excel de resultados»
+va acumulando las rutas ejecutadas. No se pueden lanzar las fases por separado: para eso está la línea de comandos
+(`AGENTS.md`).
 
 ## 1. Requisitos
 
@@ -89,6 +91,16 @@ Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md
 
 ## 5. Ficheros
 
-Cada ruta escribe en `codigo/data/frontend/<GO_ID>/` (ignorado por git): los dos Excels de entrada reducidos,
+| Fichero | Contenido |
+|---|---|
+| `api_puente.py` | Puente HTTP con las Fases 1 → 2 → 3 (`/salud`, `/ejecutar-ruta`, `/estado`). |
+| `src/App.tsx` | Interfaz: Excels de rutas, elección y ejecución de la ruta, veredicto, tarjetas por fase, tabla de genes y «Tu criterio». |
+| `src/ExcelResultados.tsx` | Excel de resultados que acumula las rutas ejecutadas, con su vista previa. |
+| `src/comun.ts` | Utilidades compartidas: carga de SheetJS (desde el CDN, para leer y escribir Excel) y formatos. |
+| `src/index.css` | Paletas de colores del tema oscuro y del claro. |
+
+Para comprobar el código antes de un commit, desde `codigo/fase4_frontend/`: `npx tsc -b` y `npx eslint src`.
+
+**Salidas de cada ejecución.** Cada ruta escribe en `codigo/data/frontend/<GO_ID>/` (ignorado por git): los dos Excels de entrada reducidos,
 `fase1_dataset_abstracts.xlsx`, `fase2_resultados.xlsx` y `fase3_scoring.xlsx`. No pisa las salidas del Excel completo.
 Las cachés de la Fase 1 (`codigo/data/`) son compartidas.
