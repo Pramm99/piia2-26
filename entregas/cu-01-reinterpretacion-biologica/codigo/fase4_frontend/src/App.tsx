@@ -790,7 +790,7 @@ export default function App() {
                       <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 'bold', color: 'var(--c-2dd4bf)' }}>{r.GO_ID}</td>
                       <td style={{ padding: '8px 10px', color: 'var(--c-f1f5f9)' }}>{r.Descripcion}</td>
                       {[r.Genes_up, r.Genes_down].map((g, i) => (
-                        <td key={i} style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '11px', color: i === 0 ? 'var(--c-6ee7b7)' : 'var(--c-fda4af)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={g}>
+                        <td key={i} className="lista-genes" style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '12px', color: i === 0 ? 'var(--c-6ee7b7)' : 'var(--c-fda4af)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={g}>
                           {g ? <><strong>({genes(g).length})</strong> {g}</> : <span style={{ color: 'var(--c-475569)' }}>—</span>}
                         </td>
                       ))}

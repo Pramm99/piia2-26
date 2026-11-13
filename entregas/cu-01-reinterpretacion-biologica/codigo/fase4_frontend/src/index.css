@@ -29,35 +29,46 @@
   --c-38bdf8: #38bdf8;
 }
 
+/* Tema claro: textos casi negros y acentos oscuros, para que se lean bien sobre blanco */
 :root[data-tema="claro"] {
   --c-020617: #ffffff;
   --c-0f172a: #f1f5f9;
   --c-1e293b: #e2e8f0;
   --c-334155: #cbd5e1;
   --c-f8fafc: #0f172a;
-  --c-f1f5f9: #1e293b;
-  --c-e2e8f0: #1e293b;
-  --c-cbd5e1: #334155;
-  --c-94a3b8: #475569;
-  --c-64748b: #64748b;
-  --c-475569: #94a3b8;
-  --c-2dd4bf: #0d9488;
-  --c-5eead4: #0f766e;
+  --c-f1f5f9: #0f172a;
+  --c-e2e8f0: #0f172a;
+  --c-cbd5e1: #1e293b;
+  --c-94a3b8: #334155;
+  --c-64748b: #475569;
+  --c-475569: #64748b;
+  --c-2dd4bf: #0f766e;
+  --c-5eead4: #115e59;
   --c-14b8a6: #14b8a6;
   --c-0f766e: #0f766e;
-  --c-34d399: #059669;
-  --c-6ee7b7: #047857;
-  --c-059669: #059669;
-  --c-f87171: #dc2626;
-  --c-fb7185: #e11d48;
-  --c-fda4af: #be123c;
-  --c-be123c: #be123c;
-  --c-fbbf24: #b45309;
-  --c-b45309: #b45309;
-  --c-38bdf8: #0369a1;
+  --c-34d399: #047857;
+  --c-6ee7b7: #065f46;
+  --c-059669: #047857;
+  --c-f87171: #b91c1c;
+  --c-fb7185: #be123c;
+  --c-fda4af: #9f1239;
+  --c-be123c: #9f1239;
+  --c-fbbf24: #92400e;
+  --c-b45309: #92400e;
+  --c-38bdf8: #075985;
 }
 
 body {
   margin: 0;
   background-color: var(--c-020617);
+}
+
+/* Sobre blanco, el texto normal con el grosor por defecto se ve demasiado fino */
+:root[data-tema="claro"] body {
+  font-weight: 500;
+}
+
+/* Listas de genes de la tabla de rutas (monoespaciada y pequeña): más gruesa sobre blanco */
+:root[data-tema="claro"] .lista-genes {
+  font-weight: 600;
 }
