@@ -58,7 +58,12 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
      cuenta del NPS y el NPS pesado por log2FC;
    * una fila por gen: si está sobreexpresado o infraexpresado en NK, qué hace en el proceso, hacia dónde empuja la ruta, de dónde sale el signo
      y por qué. Al pulsarla se ven sus artículos (título con enlace a PubMed, conclusión, confianza y la frase citada);
-   * el botón **Descargar Excel de la Fase 3**.
+   * a la derecha de la tabla de genes, la columna **Tu criterio**: una persona experta puede decir que un gen activa,
+     inhibe o no cambia el proceso. La lectura, el NPS, el veredicto y la tarjeta de la Fase 3 se recalculan al momento
+     con las mismas reglas que `fase3_scoring/nps.py`, y un aviso compara el resultado automático con el que tiene los
+     cambios (**Deshacer mis cambios** los quita). Los cambios no se guardan ni pasan al Excel: una nueva ejecución
+     vuelve al resultado automático;
+   * el botón **Descargar Excel de la Fase 3** (siempre el resultado automático).
 
 ## 4. Qué hace el puente
 

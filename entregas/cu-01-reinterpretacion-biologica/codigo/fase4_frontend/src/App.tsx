@@ -84,6 +84,7 @@ interface GeneContribution {
   Origen: string;
   W_pos: number | null;
   W_neg: number | null;
+  Log2FC: number | null;
   Contribucion: number;
 }
 
@@ -190,6 +191,7 @@ const MOTIVO_TEXTO: Record<string, string> = {
   incoherencia_respuesta: 'La respuesta del LLM era incoherente.',
   json_invalido: 'La respuesta del LLM no se pudo leer.',
   LLM_y_revision: 'Gen con función doble conocida: se revisa siempre.',
+  criterio_experto: 'Cambiado a mano por una persona experta (solo en esta pantalla).',
 };
 
 // Lo que contestó el modelo antes de que el código decidiera (UMBRAL_VEREDICTO, fase2_inferencia/esquema.py)
@@ -250,6 +252,7 @@ const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
       </div>
     );
   }
+  if (g.Origen === 'Experto') return <span style={{ fontSize: '11px', color: 'var(--c-fbbf24)' }}>Criterio experto</span>;
   if (g.Origen !== 'LLM') return <span style={{ color: 'var(--c-475569)' }}>—</span>;
   const pos = Number(g.W_pos || 0);
   const neg = Number(g.W_neg || 0);
@@ -274,10 +277,55 @@ const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
   );
 };
 
+// Signo que puede fijar a mano una persona experta. Solo cambia lo que se ve en esta pantalla: no se guarda,
+// no pasa al Excel y una nueva ejecución vuelve al resultado automático.
+type Criterio = '+1' | '-1' | 'neutro';
+
+const aplicarCriterio = (pares: GeneContribution[], criterio: Record<string, Criterio>): GeneContribution[] =>
+  pares.map((g) => {
+    const s = criterio[g.Gen];
+    if (!s) return g;
+    const direccion = g.Direccion === 'up' ? 1 : -1;
+    return {
+      ...g, Signo_par: s, Estado_par: 'resuelto', Origen: 'Experto', Motivos: 'criterio_experto',
+      Contribucion: s === 'neutro' ? 0 : (s === '+1' ? 1 : -1) * direccion,
+    };
+  });
+
+// La misma cuenta que fase3_scoring/nps.py (tabla_rutas y _lectura), para la ruta con los cambios aplicados
+const recalcularRuta = (r: PathwayResult, pares: GeneContribution[]): PathwayResult => {
+  const resueltos = pares.filter((g) => g.Estado_par === 'resuelto');
+  const conSigno = resueltos.filter((g) => g.Signo_par === '+1' || g.Signo_par === '-1');
+  const neutros = resueltos.filter((g) => g.Signo_par === 'neutro');
+  const cobertura = pares.length ? (conSigno.length + neutros.length) / pares.length : 0;
+  const lectura = (v: number | null) => {
+    if (v === null || conSigno.length < MIN_PARES_CON_SIGNO || cobertura < MIN_COBERTURA) return 'insuficiente';
+    return v >= UMBRAL_NPS ? 'activada' : v <= -UMBRAL_NPS ? 'inhibida' : 'mixta';
+  };
+  const peso = (g: GeneContribution) => (g.Log2FC === null || g.Log2FC === undefined ? 1 : Math.abs(Number(g.Log2FC)));
+  const suma = (f: (g: GeneContribution) => number) => conSigno.reduce((a, g) => a + f(g), 0);
+  const nps = conSigno.length ? suma((g) => Number(g.Contribucion)) / conSigno.length : null;
+  const conLog2fc = Boolean(r.Lectura_log2FC);
+  const npsFc = conLog2fc && conSigno.length ? suma((g) => Number(g.Contribucion) * peso(g)) / suma(peso) : null;
+  const redondear = (v: number | null) => (v === null ? null : Math.round(v * 1000) / 1000);
+  const lec = lectura(nps);
+  const lecFc = conLog2fc ? lectura(npsFc) : '';
+  return {
+    ...r,
+    NPS: redondear(nps), Lectura: lec, NPS_log2FC: redondear(npsFc), Lectura_log2FC: lecFc,
+    Sensible_al_peso: conLog2fc ? (lec !== lecFc ? 'sí' : 'no') : '',
+    n_activan: pares.filter((g) => Number(g.Contribucion) > 0).length,
+    n_inhiben: pares.filter((g) => Number(g.Contribucion) < 0).length,
+    n_pendiente: pares.filter((g) => g.Estado_par === 'pendiente').length,
+    Cobertura: Math.round(cobertura * 1000) / 1000,
+  };
+};
+
 const efectoTexto = (c: number) => (c > 0 ? 'Empuja hacia activada' : c < 0 ? 'Empuja hacia inhibida' : 'No cuenta');
 
 const fuenteTexto = (g: GeneContribution, d?: DetalleGen) => {
   if (g.Origen === 'GO') return 'Gene Ontology';
+  if (g.Origen === 'Experto') return 'Criterio experto';
   if (g.Origen === 'Ig') return 'Inmunoglobulina';
   const n = d?.articulos.length || 0;
   return n ? `${n} artículo${n > 1 ? 's' : ''}` : '—';
@@ -316,7 +364,7 @@ const ChipGen = ({ g, onClick }: { g: GeneContribution; onClick: () => void }) =
   const pos = Number(g.W_pos || 0);
   const neg = Number(g.W_neg || 0);
   const debil = g.Origen === 'LLM' && Math.max(pos, neg) < MIN_PESO_EVIDENCIA;
-  const fuente = g.Origen === 'GO' ? 'GO' : g.Origen === 'LLM' ? 'artículos' : g.Origen === 'Ig' ? 'Ig' : '';
+  const fuente = g.Origen === 'GO' ? 'GO' : g.Origen === 'LLM' ? 'artículos' : g.Origen === 'Ig' ? 'Ig' : g.Origen === 'Experto' ? 'experto' : '';
   return (
     <button
       onClick={onClick}
@@ -442,6 +490,7 @@ export default function App() {
   const [feedback, setFeedback] = useState<{ type: 'info' | 'ok' | 'err'; msg: string } | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
+  const [criterio, setCriterio] = useState<Record<string, Criterio>>({});
   const inicioRef = useRef<number>(0);
 
   useEffect(() => {
@@ -471,6 +520,7 @@ export default function App() {
           const r: Resultado = d.resultado;
           setResultado(r);
           setAbierto(null);
+          setCriterio({});
           setCurrentStep(4);
           setIsRunning(false);
           const pend = r.llm.pendientes
@@ -518,6 +568,15 @@ export default function App() {
     () => (resultado ? resultado.pares.filter((p) => p.GO_ID === rutaRes?.GO_ID) : []),
     [resultado, rutaRes]
   );
+
+  // Resultado con el criterio de la persona experta (si no ha cambiado nada, el automático tal cual)
+  const cambios = Object.keys(criterio);
+  const paresVista = useMemo(() => aplicarCriterio(paresRes, criterio), [paresRes, criterio]);
+  const rutaVista = useMemo(
+    () => (rutaRes && Object.keys(criterio).length ? recalcularRuta(rutaRes, paresVista) : rutaRes),
+    [rutaRes, paresVista, criterio]
+  );
+  const automatico = useMemo(() => Object.fromEntries(paresRes.map((g) => [g.Gen, g])), [paresRes]);
 
   const NOMBRE_LISTA = { up: 'rutas sobreexpresadas (upregulated)', down: 'rutas infraexpresadas (downregulated)' };
 
@@ -573,6 +632,7 @@ export default function App() {
       inicioRef.current = Date.now();
       setSegundos(0);
       setResultado(null);
+      setCriterio({});
       setCurrentStep(1);
       setIsRunning(true);
       setFeedback({ type: 'info', msg: `Ejecutando ${rutaSel.GO_ID} (${rutaSel.Descripcion}): Fases 1 → 2 → 3...` });
@@ -838,13 +898,27 @@ export default function App() {
                   style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--c-14b8a6)', color: 'var(--c-020617)', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
                 >
                   <Download size={13} />
-                  <span>Descargar Excel de la Fase 3</span>
+                  <span>Descargar Excel de la Fase 3{cambios.length > 0 && ' (automático, sin tus cambios)'}</span>
                 </button>
               </div>
 
+              {cambios.length > 0 && (
+                <div style={{ border: '1px dashed var(--c-fbbf24)', borderRadius: '10px', padding: '10px 14px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--c-cbd5e1)', lineHeight: 1.5 }}>
+                  <span>
+                    ✎ Has cambiado a mano {cambios.length === 1 ? '1 gen' : `${cambios.length} genes`} ({cambios.join(', ')}). Resultado automático:{' '}
+                    <strong style={{ color: colorLectura(rutaRes.Lectura) }}>{rutaRes.Lectura} (NPS {formatoNPS(rutaRes.NPS)})</strong>; con tus cambios:{' '}
+                    <strong style={{ color: colorLectura((rutaVista || rutaRes).Lectura) }}>{(rutaVista || rutaRes).Lectura} (NPS {formatoNPS((rutaVista || rutaRes).NPS)})</strong>.
+                    Solo vale para esta pantalla: no se guarda ni pasa al Excel, y una nueva ejecución vuelve al resultado automático.
+                  </span>
+                  <button onClick={() => setCriterio({})} style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', cursor: 'pointer' }}>
+                    Deshacer mis cambios
+                  </button>
+                </div>
+              )}
+
               <Veredicto
-                r={rutaRes}
-                pares={paresRes}
+                r={rutaVista || rutaRes}
+                pares={paresVista}
                 onGen={(gen) => {
                   setAbierto(gen);
                   setTimeout(() => document.getElementById(`gen-${gen}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
@@ -885,19 +959,19 @@ export default function App() {
                   </span>
                 </div>
 
-                <div style={{ ...tarjeta, borderColor: colorLectura(rutaRes.Lectura) }}>
-                  <span style={tituloTarjeta}>Fase 3 · Lectura de la ruta</span>
+                <div style={{ ...tarjeta, borderColor: colorLectura((rutaVista || rutaRes).Lectura) }}>
+                  <span style={tituloTarjeta}>Fase 3 · Lectura de la ruta{cambios.length > 0 && ' (con tus cambios)'}</span>
                   <span style={lineaTarjeta}>
-                    Lectura: <strong style={{ color: colorLectura(rutaRes.Lectura) }}>{rutaRes.Lectura} (NPS {formatoNPS(rutaRes.NPS)})</strong>.
+                    Lectura: <strong style={{ color: colorLectura((rutaVista || rutaRes).Lectura) }}>{(rutaVista || rutaRes).Lectura} (NPS {formatoNPS((rutaVista || rutaRes).NPS)})</strong>.
                   </span>
                   <span style={lineaTarjeta}>
-                    {rutaRes.n_activan} genes empujan hacia activada, {rutaRes.n_inhiben} hacia inhibida y {rutaRes.n_total - rutaRes.n_activan - rutaRes.n_inhiben} {rutaRes.n_total - rutaRes.n_activan - rutaRes.n_inhiben === 1 ? 'no cuenta' : 'no cuentan'}.
+                    {(rutaVista || rutaRes).n_activan} genes empujan hacia activada, {(rutaVista || rutaRes).n_inhiben} hacia inhibida y {(rutaVista || rutaRes).n_total - (rutaVista || rutaRes).n_activan - (rutaVista || rutaRes).n_inhiben} {(rutaVista || rutaRes).n_total - (rutaVista || rutaRes).n_activan - (rutaVista || rutaRes).n_inhiben === 1 ? 'no cuenta' : 'no cuentan'}.
                   </span>
-                  <span style={lineaTarjeta}>{explicacionNPS(rutaRes)}</span>
+                  <span style={lineaTarjeta}>{explicacionNPS((rutaVista || rutaRes))}</span>
                   <span style={notaTarjeta}>
-                    Pesando cada gen por su log2FC: NPS {formatoNPS(rutaRes.NPS_log2FC)} ({rutaRes.Lectura_log2FC || 'sin tabla'}).
-                    {rutaRes.Sensible_al_peso === 'sí' && <strong style={{ color: 'var(--c-fbbf24)' }}> La lectura cambia con ese peso: revisarla.</strong>}
-                    {rutaRes.n_pendiente > 0 && <strong style={{ color: 'var(--c-fbbf24)' }}> {rutaRes.n_pendiente} genes pendientes de la Fase 2.</strong>}
+                    Pesando cada gen por su log2FC: NPS {formatoNPS((rutaVista || rutaRes).NPS_log2FC)} ({(rutaVista || rutaRes).Lectura_log2FC || 'sin tabla'}).
+                    {(rutaVista || rutaRes).Sensible_al_peso === 'sí' && <strong style={{ color: 'var(--c-fbbf24)' }}> La lectura cambia con ese peso: revisarla.</strong>}
+                    {(rutaVista || rutaRes).n_pendiente > 0 && <strong style={{ color: 'var(--c-fbbf24)' }}> {(rutaVista || rutaRes).n_pendiente} genes pendientes de la Fase 2.</strong>}
                   </span>
                 </div>
               </div>
@@ -905,7 +979,8 @@ export default function App() {
               <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)' }}>
                 Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
                 El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
-                Pulsa un gen para ver sus artículos y el cálculo.
+                Pulsa un gen para ver sus artículos y el cálculo. En la última columna, <strong>Tu criterio</strong>, una persona experta puede
+                decir que un gen activa, inhibe o no cambia el proceso: el resultado se recalcula al momento, pero el cambio no se guarda.
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -920,10 +995,11 @@ export default function App() {
                       <th style={{ padding: '9px' }}>Fuente</th>
                       <th style={{ padding: '9px' }}>Peso de la evidencia</th>
                       <th style={{ padding: '9px' }}>Por qué</th>
+                      <th style={{ padding: '9px', color: 'var(--c-fbbf24)' }}>Tu criterio</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paresRes.map((g) => {
+                    {paresVista.map((g) => {
                       const d = resultado.genes[g.Gen];
                       const c = Number(g.Contribucion);
                       const abiertoGen = abierto === g.Gen;
@@ -937,16 +1013,42 @@ export default function App() {
                               {SIGNO_TEXTO[g.Signo_par] || g.Signo_par}
                               {g.Estado_par === 'revisar' && <span style={{ fontWeight: 'normal', color: 'var(--c-fbbf24)' }}> (a revisar)</span>}
                               {g.Estado_par === 'pendiente' && <span style={{ fontWeight: 'normal', color: 'var(--c-fbbf24)' }}> (pendiente)</span>}
+                              {criterio[g.Gen] && automatico[g.Gen] && (
+                                <div style={{ fontWeight: 'normal', fontSize: '11px', color: 'var(--c-fbbf24)' }}>
+                                  a mano; automático: {(SIGNO_TEXTO[automatico[g.Gen].Signo_par] || automatico[g.Gen].Signo_par).toLowerCase()}
+                                </div>
+                              )}
                             </td>
                             <td style={{ padding: '9px', fontWeight: 'bold', color: c > 0 ? 'var(--c-34d399)' : c < 0 ? 'var(--c-f87171)' : 'var(--c-64748b)' }}>{efectoTexto(c)}</td>
                             <td style={{ padding: '9px', color: 'var(--c-94a3b8)' }}>{fuenteTexto(g, d)}</td>
                             <td style={{ padding: '9px' }}><PesoEvidencia g={g} d={d} /></td>
                             <td style={{ padding: '9px', color: 'var(--c-cbd5e1)' }}>{motivos(g.Motivos).join(' ') || (g.Origen === 'LLM' ? 'Los artículos coinciden.' : '')}</td>
+                            <td style={{ padding: '9px' }} onClick={(e) => e.stopPropagation()}>
+                              <select
+                                value={criterio[g.Gen] || ''}
+                                onChange={(e) => {
+                                  const v = e.target.value as Criterio | '';
+                                  setCriterio((prev) => {
+                                    const nuevo = { ...prev };
+                                    if (v) nuevo[g.Gen] = v;
+                                    else delete nuevo[g.Gen];
+                                    return nuevo;
+                                  });
+                                }}
+                                title="Cambia el signo del gen solo en esta pantalla"
+                                style={{ padding: '4px 6px', fontSize: '12px', borderRadius: '6px', backgroundColor: 'var(--c-020617)', color: 'var(--c-f8fafc)', border: `1px solid ${criterio[g.Gen] ? 'var(--c-fbbf24)' : 'var(--c-334155)'}`, cursor: 'pointer' }}
+                              >
+                                <option value="">Automático</option>
+                                <option value="+1">Activa el proceso</option>
+                                <option value="-1">Inhibe el proceso</option>
+                                <option value="neutro">No lo cambia</option>
+                              </select>
+                            </td>
                           </tr>
                           {abiertoGen && (
                             <tr style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)' }}>
                               <td></td>
-                              <td colSpan={7} style={{ padding: '4px 9px 14px 9px' }}>
+                              <td colSpan={8} style={{ padding: '4px 9px 14px 9px' }}>
                                 {d?.GO && g.Origen === 'GO' && (
                                   <div style={{ fontSize: '12px', color: 'var(--c-cbd5e1)', marginBottom: '8px' }}>
                                     Anotación curada de Gene Ontology con evidencia experimental ({(d.GO.Evidencias || '—').split('|').map((c) => `${c}: ${EVIDENCIA_GO_TEXTO[c] || c}`).join(', ')}).
