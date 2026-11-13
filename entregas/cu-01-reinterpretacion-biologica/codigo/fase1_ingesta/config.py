@@ -69,6 +69,8 @@ MAX_PMIDS_EXTERNOS_POR_PAR = 10     # límite de abstracts por par para no satur
 # --- UniProt Swiss-Prot (función de la Ig completa) ---
 UNIPROT_API = "https://rest.uniprot.org/uniprotkb/search"
 UNIPROT_CACHE = os.path.join(DIR_DATA, "cache_uniprot.json")
+# Nombres de la proteína (UniProt y MyGene «other_names»), solo para el filtro de mención (fuentes/nombres.py)
+NOMBRES_CACHE = os.path.join(DIR_DATA, "cache_nombres_proteina.json")
 
 # --- Función de la Ig completa (UniProt Swiss-Prot) ---
 # Isotipos y piezas del complejo con función propia; el resto (segmentos V/D/J, cadenas κ/λ)

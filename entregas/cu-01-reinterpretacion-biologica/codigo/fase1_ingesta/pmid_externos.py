@@ -18,8 +18,9 @@ from abstracts import descargar_abstracts
 from config import EPMC_PROFUNDIDAD_CONSULTA, MAX_PMIDS_EXTERNOS_POR_PAR
 from fuentes import europepmc
 from fuentes.generif import datos_mygene
-from relevancia import (MIN_ALIAS, coincidencia, coincidencia_en_frase, menciona_gen, ngramas, patron_gen,
-                        vocabularios_rutas)
+from fuentes.nombres import nombres_proteina
+from relevancia import (MIN_ALIAS, coincidencia, coincidencia_en_frase, menciona_gen, ngramas, nombres_utiles,
+                        patron_gen, vocabularios_rutas)
 
 COLUMNAS = ["Gen", "GO_ID", "PMID", "GO_ID_anotado", "Directo", "Profundidad", "Evidencia", "Via_gen",
             "Fuente", "Tipo_relacion", "Polaridad_GO", "Experimental", "Frase_fuente",
@@ -97,7 +98,8 @@ def buscar_pmids_externos(pares_sin, desc_map, sinonimos):
     rutas = {r for _, r in pares_sin}
     print(f"🔎 Fuentes externas para {len(pares_sin)} pares sin abstract del GAF ({len(genes)} genes)")
     mg = datos_mygene(genes)
-    patrones = {g: patron_gen(g, mg[g]["Alias"], mg[g]["Nombre"]) for g in genes}
+    proteinas = nombres_utiles(nombres_proteina(genes))
+    patrones = {g: patron_gen(g, mg[g]["Alias"], mg[g]["Nombre"], proteinas[g]) for g in genes}
     vocab = vocabularios_rutas(desc_map, sinonimos, rutas)
     textos = _Textos()
 

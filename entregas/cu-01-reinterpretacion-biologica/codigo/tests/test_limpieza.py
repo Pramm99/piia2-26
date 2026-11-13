@@ -4,7 +4,7 @@ import pytest
 from abstracts import limpiar_texto
 from fase2_inferencia.limpieza import forma_comparacion, limpiar_abstract, normalizar_pmid, segmentar_frases
 from fase2_inferencia.respuesta import verificar_cita
-from relevancia import menciona_gen, patron_gen
+from relevancia import menciona_gen, nombres_utiles, patron_gen
 
 ABSTRACT = ("Human K12-Fc stimulated the up-regulation of CD25, CD54, and CD69 on human NK cells. "
             "NF-κB activation required IL-4Rα and CD70 binding.")
@@ -115,6 +115,24 @@ def test_mencion_con_griegas():
     # Variantes tipográficas y mayúsculas griegas: no rompen el filtro y valen como la letra normal
     assert menciona_gen("CD3ϵ chain and PKCϑ, ϰB, ϐ", patron_gen("CD3E"))
     assert menciona_gen("IΚBΖ levels", patron_gen("NFKBIZ", alias=("IKBZ",)))
+
+
+def test_mencion_por_nombre_de_proteina():
+    """Los nombres de la proteína cuentan como frase (griegas como palabra, «1alpha» = «1-alpha»), salvo los genéricos,
+    las siglas de una palabra (LIGHT) y los que comparten dos genes."""
+    utiles = nombres_utiles({
+        "CCL3": ["C-C motif chemokine 3", "Macrophage inflammatory protein 1-alpha", "MIP-1-alpha"],
+        "CTNNB1": ["Catenin beta-1", "Beta-catenin"], "FURIN": ["Furin", "Paired basic amino acid residue-cleaving enzyme"],
+        "CXCR6": ["C-X-C chemokine receptor type 6", "G protein-coupled receptor"], "TNFSF14": ["LIGHT"],
+        "GENA": ["Shared alpha protein"], "GENB": ["Shared alpha protein"]})
+    assert utiles["TNFSF14"] == () and utiles["GENA"] == () and "g protein coupled receptor" not in utiles["CXCR6"]
+    p = lambda g: patron_gen(g, proteinas=utiles[g])
+    assert menciona_gen("macrophage inflammatory protein-1alpha induces chemotaxis", p("CCL3"))
+    assert menciona_gen("MIP-1α levels rose", p("CCL3"))
+    assert menciona_gen("stabilization of β-catenin induces migration", p("CTNNB1"))
+    assert menciona_gen("the cellular protease furin cleaves the spike", p("FURIN"))
+    assert not menciona_gen("G protein-coupled receptor signalling", p("CXCR6"))
+    assert not menciona_gen("exposure to light", patron_gen("TNFSF14", proteinas=utiles["TNFSF14"]))
 
 
 def test_mencion_por_alias_y_nombre_completo():

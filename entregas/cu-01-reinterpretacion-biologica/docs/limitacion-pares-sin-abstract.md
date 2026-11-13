@@ -15,23 +15,23 @@ La Fase 1 busca abstracts en tres fuentes, en cascada:
 3. **Europe PMC dirigida:** el gen y un término de la ruta en la misma frase.
 
 Aun así, en la ejecución completa sobre los Excels de CIMUS (ejecución de referencia de la Fase 1, 2026-11-13)
-quedan sin evidencia **658 de 3.069 pares** (21 %, sin contar las inmunoglobulinas), que afectan a 124 genes y
-259 rutas. Las columnas son las dos listas de CIMUS: rutas de genes *up* («activadas») y de genes *down*
+quedan sin evidencia **642 de 3.069 pares** (21 %, sin contar las inmunoglobulinas), que afectan a 123 genes y
+252 rutas. Las columnas son las dos listas de CIMUS: rutas de genes *up* («activadas») y de genes *down*
 («suprimidas»).
 
 | | Activadas | Suprimidas | Total |
 |---|---|---|---|
-| Pares sin ningún abstract | 480 (de 2.386) | 178 (de 683) | 658 |
-| `anotado_sin_PMID`: el gen solo está en la ruta por anotaciones GO sin artículo | 266 | 122 | 388 |
-| `sin_anotacion_GAF`: el gen no tiene anotación a la ruta en el GAF actual | 214 | 56 | 270 |
+| Pares sin ningún abstract | 466 (de 2.386) | 176 (de 683) | 642 |
+| `anotado_sin_PMID`: el gen solo está en la ruta por anotaciones GO sin artículo | 265 | 122 | 387 |
+| `sin_anotacion_GAF`: el gen no tiene anotación a la ruta en el GAF actual | 201 | 54 | 255 |
 | `PMID_sin_abstract`: el par tiene PMIDs, pero ninguno tiene abstract en PubMed | 0 | 0 | 0 |
-| Con signo GO (solo como pista; ver § 2) | 98 | 38 | 136 |
+| Con signo GO (solo como pista; ver § 2) | 97 | 38 | 135 |
 
 La tercera causa existe en el código, pero en esta ejecución no aparece: las fuentes externas encontraron otro
 abstract para todos los pares cuyos PMIDs no lo tenían.
 
 Códigos de evidencia de las anotaciones de esos pares:
-- IEA (electrónica): 227
+- IEA (electrónica): 226
 - ISS (por similitud, casi siempre heredada de ratón, rata o vaca): 196
 - IBA (filogenética): 93
 - TAS de Reactome (la referencia es un ID de Reactome, no un PMID): 14
@@ -78,7 +78,7 @@ Opciones descartadas:
   verificar como cita.
 - **Usar la `Pista_GO` como resultado.** Ese signo sale de IEA, ISS o IBA, que es justo lo que el triaje no acepta.
 
-## 3. Posible resolución para reducir los 658
+## 3. Posible resolución para reducir los 642
 
 La investigación «Bases gratuitas para pares sin PMID» se probó con los 12 genes que no tenían ningún PMID en la
 ejecución del 2026-11-08: juntando todas las fuentes, hubo evidencia humana aceptable para 6 de ellos (unos 8 de
@@ -98,7 +98,7 @@ Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
 
   Ejemplo: `BCL2A1[tiab] AND "Apoptosis"[MeSH]`.
 - **Requisito:** una **tabla ruta GO → MeSH**, que no está publicada. Hay que construirla una vez para las rutas
-  afectadas (259, o menos si se agrupan por ancestro común). Se guardaría como un TSV versionado junto al código,
+  afectadas (252, o menos si se agrupan por ancestro común). Se guardaría como un TSV versionado junto al código,
   con una persona revisándola.
 - **Alcance en la prueba:** 3 de los 12 genes (ACP5, BCL2A1, MAP2K3).
 - **Coste:** unas 2 peticiones por gen y ruta, con caché. Sin clave de NCBI, el límite es de 3 por segundo;
@@ -126,7 +126,7 @@ Para estos pares, lo correcto es el UNKNOWN actual con su `Detalle`, no forzar u
 
 ## 4. Cómo medirlo
 
-Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 658 pares y medir dos cosas:
+Antes de dar por buena cada etapa, conviene hacer un piloto sobre los 642 pares y medir dos cosas:
 
 1. **Cobertura:** cuántos pares pasan de `sin_evidencia` a tener un abstract.
 2. **Precisión:** en una muestra de unos 30 pares por etapa, leída a mano, si el abstract trata del gen en el

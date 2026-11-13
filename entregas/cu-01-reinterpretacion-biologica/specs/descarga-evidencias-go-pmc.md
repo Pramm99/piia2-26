@@ -42,9 +42,9 @@ Un módulo de ingesta (Fase 1, `codigo/fase1_ingesta/`, `python codigo/fase1_ing
    Las tres primeras hojas llevan además la columna `Destino` del triaje.
 
 Cifras de la ejecución completa del 2026-11-13:
-* **Entrada y triaje:** 3.172 pares de entrada, de los que 103 son de inmunoglobulinas. Destinos: 332 `aceptar_GO`, 2.013 `LLM`, 66 `LLM_y_revision` y 658 `sin_evidencia`.
-* **PMIDs:** 1.547 pares con PMID en el GAF y 865 con PMID externo.
-* **Salida:** 1.463 PMIDs únicos y 5.092 filas en `Con_abstract`.
+* **Entrada y triaje:** 3.172 pares de entrada, de los que 103 son de inmunoglobulinas. Destinos: 332 `aceptar_GO`, 2.029 `LLM`, 66 `LLM_y_revision` y 642 `sin_evidencia`.
+* **PMIDs:** 1.547 pares con PMID en el GAF y 881 con PMID externo.
+* **Salida:** 1.489 PMIDs únicos y 5.176 filas en `Con_abstract`.
 
 ## Por qué
 El análisis transcriptómico a nivel de célula única clasifica los genes diferencialmente expresados en listas independientes sobreexpresadas (*Up*) e infraexpresadas (*Down*). Las bases de datos convencionales catalogan los genes de forma cualitativa (presencia o ausencia en la ruta), provocando que una misma ruta aparezca enriquecida en ambos sentidos sin explicar el efecto neto.
