@@ -58,7 +58,7 @@ const descargarBase64Excel = (b64: string, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-// Una ruta GO de CIMUS: puede estar en las dos listas (genes up y genes down)
+// Una ruta GO de CIMUS: puede estar en las dos listas (sobreexpresadas y infraexpresadas)
 interface Ruta {
   GO_ID: string;
   Descripcion: string;
@@ -304,7 +304,7 @@ export default function App() {
         base[id][campo] = String(r.geneID || '').trim();
       });
       setRutas(Object.values(base).filter((r) => r.Genes_up || r.Genes_down).sort((a, b) => a.GO_ID.localeCompare(b.GO_ID)));
-      const lista = campo === 'Genes_up' ? 'rutas activadas (genes up)' : 'rutas suprimidas (genes down)';
+      const lista = campo === 'Genes_up' ? 'rutas sobreexpresadas (upregulated)' : 'rutas infraexpresadas (downregulated)';
       setOrigenRutas((prev) => `${prev} · ${lista}: ${file.name}`);
       setSeleccion(null);
       setFeedback({ type: 'ok', msg: `${rows.length} ${lista} leídas de ${file.name}. Elige una ruta y ejecútala.` });
@@ -415,22 +415,22 @@ export default function App() {
                 <span>Elige la ruta que quieres ejecutar</span>
               </h2>
               <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
-                Marca una ruta y confirma: se ejecutan seguidas las Fases 1, 2 y 3 con sus genes up y down.
+                Marca una ruta y confirma: se ejecutan seguidas las Fases 1, 2 y 3 con sus genes sobreexpresados e infraexpresados.
                 {origenRutas && <> Rutas de: <strong style={{ color: '#cbd5e1' }}>{origenRutas}</strong>.</>}
               </p>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-              <label style={botonSubir} title="Excel de CIMUS con las rutas enriquecidas en genes up (columnas ID, Description y geneID)">
+              <label style={botonSubir} title="Excel de CIMUS con las rutas sobreexpresadas, upregulated (columnas ID, Description y geneID)">
                 <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleExcelUpload(e, 'Genes_up')} style={{ display: 'none' }} />
                 <UploadCloud size={15} color="#6ee7b7" />
-                <span>Subir rutas activadas (genes up)</span>
+                <span>Subir rutas sobreexpresadas (upregulated)</span>
               </label>
 
-              <label style={botonSubir} title="Excel de CIMUS con las rutas enriquecidas en genes down (columnas ID, Description y geneID)">
+              <label style={botonSubir} title="Excel de CIMUS con las rutas infraexpresadas, downregulated (columnas ID, Description y geneID)">
                 <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleExcelUpload(e, 'Genes_down')} style={{ display: 'none' }} />
                 <UploadCloud size={15} color="#fda4af" />
-                <span>Subir rutas suprimidas (genes down)</span>
+                <span>Subir rutas infraexpresadas (downregulated)</span>
               </label>
 
               <button
@@ -501,8 +501,8 @@ export default function App() {
                   <th style={{ padding: '8px 10px', width: '36px' }}></th>
                   <th style={{ padding: '8px 10px' }}>GO_ID</th>
                   <th style={{ padding: '8px 10px' }}>Descripción</th>
-                  <th style={{ padding: '8px 10px' }}>Genes up</th>
-                  <th style={{ padding: '8px 10px' }}>Genes down</th>
+                  <th style={{ padding: '8px 10px' }}>Genes sobreexpresados (up)</th>
+                  <th style={{ padding: '8px 10px' }}>Genes infraexpresados (down)</th>
                 </tr>
               </thead>
               <tbody>
@@ -605,7 +605,7 @@ export default function App() {
               </div>
 
               <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                Un gen empuja hacia <strong>activada</strong> si activa el proceso y sube en NK, o si lo inhibe y baja; hacia <strong>inhibida</strong> en los otros dos casos. Pulsa un gen para ver sus artículos.
+                Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos. Pulsa un gen para ver sus artículos.
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -631,7 +631,7 @@ export default function App() {
                           <tr onClick={() => setAbierto(abiertoGen ? null : g.Gen)} style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.5)', cursor: 'pointer', backgroundColor: abiertoGen ? 'rgba(20, 184, 166, 0.06)' : 'transparent' }}>
                             <td style={{ padding: '9px', color: '#64748b' }}>{abiertoGen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
                             <td style={{ padding: '9px', fontFamily: 'monospace', fontWeight: 'bold' }}>{g.Gen}</td>
-                            <td style={{ padding: '9px', color: g.Direccion === 'up' ? '#6ee7b7' : '#fda4af' }}>{g.Direccion === 'up' ? 'Sube' : 'Baja'}</td>
+                            <td style={{ padding: '9px', color: g.Direccion === 'up' ? '#6ee7b7' : '#fda4af' }}>{g.Direccion === 'up' ? 'Sobreexpresado' : 'Infraexpresado'}</td>
                             <td style={{ padding: '9px', fontWeight: 'bold', color: g.Signo_par === '+1' ? '#2dd4bf' : g.Signo_par === '-1' ? '#fb7185' : '#fbbf24' }}>
                               {SIGNO_TEXTO[g.Signo_par] || g.Signo_par}
                               {g.Estado_par === 'revisar' && <span style={{ fontWeight: 'normal', color: '#fbbf24' }}> (a revisar)</span>}
@@ -694,7 +694,7 @@ export default function App() {
             <div style={{ fontSize: '13px', color: '#e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div><span style={{ fontFamily: 'monospace', color: '#2dd4bf', fontWeight: 'bold' }}>{rutaSel.GO_ID}</span> · {rutaSel.Descripcion}</div>
               <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                {genes(rutaSel.Genes_up).length} genes up · {genes(rutaSel.Genes_down).length} genes down
+                {genes(rutaSel.Genes_up).length} sobreexpresados · {genes(rutaSel.Genes_down).length} infraexpresados
               </div>
               <div style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.5 }}>
                 Se ejecutan seguidas las tres fases: ingesta (GO y abstracts de PubMed), inferencia con Gemini (gpt-oss solo si Gemini falla) y Net Pathway Score.
