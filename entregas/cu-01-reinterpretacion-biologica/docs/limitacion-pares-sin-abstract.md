@@ -127,6 +127,18 @@ Fase 1 determinista, y solo actuaría sobre los pares que siguen vacíos.
     `codigo/fase1_ingesta/tabla_go_mesh.tsv` (hecha a mano; falta que la revise una persona) y como mucho 3 artículos
     por par, los más recientes que nombran el gen. Con 3 en vez de 10, los 326 pares siguen ganando abstract y las
     preguntas nuevas al LLM bajan de unas 1.150 a unas 630.
+- **Por qué hace falta el MeSH:** gene2pubmed liga cada gen a todos los artículos que lo tratan, sea cual sea el
+  tema. Sin filtro, un gen de estos pares tiene una mediana de 242 artículos humanos (p90 738; HIF1A, 9.765), y
+  serían los mismos para todas sus rutas (mediana de 2 rutas por gen, hasta 24). Con el MeSH de la ruta y
+  «Humans», la mediana baja a 1 artículo por par (p90 21) y el 41 % de los pares no tiene ninguno: el MeSH es lo
+  que convierte «artículos del gen» en «artículos del gen en este proceso».
+- **Coste medido (Fase 1 y Fase 2 del 2026-11-13):** esta fuente aporta 725 preguntas al LLM, de las que 177 (24 %)
+  dan signo; 129 pares pasan a tener signo. Una ejecución completa de la Fase 2 hace 920 llamadas a Gemini con
+  2,63 M tokens, de los que unas 275 llamadas y 0,71 M tokens corresponden a estas preguntas. A NCBI le hace una
+  petición por par (gen, consulta MeSH), con caché.
+- **Mantenimiento de la tabla:** una ruta que no está en `tabla_go_mesh.tsv` no se consulta. Con un Excel nuevo de
+  CIMUS, las rutas nuevas deben añadirse a la tabla (con su consulta MeSH comprobada en PubMed) antes de lanzar la
+  Fase 1; si no, sus pares sin evidencia se quedan así, sin aviso de error.
 
 ### Qué no se resolverá
 

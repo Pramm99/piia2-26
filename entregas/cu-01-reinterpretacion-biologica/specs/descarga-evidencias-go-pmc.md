@@ -26,7 +26,7 @@ Un módulo de ingesta (Fase 1, `codigo/fase1_ingesta/`, `python codigo/fase1_ing
 6. **Fuentes externas** (`pmid_externos.py`, `relevancia.py`, `fuentes/`): para los pares sin abstract utilizable en el GAF (sin PMID, o con PMIDs sin abstract en PubMed):
    * **NCBI GeneRIF**, vía MyGene.info: solo se acepta si el texto del GeneRIF nombra al gen.
    * **Búsqueda dirigida en Europe PMC**, para los que siguen vacíos: el gen y un término del subárbol de la ruta en la misma frase. Los alias en minúsculas no cuentan como mención.
-   * **NCBI gene2pubmed + MeSH**, para los que siguen vacíos: los artículos que NCBI liga al gen con la consulta MeSH de la ruta (`fase1_ingesta/tabla_go_mesh.tsv`, hecha a mano) y «Humans», de los más recientes a los más antiguos; entran los `MAX_PMIDS_GENE2PUBMED_POR_PAR` = 3 primeros cuyo título o abstract nombra al gen. Las rutas marcadas `sin_mesh` en la tabla no se consultan.
+   * **NCBI gene2pubmed + MeSH**, para los que siguen vacíos: los artículos que NCBI liga al gen con la consulta MeSH de la ruta (`fase1_ingesta/tabla_go_mesh.tsv`, hecha a mano) y «Humans», de los más recientes a los más antiguos; entran los `MAX_PMIDS_GENE2PUBMED_POR_PAR` = 3 primeros cuyo título o abstract nombra al gen. Las rutas marcadas `sin_mesh` en la tabla, y las que no están en ella, no se consultan: con un Excel nuevo de CIMUS hay que añadir sus rutas a la tabla antes de lanzar la Fase 1.
    * Como máximo `MAX_PMIDS_EXTERNOS_POR_PAR` = 10 PMIDs por par.
 
    Estas filas guardan su `Fuente`, la `Frase_fuente`, el `Termino_coincidente` y dónde coincide (`Coincide_en`).
