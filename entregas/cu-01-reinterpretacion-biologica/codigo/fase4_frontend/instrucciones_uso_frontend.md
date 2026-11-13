@@ -23,7 +23,7 @@ pip install -r requirements.txt
 
 ### Frontend (Node.js)
 
-Desde la carpeta `codigo/frontend/`:
+Desde la carpeta `codigo/fase4_frontend/`:
 
 ```bash
 npm install
@@ -45,7 +45,7 @@ El frontend incluye dos modos de trabajo:
 Para que la interfaz web pueda comunicarse con el pipeline en Python de manera local (sin bases de datos y guardando los resultados en ficheros locales dentro de `codigo/data/`, cumpliendo el ADR-001 y el ADR-004), abre una terminal en la carpeta `codigo/` y ejecuta:
 
 ```bash
-python frontend/api_puente.py
+python fase4_frontend/api_puente.py
 
 ```
 
@@ -53,7 +53,7 @@ python frontend/api_puente.py
 
 ### Paso B: Arrancar el Servidor Web (Frontend)
 
-Abre una **segunda terminal** situada en la carpeta `codigo/frontend/` y ejecuta:
+Abre una **segunda terminal** situada en la carpeta `codigo/fase4_frontend/` y ejecuta:
 
 ```bash
 npm run dev

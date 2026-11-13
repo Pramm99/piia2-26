@@ -318,7 +318,7 @@ export default function App() {
       return;
     }
     if (!backendOnline) {
-      setFeedback({ type: 'err', msg: 'El motor Python local no está conectado. Ejecuta "python frontend/api_puente.py" desde codigo/.' });
+      setFeedback({ type: 'err', msg: 'El motor Python local no está conectado. Ejecuta "python fase4_frontend/api_puente.py" desde codigo/.' });
       return;
     }
 

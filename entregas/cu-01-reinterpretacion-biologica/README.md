@@ -175,6 +175,7 @@ entregas/cu-01-reinterpretacion-biologica/
     │   └── fuentes/                   #   Clientes de MyGene/GeneRIF, Europe PMC, gene2pubmed, UniProt y su caché.
     ├── fase2_inferencia/              # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
     ├── fase3_scoring/                 # Fase 3: signo de cada par (gen, ruta) y Net Pathway Score de cada ruta.
+    ├── fase4_frontend/                # Fase 4: interfaz web (React + Vite) y puente HTTP local con las fases 1-3; aún sin conectar.
     ├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
     ├── tests/                         # Pruebas con pytest, sin red (python -m pytest desde codigo/).
     ├── tools_cimus/                   # Material de CIMUS: rutas enriquecidas (entrada de la Fase 1) y tabla de log2FC (sensibilidad de la Fase 3).
