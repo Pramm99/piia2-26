@@ -52,7 +52,7 @@ Durante el avance del proyecto el equipo descartó también dos piezas, porque n
 
 ## Referencias
 * **Documentación del proyecto:**
-  * `PlanesViables/OpcionA.md` y `PlanesViables/OpcionB.md` (análisis comparativo detallado de arquitecturas).
+  * [`docs/planes-viables/OpcionA.md`](../docs/planes-viables/OpcionA.md) y [`docs/planes-viables/OpcionB.md`](../docs/planes-viables/OpcionB.md) (análisis comparativo detallado de arquitecturas).
   * [ADR-002](adr-002-europe-pmc-api.md) (fuentes de evidencia), [ADR-003](adr-003-control-alucinaciones-unknown.md) (control de alucinaciones), [ADR-004](adr-004-persistencia-ficheros-locales.md) (persistencia en ficheros locales) y [ADR-005](adr-005-eleccion-modelo-coste-cero.md) (elección de los modelos).
 * **APIs y modelos:**
   * Documentación de la API REST de Europe PMC: [https://europepmc.org/RestfulWebService](https://europepmc.org/RestfulWebService)

@@ -22,7 +22,7 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 | `codigo/data/` | Cachés, registro de respuestas del LLM y salidas. **No se versiona.** |
 | `decisions/`, `specs/`, `docs/` | ADRs, specs funcionales, limitaciones conocidas y plantillas de issue. |
 | `DOR.md`, `DOD.md`, `TABLERO.md` | Cuándo empieza y cuándo termina una tarea, y cómo se gestionan el tablero y los bloqueos. |
-| `PlanesViables/` | Análisis previo de alternativas (opciones A y B). Es histórico: no se toca. |
+| `docs/planes-viables/` | Análisis previo de alternativas (opciones A y B). Es histórico: no se toca. |
 
 ## Cómo se ejecuta
 Desde `codigo/`. Está probado con Python 3.14. El entorno virtual es `codigo/pia_venv/`, aunque también vale el Python del sistema con `requirements.txt`.

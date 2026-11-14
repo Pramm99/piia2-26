@@ -145,7 +145,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 ## 6. Estructura del repositorio
 
-Todo el trabajo del equipo vive en esta carpeta, como pide el repositorio de la asignatura: la documentación, el código fuente (`codigo/`) y el análisis previo de alternativas (`PlanesViables/`). Las rutas de este documento son relativas a ella.
+Todo el trabajo del equipo vive en esta carpeta, como pide el repositorio de la asignatura: la documentación, el código fuente (`codigo/`) y el análisis previo de alternativas (`docs/planes-viables/`). Las rutas de este documento son relativas a ella.
 
 ```Plaintext
 entregas/cu-01-reinterpretacion-biologica/
@@ -172,8 +172,8 @@ entregas/cu-01-reinterpretacion-biologica/
 │   ├── scoring-net-pathway-score.md
 │   └── frontend-ejecucion-ruta.md
 │
-├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md), KPIs (kpis.md) y plantillas de issue (plantillas-issue/).
-├── PlanesViables/                 # Análisis de las dos arquitecturas candidatas (OpcionA.md, OpcionB.md; ADR-001).
+├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md), KPIs (kpis.md), plantillas de issue (plantillas-issue/)
+│                                  #   y análisis de las dos arquitecturas candidatas (planes-viables/OpcionA.md y OpcionB.md; ADR-001).
 │
 └── codigo/                        # Código fuente:
     ├── fase1_ingesta/                 # Fase 1: ingesta (GO, GAF, inmunoglobulinas, triaje del signo GO,
