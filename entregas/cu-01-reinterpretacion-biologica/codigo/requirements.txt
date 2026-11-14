@@ -1,4 +1,5 @@
 requests>=2.31
+urllib3>=1.26      # Retry con allowed_methods (fase1_ingesta/red.py); llega con requests, pero se importa directamente
 pandas>=2.0
 openpyxl>=3.1
 # Solo para las pruebas (python -m pytest desde codigo/)
