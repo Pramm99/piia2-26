@@ -136,6 +136,7 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
   | [`inferencia-llm.md`](specs/inferencia-llm.md) | Inferencia del signo con LLM y validación de la respuesta. |
   | [`benchmark-gold-set.md`](specs/benchmark-gold-set.md) | Gold set etiquetado a ciegas y benchmark de modelos. |
   | [`scoring-net-pathway-score.md`](specs/scoring-net-pathway-score.md) | Agregación de los artículos de cada par y *Net Pathway Score* de cada ruta (Fase 3). |
+  | [`frontend-ejecucion-ruta.md`](specs/frontend-ejecucion-ruta.md) | Interfaz web que ejecuta una ruta entera, la explica en lenguaje llano y acumula los resultados en un Excel (Fase 4). |
 
 - **Limitaciones conocidas:** [`docs/limitacion-pares-sin-abstract.md`](docs/limitacion-pares-sin-abstract.md) (pares gen–ruta sin ningún _abstract_).
 - **Interfaz web (Fase 4):** [`codigo/fase4_frontend/instrucciones_uso_frontend.md`](codigo/fase4_frontend/instrucciones_uso_frontend.md) (arranque, uso, Excel de resultados y criterio experto).
@@ -168,7 +169,8 @@ entregas/cu-01-reinterpretacion-biologica/
 │   ├── limpieza-abstracts-particion-genica.md
 │   ├── inferencia-llm.md
 │   ├── benchmark-gold-set.md
-│   └── scoring-net-pathway-score.md
+│   ├── scoring-net-pathway-score.md
+│   └── frontend-ejecucion-ruta.md
 │
 ├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md), KPIs (kpis.md) y plantillas de issue (plantillas-issue/).
 ├── PlanesViables/                 # Análisis de las dos arquitecturas candidatas (OpcionA.md, OpcionB.md; ADR-001).
