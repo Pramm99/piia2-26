@@ -173,7 +173,7 @@ entregas/cu-01-reinterpretacion-biologica/
 │   └── frontend-ejecucion-ruta.md
 │
 ├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md), KPIs (kpis.md), plantillas de issue (plantillas-issue/)
-│                                  #   y análisis de las dos arquitecturas candidatas (planes-viables/OpcionA.md y OpcionB.md; ADR-001).
+│                                  #   y análisis de las dos arquitecturas candidatas (planes-viables/opcion-a.md y opcion-b.md; ADR-001).
 │
 └── codigo/                        # Código fuente:
     ├── fase1_ingesta/                 # Fase 1: ingesta (GO, GAF, inmunoglobulinas, triaje del signo GO,
