@@ -172,7 +172,6 @@ entregas/cu-01-reinterpretacion-biologica/
 │
 ├── docs/                          # Limitaciones documentadas (limitacion-pares-sin-abstract.md), KPIs (kpis.md) y plantillas de issue (plantillas-issue/).
 ├── PlanesViables/                 # Análisis de las dos arquitecturas candidatas (OpcionA.md, OpcionB.md; ADR-001).
-├── src/                           # Esquema del código fuente (definicion-src.txt).
 ├── tests/                         # Vacío (test_pipeline.py): las pruebas están en codigo/tests/.
 │
 └── codigo/                        # Código fuente:
