@@ -53,6 +53,7 @@ Las tres participamos en la evaluación de los informes generados, la identifica
 - María Mira: maria.mira.calvete@rai.usc.es
 - María de Miguel: maria.de.miguel@rai.usc.es
 
+
 ## Estructura del proyecto
 
 La documentación del proyecto se encuentra en la carpeta `entregas/cu-18-proyecto-informes/` del repositorio de GitHub.
@@ -62,17 +63,30 @@ Su organización es la siguiente:
 ```text
 cu-18-proyecto-informes/
 ├── README.md
-└── specs/
-    ├── generacion-informes.md
+├── ARCHITECTURE.md
+├── specs/
+│   ├── generacion-informes.md
+│   ├── estrategias-generacion.md
+│   ├── evaluacion-informes.md
+│   └── comparacion-modelos.md
+└── decisions/
     ├── estrategias-generacion.md
-    ├── evaluacion-informes.md
-    └── comparacion-modelos.md
+    └── evaluacion-informes.md
 ```
 
-- **README.md:** presenta el proyecto, sus objetivos, la motivación, el alcance y la organización del equipo.
-- **specs/:** contiene las especificaciones de las funcionalidades que queremos desarrollar.
-  - **generacion-informes.md:** describe cómo se generarán los informes clínicos sintéticos mediante modelos de lenguaje.
-  - **estrategias-generacion.md:** define las diferentes estrategias de generación que vamos a estudiar.
-  - **evaluacion-informes.md:** establece cómo evaluaremos los informes generados y qué aspectos analizaremos.
-  - **comparacion-modelos.md:** explica cómo compararemos los resultados de los distintos modelos y estrategias.
-  
+### Documentación de arquitectura
+
+- [Arquitectura de la solución](ARCHITECTURE.md): diagrama, componentes y flujo de funcionamiento del sistema.
+
+### Decisiones de implementación
+
+- [ADR 1 - Estrategias de generación](decisions/estrategias-generacion.md): justificación de las estrategias utilizadas.
+- [ADR 2 - Evaluación de informes](decisions/evaluacion-informes.md): justificación de los métodos de evaluación seleccionados.
+
+### Especificaciones funcionales
+
+- [Generación de informes](specs/generacion-informes.md)
+- [Estrategias de generación](specs/estrategias-generacion.md)
+- [Evaluación de informes](specs/evaluacion-informes.md)
+- [Comparación de modelos](specs/comparacion-modelos.md)
+```
