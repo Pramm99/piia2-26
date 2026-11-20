@@ -21,8 +21,7 @@ flowchart TD
     H["Fase 1: Datos clinicos"]
     I["Fase 2: Redaccion del informe"]
     J["Informes sinteticos TXT"]
-    K["BLEU-4 y BERTScore"]
-    L["LLM-as-a-Judge"]
+    K["Evaluación automática del lenguaje (Métricas)"]
     M["Evaluacion medica"]
     N["Registro de resultados"]
     O["Comparacion final"]
@@ -38,10 +37,8 @@ flowchart TD
     G --> J
     I --> J
     J --> K
-    J --> L
     J --> M
     K --> N
-    L --> N
     M --> N
     N --> O
 ```
