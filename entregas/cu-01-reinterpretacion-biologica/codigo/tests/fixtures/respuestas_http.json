@@ -1,0 +1,32 @@
+{
+  "hgnc": {"response": {"docs": [{"symbol": "IGKC"}, {"symbol": "IGHM"}, {"symbol": "IGLC2"}]}},
+
+  "uniprot": {
+    "IGKC": {"primaryAccession": "P01834", "comments": [
+      {"commentType": "FUNCTION", "texts": [{"value": "Constant region of immunoglobulin light chains. Immunoglobulins, also known as antibodies, are membrane-bound or secreted glycoproteins produced by B lymphocytes."}]}]},
+    "IGHM": {"primaryAccession": "P01871", "comments": [
+      {"commentType": "FUNCTION", "texts": [{"value": "Constant region of immunoglobulin heavy chains. IgM is the first antibody produced in a humoral response."}]},
+      {"commentType": "SUBUNIT", "texts": [{"value": "Pentamer linked by the J chain."}]}]}
+  },
+
+  "mygene": {
+    "CCL5": {"name": "C-C motif chemokine ligand 5", "alias": ["RANTES", "SCYA5"],
+             "generif": [{"pubmed": 200, "text": "CCL5 enhances interferon-gamma production by NK cells."},
+                         {"pubmed": 201, "text": "A chemokine network shapes interferon-gamma production."}]},
+    "SELL": {"name": "selectin L", "alias": ["CD62L", "LYAM1"], "generif": []},
+    "CXCR4": {"name": "C-X-C motif chemokine receptor 4", "alias": "FB22"}
+  },
+
+  "epmc_busquedas": {
+    "SELL": [{"pmid": "300"}, {"pmid": "301"}]
+  },
+
+  "epmc_abstracts": {
+    "100": {"title": "NKG7 and cytotoxic granules", "abstractText": "<h4>Results</h4>NKG7 promotes natural killer cell mediated cytotoxicity in human NK cells."},
+    "104": {"title": "TIGIT restrains NK cells", "abstractText": "TIGIT engagement reduced cytotoxicity of human NK cells (p &lt; 0.01)."},
+    "105": {"title": "TIGIT blockade", "abstractText": "Loss of TIGIT signalling enhanced IFN-&gamma; release by NK cells."},
+    "200": {"title": "CCL5 in NK cells", "abstractText": "CCL5 enhances interferon-gamma production by human NK cells."},
+    "300": {"title": "L-selectin shedding", "abstractText": "L-selectin shedding was studied. SELL controls leukocyte migration to lymph nodes."},
+    "301": {"title": "Lymphocyte homing", "abstractText": "SELL is expressed on naive cells. Leukocyte migration was measured in a separate assay."}
+  }
+}

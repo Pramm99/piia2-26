@@ -1,0 +1,42 @@
+"""Fase 3 desde la línea de comandos (sin red ni LLM; se puede repetir cuantas veces se quiera):
+  python -m fase3_scoring [excel_fase1|-] [excel_fase2|-] [log2fc.xlsx|.csv|-|ninguno]
+Escribe codigo/data/fase3_scoring.xlsx (hojas Por_ruta, Por_par, Resumen y Abstracts_sin_signo). Por defecto lee
+codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx, codigo/data/fase2_resultados.xlsx y, si existe, la tabla de
+log2FC de CIMUS (config.FICHERO_LOG2FC), que solo cambia la sensibilidad (NPS_log2FC), no el NPS. Un «-» deja ese
+argumento por defecto; «ninguno» calcula sin log2FC.
+"""
+import sys
+from pathlib import Path
+
+# Como script suelto (python fase3_scoring/__main__.py): codigo/ en sys.path para importar los paquetes.
+if not __package__:
+    _aqui = Path(__file__).resolve().parent
+    sys.path = [p for p in sys.path if Path(p or ".").resolve() != _aqui]
+    sys.path.insert(0, str(_aqui.parent))
+
+from fase3_scoring import config
+from fase3_scoring.nps import calcular, escribir
+
+
+def main(argv) -> None:
+    arg = lambda i: argv[i] if len(argv) > i and argv[i] != "-" else None
+    log2fc = arg(3) or (config.FICHERO_LOG2FC if config.FICHERO_LOG2FC.exists() else None)
+    pares, rutas, res, abstracts = calcular(arg(1) or config.FICHERO_FASE1, arg(2) or config.FICHERO_FASE2,
+                                 None if log2fc == "ninguno" else log2fc)
+    print(pares.groupby(["Estado_par", "Signo_par"]).size().to_string())
+    print(rutas["Lectura"].value_counts().to_string())
+    sensibles = int((rutas["Sensible_al_peso"] == "sí").sum())
+    if sensibles:
+        print(f"⚖️ {sensibles} rutas cambian de lectura si cada gen pesa su |log2FC| (Sensible_al_peso).")
+    afectadas = int((rutas["n_pendiente"] > 0).sum())
+    if afectadas:
+        print(f"⏸️ {int(rutas['n_pendiente'].sum())} pares pendientes de la Fase 2 en {afectadas} rutas: "
+              "relanza la Fase 2 y repite el scoring.")
+    if len(abstracts):
+        print(f"📄 {len(abstracts)} artículos de {abstracts[['Gen', 'GO_ID']].drop_duplicates().shape[0]} pares sin signo, "
+              "con su enlace a PubMed, en la hoja Abstracts_sin_signo.")
+    print(f"Resultados en {escribir(pares, rutas, res, abstracts)}")
+
+
+if __name__ == "__main__":
+    main(sys.argv)

@@ -1,6 +1,6 @@
 ---
 description: Control de alucinaciones mediante un esquema de salida con signo, estado y motivos, reglas automáticas de verificación y contraste con Gene Ontology y entre dos modelos.
-state: Aceptado (validación implementada el 2026-11-08; contraste entre modelos y con GO, el 2026-11-10; veredicto obligado con UNKNOWN decidido por el código, el 2026-11-10)
+state: Aceptado (validación implementada el 2026-11-08; contraste entre modelos y con GO, el 2026-11-10; veredicto obligado con UNKNOWN decidido por el código, el 2026-11-10; sin confianza mínima para `coincide_polaridad_GO` y umbral sobre `confianza_modelo`, el 2026-11-11; el secundario solo como respaldo, el 2026-11-12)
 ---
 
 # ADR 003 - Control de Alucinaciones: Signo, Estado y Motivos en Lugar de Predicciones Forzadas
@@ -27,7 +27,7 @@ El sistema **nunca da por bueno un signo** cuando la evidencia no lo sostiene. S
 | `json_invalido` | Regla automática | `no_concluyente` | `UNKNOWN` |
 | `baja_confianza` | Regla automática: confianza por debajo de `UMBRAL_VEREDICTO` (80) y sin coincidencia con GO | `no_concluyente` | `UNKNOWN` |
 | `incoherencia_respuesta` | Regla automática: veredicto que llega al umbral pero trae una limitación | `revisar` | Se mantiene |
-| `coincide_polaridad_GO` | Contraste con GO: el veredicto sobre la ruta coincide con la `Polaridad_GO` de la anotación | `resuelto` | El de GO y el LLM, aunque la confianza no llegue al umbral |
+| `coincide_polaridad_GO` | Contraste con GO: el veredicto sobre la ruta coincide con la `Polaridad_GO` de la anotación | `resuelto` (o `revisar` si además hay `discrepancia_entre_modelos` o `incoherencia_respuesta`) | El de GO y el LLM, aunque la confianza no llegue al umbral |
 | `discrepancia_polaridad_GO` | Contraste con GO | `revisar` | Se mantiene (`UNKNOWN` si la confianza no llega al umbral) |
 | `discrepancia_entre_modelos` | Contraste entre modelos | `revisar` | El del modelo principal |
 | `respaldo_secundario` | El principal no respondió (cupo agotado, red) o su JSON no vale, y decide la respuesta válida del secundario | El que resulte de esa respuesta (no añade revisión) | El del modelo secundario |
@@ -47,26 +47,26 @@ El LLM **no puede abstenerse**: para cada pregunta devuelve siempre un veredicto
 | No hay `Polaridad_GO` y la confianza llega al umbral (`UMBRAL_VEREDICTO = 80`, configurable en `esquema.py`; fijado con la curva riesgo-cobertura del benchmark) | El veredicto del LLM: `+1`, `-1` o `neutro` (`resuelto`). Si además trae una limitación, `revisar` con `incoherencia_respuesta` |
 | No hay `Polaridad_GO` y la confianza no llega al umbral | `UNKNOWN`, `baja_confianza` más la limitación que dio el modelo (`no_concluyente`) |
 
-`neutro` significa que el abstract muestra que el gen **no cambia** el proceso («no afectó», «fue prescindible»). Es el mismo valor que la Fase 1 da a las inmunoglobulinas y cuenta como respuesta resuelta (suma 0 en el score). Un abstract que no trata el efecto del gen no es neutro: el modelo da una confianza baja y el código lo deja en `UNKNOWN`. **El prompt no menciona ningún umbral** (decisión del 2026-11-10): decirle al modelo dónde se corta sería una fuga de información que predispone su confianza. El umbral lo fija el código según la calidad medida en el benchmark. Como el registro guarda la respuesta cruda, cambiar el umbral solo exige volver a validar, sin llamar de nuevo a los modelos.
+`neutro` significa que el abstract muestra que el gen **no cambia** el proceso («no afectó», «fue prescindible»). Es el mismo valor que la Fase 1 da a las inmunoglobulinas y cuenta como respuesta resuelta: entra en la cobertura de la ruta, pero no en el NPS, que promedia solo los pares con signo ±1, y se informa como `Fraccion_neutros` (spec de scoring). Un abstract que no trata el efecto del gen no es neutro: el modelo da una confianza baja y el código lo deja en `UNKNOWN`. **El prompt no menciona ningún umbral** (decisión del 2026-11-10): decirle al modelo dónde se corta sería una fuga de información que predispone su confianza. El umbral lo fija el código según la calidad medida en el benchmark. Como el registro guarda la respuesta cruda, cambiar el umbral solo exige volver a validar, sin llamar de nuevo a los modelos.
 
 `UNKNOWN` queda reservado para los casos **sin evidencia utilizable**, o sin la confianza suficiente para darla por buena. Cuando hay evidencia pero otra fuente la contradice (Gene Ontology o el modelo secundario), se conserva el signo y el caso se marca para revisión experta.
 
 El control se organiza en tres capas:
 
-1. **Prompt** (`codigo/consulta_gen/prompt.py`). Pide las frases, el razonamiento y la confianza **antes** del veredicto. Explica cada trampa de dirección con un criterio explícito y enumera los campos del JSON con sus valores permitidos.
+1. **Prompt** (`codigo/fase2_inferencia/prompt.py`). Pide las frases, el razonamiento y la confianza **antes** del veredicto. Explica cada trampa de dirección con un criterio explícito y enumera los campos del JSON con sus valores permitidos.
    * El modelo siempre elige un veredicto. Las trampas se declaran como `limitacion` y bajan la confianza.
    * La confianza no tiene cifras ni umbral, solo una guía cualitativa de más a menos apoyo.
    * El modelo responde en inglés y el código traduce las limitaciones a los motivos de la tabla (`MOTIVO_MODELO_A_ADR`).
-2. **Reglas automáticas**, que no dependen del juicio del modelo (`codigo/consulta_gen/respuesta.py`):
+2. **Reglas automáticas**, que no dependen del juicio del modelo (`codigo/fase2_inferencia/respuesta.py`):
    * **Filtro previo** (`casos.py`): si el abstract no nombra al gen como palabra completa por su símbolo, sus alias de MyGene o su nombre completo, la pregunta se cierra con `no_menciona_gen` sin llamar al LLM. `CD7` no cuenta dentro de `CD70`, `CD-7` equivale a `CD7`, los alias de menos de 3 caracteres se ignoran y una forma escrita toda en minúsculas no cuenta como mención.
    * **Verificación de la cita:** el abstract va en frases numeradas (`[T]`, `[S1]`, `[S2]`…) y la cita debe estar dentro de la frase que indica el modelo. Se compara tras una normalización solo para comparar: minúsculas, todos los guiones unificados, letras griegas escritas como palabras (α→alpha, κ→kappa…) y sin puntuación. La cita debe tener **al menos 6 palabras** y coincidir con palabras enteras. El modelo da de 1 a 3 frases y basta con que una se verifique. Si ninguna se verifica, el signo pasa a `UNKNOWN` con `cita_no_verificada`, y se conserva el veredicto original del modelo (`signo_llm`) para auditoría.
    * **Formato:** un JSON no interpretable, un campo que falta o un valor fuera de los permitidos da `json_invalido`. También una confianza ausente o que no sea un entero de 0 a 100, y una lista de frases mal formada.
    * **Confianza y coherencia:** una confianza por debajo de `UMBRAL_VEREDICTO` (80) convierte el veredicto en `UNKNOWN` con `baja_confianza`, salvo que coincida con GO (capa 3). Un veredicto que llega al umbral pero trae una limitación se conserva, añade `incoherencia_respuesta` y queda en `revisar`.
-3. **Contraste con fuentes independientes** (`codigo/consulta_gen/resultados.py`):
+3. **Contraste con fuentes independientes** (`codigo/fase2_inferencia/resultados.py`):
    * **Gene Ontology**, fila a fila (gen, ruta, PMID). Solo se contrasta cuando las anotaciones de ese PMID dan una única `Polaridad_GO` (`+1` o `-1`). Se aplica la tabla de arriba; la coincidencia exige al menos una cita verificada.
-   * **Dos modelos:** cada pregunta se evalúa con un **modelo principal** y un **modelo secundario**, ambos gratuitos. El `signo` final es el del principal y se registran los dos (`Signo_principal` y `Signo_secundario`). Cualquier diferencia entre ellos (signos opuestos, o uno `UNKNOWN` y el otro no) añade el motivo `discrepancia_entre_modelos` y deja el caso en `revisar`. Una respuesta del secundario con `json_invalido` no cuenta como discrepancia: no dice nada del abstract, solo que ese modelo falló el formato. **Respaldo:** si el principal no responde (límite diario, red) o su JSON no vale, y el secundario sí tiene una respuesta válida, decide la del secundario, con el motivo `respaldo_secundario` y la columna `Modelo_respuesta`. Esa pregunta se queda sin contraste entre modelos, y `confianza_final` aplica el factor `sin_segundo`. Si ninguno de los dos ha respondido, el caso queda `pendiente`, nunca `UNKNOWN`. Qué modelo es el principal y cuál el secundario se fija en el [ADR-005](adr-005-eleccion-modelo-coste-cero.md), a partir del benchmark.
+   * **Dos modelos, el secundario solo como respaldo** (decisión del 2026-11-12): cada pregunta va al **modelo principal**; el **secundario**, también gratuito, solo la recibe si el principal falla. Si el principal responde, la pregunta no va al secundario, y una respuesta del secundario que esté en el registro (de una ejecución con `--contraste`) no se usa. **Respaldo:** si el principal no responde (límite diario, red) o su JSON no vale, y el secundario sí tiene una respuesta válida, decide la del secundario, con el motivo `respaldo_secundario` y la columna `Modelo_respuesta`. Esa pregunta se queda sin contraste entre modelos, y `confianza_final` aplica el factor `sin_segundo`. Si ninguno de los dos ha respondido, el caso queda `pendiente`, nunca `UNKNOWN`. **Contraste (solo para experimentos, `--contraste`):** los dos responden a todo, se registran los dos signos (`Signo_principal` y `Signo_secundario`) y cualquier diferencia (signos opuestos, o uno `UNKNOWN` y el otro no) añade `discrepancia_entre_modelos` y deja el caso en `revisar`; un `json_invalido` del secundario no cuenta. Un contraste parcial del 2026-11-12 (299 preguntas) mostró que gpt-oss casi nunca contradice a Gemini (1 de 109 signos), pero se abstiene en el 37 %: con contraste, esas abstenciones mandarían a revisión signos que Gemini da con confianza suficiente. Qué modelo es el principal y cuál el secundario se fija en el [ADR-005](adr-005-eleccion-modelo-coste-cero.md), a partir del benchmark.
 
-**Porcentaje final (`confianza_final`).** La confianza declarada suele estar inflada, así que el porcentaje que se muestra junto al signo y al motivo se corrige con señales que no dependen de lo que el modelo diga de sí mismo (`codigo/consulta_gen/confianza.py`):
+**Porcentaje final (`confianza_final`).** La confianza declarada suele estar inflada, así que el porcentaje que se muestra junto al signo y al motivo se corrige con señales que no dependen de lo que el modelo diga de sí mismo (`codigo/fase2_inferencia/confianza.py`):
 
 `confianza_final = confianza_modelo × factor_evidencia × factor_frase × factor_acuerdo`, entre 0 y 100.
 
@@ -74,7 +74,7 @@ El control se organiza en tres capas:
 * **Frase citada:** 0,9 si es el título o las frases S1-S2 (suelen ser introducción); 1,0 si es una frase posterior.
 * **Otro modelo:** 1,0 si da el mismo signo; 0,8 si da `UNKNOWN`; 0,5 si da el signo opuesto; 0,9 si no hay respuesta suya.
 
-Los factores son provisionales: salen de una prueba del 2026-11-09 con un prompt anterior (43 signos de tres modelos de API sobre 60 casos) como el cociente entre el acierto de cada grupo y el del mejor, acercados a 1 la mitad del camino porque las muestras son pequeñas. Cuando haya etiquetas de CIMUS se sustituirán por una regresión logística ajustada en el *gold set*. Solo los signos tienen `confianza_final`: un `UNKNOWN` se explica con su motivo. En una fila aceptada por `coincide_polaridad_GO` cuya confianza no llegaba al umbral, `confianza_final` se calcula sobre el veredicto aceptado y por eso sale baja. Ese porcentaje es también el peso propuesto para cada respuesta en la agregación por par gen-ruta (spec de scoring).
+Los factores son provisionales: salen de una prueba del 2026-11-09 con un prompt anterior (43 signos de tres modelos de API sobre 60 casos) como el cociente entre el acierto de cada grupo y el del mejor, acercados a 1 la mitad del camino porque las muestras son pequeñas. Se sustituirán por una regresión logística ajustada en el *gold set*. Solo los signos tienen `confianza_final`: un `UNKNOWN` se explica con su motivo. En una fila aceptada por `coincide_polaridad_GO` cuya confianza no llegaba al umbral, `confianza_final` se calcula sobre el veredicto aceptado y por eso sale baja. Ese porcentaje, multiplicado por un factor de contexto (especie y tipo celular), es el peso de cada respuesta en la agregación por par gen-ruta (spec de scoring).
 
 La normalización de comparación nunca se aplica al texto que lee el LLM: este recibe el abstract limpio pero con la nomenclatura intacta, como exige la spec de limpieza.
 
@@ -106,25 +106,24 @@ El sistema no da el `+1` que un modelo complaciente habría dado. Como el veredi
 5. **Las discrepancias son información, no ruido:** la polaridad de GO es curada por expertos y el segundo modelo es independiente del primero. Convertir sus desacuerdos en `UNKNOWN` descartaría justo los casos que más interesa que revise el experto. Cuando discrepan los dos modelos, se conserva el signo del principal, se registran ambas respuestas y el caso queda marcado para que el experto lo resuelva con toda la información.
 6. **La conclusión es del experto:** el sistema extrae y verifica evidencia; los casos `revisar` se entregan al profesional biomédico con las citas y los motivos.
 
-**Validación:** sobre el *gold set* se miden la **precisión de las respuestas dadas** (cuando el sistema da `+1`, `-1` o `neutro`, cuántas acierta), la **cobertura** (porcentaje de casos con estado `resuelto`) y el **recall de `UNKNOWN`** (cuántos casos no concluyentes según el experto detecta el sistema), además de la calibración de `confianza_modelo` y `confianza_final` (spec del benchmark). Medición provisional del 2026-11-10 sobre el *gold set* (100 casos: 65 de genes *up* y 35 de genes *down*), con umbral 80:
+**Validación:** sobre el *gold set* se miden la **precisión de las respuestas dadas** (cuando el sistema da `+1`, `-1` o `neutro`, cuántas acierta), la **cobertura** (porcentaje de casos en que el sistema no da `UNKNOWN`, incluidos los que quedan en `revisar`) y el **recall de `UNKNOWN`** (cuántos casos no concluyentes según el experto detecta el sistema), además de la calibración de `confianza_modelo` y `confianza_final` (spec del benchmark). Medición provisional del 2026-11-10 sobre el *gold set* (100 casos: 65 de genes *up* y 35 de genes *down*), con umbral 80:
 
 | Modelo | Exactitud | Precisión de los signos | Cobertura | Recall de `UNKNOWN` |
 |---|---|---|---|---|
 | Gemini 3.5 Flash-Lite | 84 % | 72 % | 40 % | 85 % |
 | gpt-oss-120b (Groq) | 85 % | 79 % | 34 % | 89 % |
 
-Las etiquetas son de anotadores Claude a ciegas; las cifras valdrán cuando etiquete CIMUS. Los umbrales mínimos se acordarán con CIMUS.
+Las etiquetas son de anotadores Claude a ciegas (el equipo decidió quedarse con ellas el 2026-11-11), así que el acierto medido puede estar inflado frente al de un experto humano.
 
 Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga la ejecución en los planes gratuitos; el filtro previo puede descartar abstracts que nombran el gen de forma no recogida en los alias (un error en la dirección segura, que se medirá en el benchmark); y la cobertura bajará frente a un sistema que siempre responde.
 
-### Pendiente de decidir
-* **Confianza mínima para `coincide_polaridad_GO`:** hoy se acepta cualquier confianza. En el benchmark, esta regla acepta 5 signos de Gemini por debajo del umbral y acierta 3; los 2 errores tenían confianza 0 y 30 y la etiqueta era `UNKNOWN`. En gpt-oss acepta 3 y acierta 1 (errores con confianza 30 y 70).
-* **Umbral sobre `confianza_final` en lugar de `confianza_modelo`:** en el benchmark el resultado es mixto:
-  * para Gemini, `confianza_final` separa algo mejor (AUROC de 0,76 frente a 0,72) y está mejor calibrada (ECE de 7 puntos frente a 15);
-  * para gpt-oss es al revés (AUROC de 0,66 frente a 0,74; ECE de 15 frente a 5);
-  * con 40 y 34 signos, ninguna de las diferencias es concluyente.
+**Sin confianza mínima para `coincide_polaridad_GO`** (decidido por el equipo el 2026-11-11): si el veredicto coincide con GO y tiene una cita verificada, se acepta con cualquier confianza. En el benchmark, esta regla acepta 5 signos de Gemini por debajo del umbral y acierta 3 (los 2 errores tenían confianza 0 y 30 y la etiqueta era `UNKNOWN`); en gpt-oss acepta 3 y acierta 1.
 
-  Se decidirá con las etiquetas de CIMUS y con los factores de `confianza_final` reajustados sobre respuestas que no se usaron para fijarlos.
+**El umbral se aplica a `confianza_modelo`, no a `confianza_final`** (decidido por el equipo el 2026-11-11). `confianza_modelo` decide si hay signo (≥ `UMBRAL_VEREDICTO`, 80) y `confianza_final` solo pesa ese signo en la agregación (spec de scoring). Motivos:
+* **Estabilidad:** `confianza_final` incluye el acuerdo con el otro modelo, y sin respuesta del secundario vale ×0,9 (`sin_segundo`). Como el secundario solo responde cuando falla el principal (8 de 2.464 preguntas en la ejecución completa), casi todos los signos llevan ese factor; un umbral sobre `confianza_final` penalizaría por igual a casi todos y dependería del modo de ejecución.
+* **Recorte:** sobre los 725 signos `+1`/`−1` que da el LLM en esa ejecución (hoja `Preguntas` de `fase2_resultados.xlsx`, Excel completo del 2026-11-13; todos con `confianza_modelo` entre 80 y 100, mediana 90, y `confianza_final` de mediana 76), `confianza_final` ≥ 80 quitaría 520 (72 %) y ≥ 70, 211 (29 %).
+* **Sin doble penalización:** el tipo de evidencia y la frase citada ya rebajan el peso del voto en el scoring; si decidieran también el umbral, contarían dos veces.
+* **El benchmark no la favorece:** para Gemini, `confianza_final` separa algo mejor (AUROC de 0,76 frente a 0,72; ECE de 7 puntos frente a 15), pero para gpt-oss es al revés (AUROC de 0,66 frente a 0,74; ECE de 15 frente a 5). Con 40 y 34 signos ninguna diferencia es concluyente, y sus factores se fijaron con un prompt anterior.
 
 ## Alternativas
 * **`UNKNOWN` simple, sin motivo:**
@@ -133,6 +132,8 @@ Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga 
   * *Motivo de descarte:* el corte depende del juicio de cada modelo y no se puede ajustar sin cambiar el prompt y volver a llamar.
 * **Usar la confianza declarada tal cual, sin umbral ajustado ni corrección:**
   * *Motivo de descarte:* la confianza verbalizada de los LLM está mal calibrada y tiende a ser excesiva (se concentra entre 80 y 100 aunque el modelo se equivoque). Por eso el umbral se fija con el benchmark y no en el prompt, y el porcentaje que se muestra es la `confianza_final`, cuya calibración se mide (fiabilidad, ECE, AUROC y curva riesgo-cobertura).
+* **Aplicar el umbral a `confianza_final`:**
+  * *Motivo de descarte:* depende de si el secundario ya ha respondido, recorta dos tercios de los signos con umbral 80 y penaliza dos veces el tipo de evidencia y la frase citada, que ya pesan en el scoring.
 * **Marcar `revisar` cuando la cita no se verifica, en lugar de `UNKNOWN`:**
   * *Motivo de descarte:* una cita que no está en el abstract es justo la señal de alucinación que se quiere bloquear; el equipo decidió tratarla como falta de evidencia.
 * **Convertir en `UNKNOWN` cualquier discrepancia (con GO o entre modelos):**
@@ -146,15 +147,15 @@ Aceptamos los compromisos asociados: duplicar las llamadas (dos modelos) alarga 
 
 ## Referencias
 * **Código del proyecto (estado actual):**
-  * `codigo/consulta_gen/respuesta.py`: validación de la respuesta (`_validar`), verificación de la cita, `UNKNOWN` forzado, `json_invalido`, `baja_confianza` e `incoherencia_respuesta`.
-  * `codigo/consulta_gen/esquema.py`: esquemas JSON estrictos (`ESQUEMA` / `ESQUEMA_LISTA`, `CAMPOS_CONTEXTO`), tabla de motivos y umbral (`UMBRAL_VEREDICTO`).
-  * `codigo/consulta_gen/prompt.py`: reglas del prompt.
-  * `codigo/consulta_gen/casos.py`: filtro previo `no_menciona_gen` (con `menciona_gen` de `extraer_info/relevancia.py`).
-  * `codigo/consulta_gen/limpieza.py`: `forma_comparacion()` y `segmentar_frases()`.
-  * `codigo/consulta_gen/resultados.py`: contraste entre modelos y con `Polaridad_GO`, y salida `fase2_resultados.xlsx`.
-  * `codigo/consulta_gen/confianza.py`: `confianza_final` y sus factores provisionales.
+  * `codigo/fase2_inferencia/respuesta.py`: validación de la respuesta (`_validar`), verificación de la cita, `UNKNOWN` forzado, `json_invalido`, `baja_confianza` e `incoherencia_respuesta`.
+  * `codigo/fase2_inferencia/esquema.py`: esquemas JSON estrictos (`ESQUEMA` / `ESQUEMA_LISTA`, `CAMPOS_CONTEXTO`), tabla de motivos y umbral (`UMBRAL_VEREDICTO`).
+  * `codigo/fase2_inferencia/prompt.py`: reglas del prompt.
+  * `codigo/fase2_inferencia/casos.py`: filtro previo `no_menciona_gen` (con `menciona_gen` de `fase1_ingesta/relevancia.py`).
+  * `codigo/fase2_inferencia/limpieza.py`: `forma_comparacion()` y `segmentar_frases()`.
+  * `codigo/fase2_inferencia/resultados.py`: contraste entre modelos y con `Polaridad_GO`, y salida `fase2_resultados.xlsx`.
+  * `codigo/fase2_inferencia/confianza.py`: `confianza_final` y sus factores provisionales.
   * `codigo/evaluacion/evaluar_gold.py`: métricas y calibración sobre el *gold set*.
-  * `codigo/extraer_info/polaridad.py`: cierre `sin_evidencia` de los pares sin abstract.
+  * `codigo/fase1_ingesta/polaridad.py`: cierre `sin_evidencia` de los pares sin abstract.
 * **Salidas estructuradas:**
   * Groq: [https://console.groq.com/docs/structured-outputs](https://console.groq.com/docs/structured-outputs)
   * Gemini API: [https://ai.google.dev/gemini-api/docs/structured-output](https://ai.google.dev/gemini-api/docs/structured-output)

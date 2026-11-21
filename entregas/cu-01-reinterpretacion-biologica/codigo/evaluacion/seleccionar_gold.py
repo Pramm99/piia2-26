@@ -24,7 +24,7 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 CODIGO = AQUI.parent
-sys.path.insert(0, str(CODIGO / "extraer_info"))
+sys.path.insert(0, str(CODIGO / "fase1_ingesta"))
 import config  # noqa: E402
 
 if len(sys.argv) > 2:  # mismos OBO y cachés que la ejecución de la Fase 1 que generó el Excel
@@ -35,8 +35,8 @@ sys.path.insert(0, str(CODIGO))
 
 import pandas as pd  # noqa: E402
 
-from consulta_gen.casos import construir_casos  # noqa: E402
-from consulta_gen.lectura import cargar_hoja, pendientes_de_llm  # noqa: E402
+from fase2_inferencia.casos import construir_casos  # noqa: E402
+from fase2_inferencia.lectura import cargar_hoja, pendientes_de_llm  # noqa: E402
 
 SEMILLA = 20261109
 MAX_POR_GEN = 5

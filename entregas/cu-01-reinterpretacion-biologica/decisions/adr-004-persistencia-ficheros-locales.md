@@ -1,6 +1,6 @@
 ---
 description: Persistencia mediante ficheros locales (cachés desechables y un registro JSONL de respuestas del LLM) en lugar de ejecución puramente en memoria o bases de datos.
-state: Aceptado (registro implementado el 2026-11-08 en codigo/consulta_gen/registro.py; dos ficheros y salida de la Fase 2 desde el 2026-11-10)
+state: Aceptado (registro implementado el 2026-11-08 en codigo/fase2_inferencia/registro.py; dos ficheros y salida de la Fase 2 desde el 2026-11-10)
 ---
 
 # ADR 004 - Persistencia en Ficheros Locales: Cachés Desechables y Registro de Respuestas del LLM
@@ -10,20 +10,22 @@ El pipeline **no usa bases de datos ni servicios de almacenamiento**. Guarda su 
 
 | Tipo | Ficheros | ¿Se puede borrar? |
 |---|---|---|
-| **Caché desechable** | Fase 1: `go-basic.obo`, `goa_human.gaf.gz`, `cache_abstracts.json` (título y abstract en crudo), `cache_mygene.json` (alias, nombre y GeneRIF), `cache_epmc_busquedas.json` (búsqueda dirigida en Europe PMC), `cache_uniprot.json` (función de las inmunoglobulinas) y `hgnc_inmunoglobulinas.json`. La Fase 2 reutiliza `cache_mygene.json` para los alias del gen | Sí: el resultado no cambia, solo tarda más en reconstruirse. |
-| **Artefacto intermedio regenerable** | `codigo/extraer_info/fase1_dataset_abstracts.xlsx` (salida de la Fase 1, entrada de la Fase 2) | Sí: se regenera a partir de las cachés. |
-| **Artefacto de salida regenerable** | `fase2_resultados.xlsx` (salida de la Fase 2, entrada del scoring) | Sí: se regenera desde el registro sin llamar a ningún modelo. |
+| **Caché desechable** | Fase 1: `go-basic.obo`, `goa_human.gaf.gz`, `cache_abstracts.json` (título y abstract en crudo), `cache_mygene.json` (alias, nombre y GeneRIF), `cache_epmc_busquedas.json` (búsqueda dirigida en Europe PMC), `cache_uniprot.json` (función de las inmunoglobulinas), `cache_nombres_proteina.json` (nombres de la proteína de UniProt y MyGene para el filtro de mención), `cache_gene2pubmed.json` (artículos ligados por gene2pubmed + MeSH) y `hgnc_inmunoglobulinas.json`. La Fase 2 reutiliza `cache_mygene.json` para los alias del gen y `cache_nombres_proteina.json` para el filtro | Sí, pero `go-basic.obo`, `goa_human.gaf.gz`, `cache_mygene.json`, `cache_nombres_proteina.json`, `cache_gene2pubmed.json` y `cache_epmc_busquedas.json` se rehacen con la versión actual de cada fuente, así que pueden cambiar los PMIDs elegidos ([ADR-002](adr-002-europe-pmc-api.md)). El resto no cambia el resultado: solo tarda más en reconstruirse. |
+| **Artefacto intermedio regenerable** | `codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx` (salida de la Fase 1, entrada de la Fase 2) | Sí: se regenera a partir de las cachés. |
+| **Artefacto de salida regenerable** | `fase2_resultados.xlsx` (salida de la Fase 2, entrada del scoring) y `fase3_scoring.xlsx` (salida del scoring). La interfaz web (Fase 4) escribe los de cada ruta en `codigo/data/frontend/<GO_ID>/`, junto con su Excel de la Fase 1 y los Excels de entrada reducidos | Sí: se regeneran desde el registro y los Excels sin llamar a ningún modelo. |
 | **Registro de respuestas del LLM** | `respuestas_llm.jsonl` y `llamadas_llm.jsonl` | **No**: es el resultado del experimento y no puede reconstruirse de forma idéntica. |
 
-El benchmark usa el mismo registro, uno por modelo, en `codigo/data/benchmark*/<modelo>/` (`respuestas_llm.jsonl` y `llamadas_llm.jsonl`). Al lado escribe `claves.json` (la clave de registro de cada caso del *gold set*), `prompts.json` (las frases de cada abstract) y `ejecuciones.jsonl` (una línea por ejecución, con llamadas, pendientes y tokens). Con ellos el informe se regenera sin la Fase 1 y sin llamar a los modelos.
+La interfaz web usa el mismo registro y las mismas cachés que la línea de comandos. Su «Excel de resultados», que acumula las rutas ejecutadas, es un fichero que elige la persona fuera de `codigo/data/`: lo escribe el navegador, no el pipeline.
+
+El benchmark usa el mismo registro, uno por modelo, en `codigo/data/benchmark/<modelo>/` (u otra carpeta con `--dir=<nombre>`) (`respuestas_llm.jsonl` y `llamadas_llm.jsonl`). Al lado escribe `claves.json` (la clave de registro de cada caso del *gold set*), `prompts.json` (las frases de cada abstract) y `ejecuciones.jsonl` (una línea por ejecución, con llamadas, pendientes y tokens). Con ellos el informe se regenera sin la Fase 1 y sin llamar a los modelos.
 
 El **registro de respuestas** sigue estas reglas:
-* **Dos ficheros, solo de añadido (*append-only*)**, escritos y volcados a disco en cuanto llega cada respuesta. Si la ejecución se corta, como mucho se pierde la llamada en curso. Una llamada lleva las preguntas de un gen, en las dos versiones del prompt:
-  * `llamadas_llm.jsonl`: **una línea por llamada**, con `id_llamada`, `version`, `modelo` (nombre corto), `fecha`, `proveedor`, el ID exacto del modelo que devuelve el proveedor, `system_fingerprint` cuando lo da, `tokens` (el `usage` completo, con los de caché y razonamiento), `fin` (`finish_reason`), `segundos`, `huella_llamada`, las claves de sus `preguntas` y la `respuesta_cruda` completa.
+* **Dos ficheros, solo de añadido (*append-only*)**, escritos y volcados a disco en cuanto llega cada respuesta. Si la ejecución se corta, como mucho se pierde la llamada en curso. Una llamada lleva las preguntas de un gen (o un trozo de ellas, según el presupuesto por llamada):
+  * `llamadas_llm.jsonl`: **una línea por llamada**, con `id_llamada`, `version`, `modelo` (el ID exacto que devuelve el proveedor, p. ej. `openai/gpt-oss-120b`; el nombre corto va dentro de las claves de `preguntas`), `fecha`, `proveedor`, `system_fingerprint` cuando lo da, `tokens` (el `usage` completo, con los de caché y razonamiento), `fin` (`finish_reason`), `segundos`, `huella_llamada`, las claves de sus `preguntas` y la `respuesta_cruda` completa.
   * `respuestas_llm.jsonl`: **una línea por pregunta respondida**, con `clave`, `version`, `modelo`, `fecha`, `id_llamada`, `q` (su posición en la llamada), `huella_prompt`, `respuesta_cruda` (solo el fragmento JSON de esa pregunta) y `salida` (la validación del momento, según el ADR-003).
-* **Clave de una pregunta:** la lista `clave` = [`version` del prompt, `gen`, `pmid`, `go_id`, `modelo`, huella]. `go_id` es siempre el **proceso núcleo** por el que se pregunta, no la ruta. La huella es la de la parte del prompt de esa pregunta (`prompt.construir_pregunta_gen`), así que una pregunta nueva (por ejemplo, un abstract más de la Fase 1) solo cuesta su llamada. Antes de llamar a un modelo se comprueba si esa clave ya existe; si existe, no se repite la llamada.
+* **Clave de una pregunta:** la lista `clave` = [`version` del prompt, `gen`, `pmid`, `go_id`, `modelo`, huella]. `go_id` es siempre el **proceso núcleo** por el que se pregunta, no la ruta. La huella es la del prompt de esa pregunta (`registro.huella` sobre el `PromptLLM` de `prompt.construir_prompt`), así que una pregunta nueva (por ejemplo, un abstract más de la Fase 1) solo cuesta su llamada. Antes de llamar a un modelo se comprueba si esa clave ya existe; si existe, no se repite la llamada.
 * **Pregunta saltada:** si el modelo no responde a una de las preguntas de la lista, no se escribe su línea y queda pendiente para la siguiente ejecución.
-* **Salida cortada:** si la respuesta se corta por `max_completion_tokens` (`fin = "length"`), la llamada se registra en `llamadas_llm.jsonl` sin ninguna respuesta, y la lista se parte en dos y se repite.
+* **Salida cortada:** si la respuesta se corta por `max_completion_tokens` (`fin = "length"`), la llamada se registra en `llamadas_llm.jsonl` sin ninguna respuesta y, si lleva más de una pregunta, la lista se parte en dos y se repite.
 * **Fallo de red:** si un modelo no responde tras los reintentos, no se escribe ninguna línea. Sus preguntas quedan pendientes, ese modelo deja de llamarse en esa ejecución (casi siempre es el límite diario) y la siguiente ejecución retoma lo pendiente.
 * **Invalidación:** si cambia el prompt, cambia su huella y la pregunta se vuelve a evaluar, sin mezclar respuestas a prompts distintos.
 * **Revalidación:** al reutilizar una línea se vuelve a validar su `respuesta_cruda` con el validador actual (`ejecucion.py`), así que un cambio del validador (por ejemplo, el umbral de confianza del ADR-003) no obliga a volver a llamar.
@@ -35,7 +37,7 @@ Las cachés desechables se escriben de forma atómica (fichero temporal y renomb
 2. **Las respuestas del LLM no son reproducibles volviendo a llamar:** temperatura 0 no garantiza salidas idénticas, y los modelos de los planes gratuitos cambian o desaparecen (el modelo `llama3-8b-8192` previsto inicialmente ya no está disponible). El registro es la única forma de conservar lo que respondió cada modelo.
 3. **Auditoría:** los casos marcados como `revisar` (ADR-003) deben poder revisarse con la respuesta original de cada modelo.
 4. **Lo que el ADR-001 quería evitar era la infraestructura**, no los ficheros: sin servidores de bases de datos, sin contenedores y sin esquemas que migrar. Los ficheros locales mantienen esa portabilidad: basta con clonar el repositorio.
-5. **JSONL es suficiente para el volumen:** con la Fase 1 del 2026-11-09 hay 1.694 preguntas (1.123 de las rutas de genes *up* y 571 de las de genes *down*). Con dos modelos son unas 3.400 líneas en `respuestas_llm.jsonl` y unos cientos de llamadas por modelo. Se lee con `pandas.read_json(..., lines=True)` y se puede inspeccionar con cualquier editor.
+5. **JSONL es suficiente para el volumen:** con la Fase 1 del 2026-11-13 hay 2.464 preguntas (1.692 de las rutas de genes *up* y 772 de las de genes *down*). Con dos modelos son unas 4.900 líneas en `respuestas_llm.jsonl` y unos cientos de llamadas por modelo. Se lee con `pandas.read_json(..., lines=True)` y se puede inspeccionar con cualquier editor.
 
 Aceptamos los compromisos asociados: el registro crece con cada cambio de prompt (las respuestas antiguas se conservan con su huella) y no hay consultas complejas; los análisis se hacen cargando el fichero en `pandas`.
 
@@ -53,14 +55,14 @@ Aceptamos los compromisos asociados: el registro crece con cada cambio de prompt
 
 ## Referencias
 * **Código del proyecto:**
-  * `codigo/consulta_gen/registro.py` (`Registro`, `clave`, `huella`; escritura con `fsync` línea a línea).
-  * `codigo/consulta_gen/ejecucion.py` (ejecución reanudable, revalidación, preguntas saltadas y salidas cortadas).
-  * `codigo/consulta_gen/cliente.py` (metadatos de cada llamada: proveedor, modelo, `system_fingerprint`, `tokens`, `fin`, `segundos`).
-  * `codigo/consulta_gen/resultados.py` (`fase2_resultados.xlsx`).
+  * `codigo/fase2_inferencia/registro.py` (`Registro`, `clave`, `huella`; escritura con `fsync` línea a línea).
+  * `codigo/fase2_inferencia/ejecucion.py` (ejecución reanudable, revalidación, preguntas saltadas y salidas cortadas).
+  * `codigo/fase2_inferencia/cliente.py` (metadatos de cada llamada: proveedor, modelo, `system_fingerprint`, `tokens`, `fin`, `segundos`).
+  * `codigo/fase2_inferencia/resultados.py` (`fase2_resultados.xlsx`).
   * `codigo/evaluacion/evaluar_gold.py` (registro por modelo del benchmark, `claves.json`, `prompts.json` y `ejecuciones.jsonl`).
-  * `codigo/extraer_info/abstracts.py` (`cargar_cache` / `guardar_cache`) y `codigo/extraer_info/fuentes/cache.py` (`guardar_json`): escritura atómica con `os.replace`.
-  * `codigo/extraer_info/red.py` (`descargar_archivo`, descarga atómica del OBO y el GAF).
-  * `codigo/extraer_info/config.py` (rutas de los ficheros).
+  * `codigo/fase1_ingesta/abstracts.py` (`cargar_cache` / `guardar_cache`) y `codigo/fase1_ingesta/fuentes/cache.py` (`guardar_json`): escritura atómica con `os.replace`.
+  * `codigo/fase1_ingesta/red.py` (`descargar_archivo`, descarga atómica del OBO y el GAF).
+  * `codigo/fase1_ingesta/config.py` (rutas de los ficheros).
 * **Formato JSON Lines:** [https://jsonlines.org/](https://jsonlines.org/)
 * **Ejemplo de lectura del registro y de las preguntas ya evaluadas:**
 
@@ -70,7 +72,7 @@ Aceptamos los compromisos asociados: el registro crece con cada cambio de prompt
   registro = pd.read_json("data/respuestas_llm.jsonl", lines=True, dtype={"clave": object})
   registro[["version", "gen", "pmid", "go_id", "modelo", "huella"]] = pd.DataFrame(
       registro["clave"].tolist(), index=registro.index)
-  hechos = set(map(tuple, registro["clave"]))  # misma clave que consulta_gen.registro.clave(prompt, modelo)
+  hechos = set(map(tuple, registro["clave"]))  # misma clave que fase2_inferencia.registro.clave(prompt, modelo)
   ```
 
   Para comprobar una pregunta concreta desde el código basta con `clave(prompt, modelo) in Registro()`.

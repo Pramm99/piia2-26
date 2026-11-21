@@ -4,8 +4,8 @@ import json
 import pandas as pd
 import pytest
 
-from consulta_gen.esquema import CasoProceso
-from consulta_gen.prompt import construir_prompt
+from fase2_inferencia.esquema import CasoProceso
+from fase2_inferencia.prompt import construir_prompt
 
 FRASE = "CD7 strongly increased T cell cytokine production in vitro."
 CITA = "CD7 strongly increased T cell cytokine production"

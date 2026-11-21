@@ -30,7 +30,7 @@ sys.argv = [a for a in sys.argv if not a.startswith("--dir=")]
 _COMUNES = [int(a.split("=", 1)[1]) for a in sys.argv if a.startswith("--comunes=")]
 sys.argv = [a for a in sys.argv if not a.startswith("--comunes=")]
 BENCH = CODIGO / "data" / (_DIR[0].split("=", 1)[1] if _DIR else "benchmark")
-sys.path.insert(0, str(CODIGO / "extraer_info"))
+sys.path.insert(0, str(CODIGO / "fase1_ingesta"))
 import config  # noqa: E402
 
 if len(sys.argv) > 4 and sys.argv[1] == "ejecutar":
@@ -38,11 +38,11 @@ if len(sys.argv) > 4 and sys.argv[1] == "ejecutar":
     config.MYGENE_CACHE = str(Path(sys.argv[4]) / "cache_mygene.json")
 sys.path.insert(0, str(CODIGO))
 
-from consulta_gen.confianza import confianza_final  # noqa: E402
-from consulta_gen.esquema import VERSION_PROMPT  # noqa: E402
-from consulta_gen.prompt import construir_prompt  # noqa: E402
-from consulta_gen.registro import Registro, clave  # noqa: E402
-from consulta_gen.respuesta import validar_respuesta  # noqa: E402
+from fase2_inferencia.confianza import confianza_final  # noqa: E402
+from fase2_inferencia.esquema import VERSION_PROMPT  # noqa: E402
+from fase2_inferencia.prompt import construir_prompt  # noqa: E402
+from fase2_inferencia.registro import Registro, clave  # noqa: E402
+from fase2_inferencia.respuesta import validar_respuesta  # noqa: E402
 
 A_SIGNO = {"INCREASES": "+1", "DECREASES": "-1", "NO_EFFECT": "neutro", "NO_CLEAR_EFFECT": "UNKNOWN"}
 CLASES = ("+1", "-1", "neutro", "UNKNOWN")
@@ -77,8 +77,8 @@ def ejecutar_modelo(modelo, ruta_excel, presupuesto=None):
     por defecto de 4.096 tokens, cuando no hay RAM para más: cada pregunta va sola)."""
     import dataclasses
     import time
-    from consulta_gen.cliente import MODELOS, ClienteOpenAICompatible
-    from consulta_gen.ejecucion import ejecutar
+    from fase2_inferencia.cliente import MODELOS, ClienteOpenAICompatible
+    from fase2_inferencia.ejecucion import ejecutar
     cfg = MODELOS[modelo]
     if presupuesto:
         cfg = dataclasses.replace(cfg, presupuesto_llamada=presupuesto)
