@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GenPath Explorer - Borrador v4</title>
+<style>
+  :root {
+    --bg: #f5f7fa; --panel: #ffffff; --ink: #1a202c; --muted: #5a6577; --line: #dde3ec;
+    --brand: #1f6f8b; --brand-dark: #14506a; --up: #c53030; --down: #2b6cb0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.45; }
+  header { background: var(--brand-dark); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: 0.2px; }
+  header .sub { opacity: 0.85; font-size: 13px; }
+  .badge { margin-left: auto; background: #c6f6d5; color: #22543d; font-weight: 600; font-size: 12px; padding: 4px 10px; border-radius: 999px; }
+  .badge.sim { background: #f6e05e; color: #5f4b00; }
+  .badge.up { background: #bee3f8; color: #2a4365; }
+  .layout { display: grid; grid-template-columns: 255px 1fr; gap: 16px; padding: 16px; max-width: 1480px; margin: 0 auto; }
+  aside, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  aside { padding: 14px; align-self: start; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+  aside h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 0 0 10px; }
+  .field { margin-bottom: 13px; }
+  .field > label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .field select, .field input[type=text] { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; background: #fff; }
+  .field input[type=range] { width: 100%; }
+  .chk { display: block; font-weight: 400 !important; font-size: 14px !important; margin: 3px 0 !important; cursor: pointer; }
+  .chk.empty { color: var(--muted); }
+  .val { font-weight: 600; color: var(--brand-dark); }
+  .hint { font-size: 12px; color: var(--muted); }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 14px; flex-wrap: wrap; }
+  .tab { background: none; border: none; padding: 10px 13px; font-size: 14px; cursor: pointer; color: var(--muted); border-bottom: 3px solid transparent; font-weight: 600; }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--brand-dark); border-bottom-color: var(--brand); }
+  .view { display: none; }
+  .view.active { display: block; }
+  .card { padding: 14px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 8px; font-size: 15px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid2w { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  svg { width: 100%; height: auto; display: block; }
+  .clk { cursor: pointer; }
+  .clk:hover rect.hov { filter: brightness(0.93); }
+  .legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+  .grad { width: 160px; height: 10px; border-radius: 5px; background: linear-gradient(to right, #2b6cb0, #f7fafc, #c53030); border: 1px solid var(--line); }
+  .hatchsw { display: inline-block; width: 18px; height: 12px; border: 1px solid var(--line); background: repeating-linear-gradient(45deg, #f7fafc, #f7fafc 3px, #cbd5e0 3px, #cbd5e0 5px); }
+  .faintsw { display: inline-block; width: 18px; height: 12px; border: 1px solid var(--line); background: #e9b8b8; opacity: 0.6; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  .kpi .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+  .kpi .v { font-size: 24px; font-weight: 700; }
+  .kpi .s { font-size: 12px; color: var(--muted); }
+  .kpi.up .v { color: var(--up); }
+  .kpi.down .v { color: var(--down); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th:first-child, td:first-child { text-align: left; }
+  td.l, th.l { text-align: left; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  th.sortable:hover { color: var(--ink); }
+  tbody tr.rowc { cursor: pointer; }
+  tbody tr.rowc:hover { background: #eef6fa; }
+  tbody tr.sel { background: #dff0f7; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .pill.s { background: #c6f6d5; color: #22543d; }
+  .pill.n { background: #edf2f7; color: #4a5568; }
+  .pill.u { background: #fed7d7; color: #742a2a; }
+  .pill.d { background: #bee3f8; color: #2a4365; }
+  .pill.o { background: #fefcbf; color: #744210; }
+  .pill.e { background: #fed7d7; color: #742a2a; }
+  pre.formula { background: #f1f5f9; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 13px; margin: 6px 0 12px; }
+  button.primary { background: var(--brand); color: #fff; border: none; border-radius: 8px; padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.primary:hover { background: var(--brand-dark); }
+  button.primary:disabled { opacity: 0.55; cursor: default; }
+  button.ghost { background: #fff; color: var(--brand-dark); border: 1px solid var(--brand); border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  button.ghost:disabled { opacity: 0.55; cursor: default; }
+  .llm { white-space: pre-wrap; background: #fbfdff; border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-height: 160px; font-size: 14.5px; line-height: 1.6; }
+  .warn { background: #fffaf0; border: 1px solid #f6d58f; color: #744210; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: 10px 0; }
+  .info { background: #ebf8ff; border: 1px solid #bee3f8; color: #2a4365; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: 10px 0; }
+  .okbox { background: #f0fff4; border: 1px solid #9ae6b4; color: #22543d; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: 10px 0; }
+  .errbox { background: #fff5f5; border: 1px solid #feb2b2; color: #742a2a; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: 10px 0; }
+  .drop { border: 2px dashed #a0b4c8; border-radius: 10px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; margin: 10px 0; background: #fafcfe; }
+  .drop.over { background: #e6f4fa; border-color: var(--brand); }
+  .caret { display: inline-block; width: 7px; height: 15px; background: var(--brand); vertical-align: -2px; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; font-weight: 600; color: var(--brand-dark); }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .small { font-size: 12px; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .chip { background: #edf2f7; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 12.5px; font-weight: 600; }
+  .chip.all { background: #fefcbf; border-color: #ecc94b; }
+  .rel { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .rel b { color: var(--brand-dark); }
+  ul.plain { margin: 6px 0 10px 18px; padding: 0; }
+  .scroll { max-height: 380px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .scroll table th { position: sticky; top: 0; background: #fff; }
+  td.pc, th.pc { text-align: center; }
+  .dot { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; }
+  .dot.up { background: var(--up); }
+  .dot.down { background: var(--down); }
+  .dot.none { background: #edf2f7; }
+  input[type=text].txt, input.mini { padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+  input.mini { width: 120px; }
+  select.mini { padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; max-width: 150px; }
+  .pipe { display: flex; gap: 6px; align-items: stretch; flex-wrap: wrap; margin: 8px 0 4px; }
+  .pipe .st { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; background: #fafcfe; }
+  .pipe .st b { display: block; color: var(--brand-dark); margin-bottom: 2px; }
+  .pipe .st.fe { border-color: #90cdf4; background: #ebf8ff; }
+  .pipe .st.be { border-color: #9ae6b4; background: #f0fff4; }
+  .pipe .st.ai { border-color: #f6d58f; background: #fffaf0; }
+  .pipe .ar { align-self: center; color: var(--muted); font-weight: 700; }
+  .maprow { display: grid; grid-template-columns: 110px 1fr; gap: 4px 8px; align-items: center; margin: 6px 0; font-size: 12.5px; }
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; max-height: none; }
+    .grid2, .grid2w, .grid4 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>GenPath Explorer</h1>
+  <span class="sub">Patrones de rutas entre tipos celulares (tumor frente a normal)</span>
+  <span class="badge" id="dataBadge">BORRADOR v4</span>
+</header>
+
+<div class="layout">
+
+  <aside>
+    <h2>Filtros</h2>
+    <div class="field">
+      <label for="coll">Coleccion de rutas</label>
+      <select id="coll"></select>
+    </div>
+    <div class="field">
+      <label>Tipos celulares</label>
+      <div id="cts"></div>
+      <div class="hint">Minimo 2. Entre parentesis: rutas significativas con los filtros actuales.</div>
+    </div>
+    <div class="field">
+      <label for="padj">p ajustado maximo: <span class="val" id="padjVal">0.05</span></label>
+      <input type="range" id="padj" min="0.001" max="0.25" step="0.001" value="0.05">
+    </div>
+    <div class="field">
+      <label for="nes">|NES| minimo: <span class="val" id="nesVal">0.0</span></label>
+      <input type="range" id="nes" min="0" max="3" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="dir">Sentido</label>
+      <select id="dir">
+        <option value="all">Enriquecidas y suprimidas</option>
+        <option value="up">Solo enriquecidas (NES +)</option>
+        <option value="down">Solo suprimidas (NES -)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="q">Filtrar rutas por nombre</label>
+      <input type="text" id="q" placeholder="por ejemplo interferon">
+    </div>
+    <div class="field">
+      <label for="maxRows">Rutas en el mapa</label>
+      <select id="maxRows">
+        <option value="20">20</option>
+        <option value="40" selected>40</option>
+        <option value="80">80</option>
+        <option value="500">Todas</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="showNS"> Incluir rutas no significativas</label>
+    </div>
+    <p class="hint">Cada tipo celular es una comparacion tumor frente a normal dentro de ese mismo tipo. NES positivo = enriquecida en tumor. NES negativo = suprimida.</p>
+  </aside>
+
+  <main>
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="panorama">Panorama</button>
+      <button class="tab" data-tab="comparar">Comparar tipos</button>
+      <button class="tab" data-tab="ruta">Ruta</button>
+      <button class="tab" data-tab="genes">Genes</button>
+      <button class="tab" data-tab="tabla">Tabla</button>
+      <button class="tab" data-tab="datos">Datos</button>
+      <button class="tab" data-tab="interp">Interpretacion</button>
+    </div>
+
+    <!-- PANORAMA -->
+    <section class="view active" id="view-panorama">
+      <div class="grid4" id="kpis"></div>
+      <div class="grid2w">
+        <div class="card">
+          <h3>Rutas por tipo celular (NES)</h3>
+          <div id="heat"></div>
+          <div class="legend"><span>Suprimida en tumor</span><div class="grad"></div><span>Enriquecida en tumor</span></div>
+          <div class="legend"><span class="faintsw"></span><span>en la tabla pero no significativa</span><span class="hatchsw"></span><span>no esta en la tabla de ese tipo</span></div>
+          <div class="legend"><span>* p aj. menor de 0.05, ** menor de 0.01, *** menor de 0.001</span><span>Clic en una fila para abrir la ruta</span></div>
+          <div class="small" id="heatNote"></div>
+        </div>
+        <div>
+          <div class="card">
+            <h3>Rutas significativas por tipo</h3>
+            <div id="bars"></div>
+            <div class="legend"><span style="color:#c53030;font-weight:700">Enriquecidas</span><span style="color:#2b6cb0;font-weight:700">Suprimidas</span></div>
+          </div>
+          <div class="info">Comparas <b>como responde cada tipo al tumor</b>, no niveles absolutos entre tipos. Si el archivo solo trae rutas significativas, una ruta ausente no significa que no cambie.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPARAR -->
+    <section class="view" id="view-comparar">
+      <div class="grid2w">
+        <div class="card">
+          <h3>Similitud entre tipos celulares</h3>
+          <div id="sim"></div>
+          <p class="small">Indice de Jaccard con signo: rutas significativas con el mismo sentido en ambos, dividido entre las rutas distintas de los dos. 0 = nada en comun, 1 = identicos. La diagonal muestra cuantas rutas tiene cada tipo. Clic en una celda para ver la pareja.</p>
+        </div>
+        <div class="card">
+          <h3>Pareja a comparar</h3>
+          <div class="field"><label for="selA">Tipo A</label><select id="selA"></select></div>
+          <div class="field"><label for="selB">Tipo B</label><select id="selB"></select></div>
+          <div id="pairKpis"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Rutas compartidas: NES en A y en B</h3>
+        <div id="dumb"></div>
+      </div>
+      <div class="grid2" id="pairLists"></div>
+      <div class="card">
+        <h3>Genes comunes en las rutas compartidas</h3>
+        <div id="pairGenes"></div>
+        <p class="small">Genes del core_enrichment (borde de enriquecimiento). Los porcentajes son descriptivos, no un test estadistico.</p>
+      </div>
+    </section>
+
+    <!-- RUTA -->
+    <section class="view" id="view-ruta">
+      <div class="card">
+        <div class="toolbar">
+          <h3 style="margin:0">Detalle de ruta</h3>
+          <input type="text" class="txt" id="pwIn" list="pwList" placeholder="Escribe para buscar una ruta" style="margin-left:auto;min-width:300px">
+          <datalist id="pwList"></datalist>
+        </div>
+        <div id="pwHead"></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>NES en cada tipo celular</h3>
+          <div id="pwBars"></div>
+        </div>
+        <div class="card">
+          <h3>Estadisticas por tipo</h3>
+          <div id="pwStats"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Genes comunes entre tipos</h3>
+        <div id="pwOverlap"></div>
+      </div>
+    </section>
+
+    <!-- GENES -->
+    <section class="view" id="view-genes">
+      <div class="card">
+        <div class="toolbar">
+          <h3 style="margin:0">Genes recurrentes</h3>
+          <input type="text" class="txt" id="gsearch" placeholder="Buscar gen (por ejemplo MX1)" style="margin-left:auto;min-width:240px">
+        </div>
+        <p class="small">Genes del core_enrichment de las rutas significativas, ordenados por en cuantos tipos celulares aparecen. Indica participacion en el borde de enriquecimiento, no expresion.</p>
+        <div class="scroll"><table id="geneTbl"><thead><tr><th class="l">Gen</th><th>Tipos</th><th>Rutas</th><th class="l">Detalle</th></tr></thead><tbody></tbody></table></div>
+        <p class="small" id="geneNote"></p>
+      </div>
+    </section>
+
+    <!-- TABLA -->
+    <section class="view" id="view-tabla">
+      <div class="card">
+        <div class="toolbar">
+          <h3 style="margin:0">Resultados</h3>
+          <label style="font-size:13px"><input type="checkbox" id="tblAll"> Incluir filas no significativas</label>
+          <button class="ghost" id="btnCsv" style="margin-left:auto">Descargar CSV</button>
+        </div>
+        <div class="scroll" style="max-height:560px">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th class="l sortable" data-k="ct">Tipo celular</th>
+              <th class="l sortable" data-k="name">Ruta</th>
+              <th class="sortable" data-k="nes">NES</th>
+              <th class="sortable" data-k="padj">p ajustado</th>
+              <th class="sortable" data-k="q">q</th>
+              <th class="sortable" data-k="size">Tamano</th>
+              <th class="sortable" data-k="ncore">Genes core</th>
+              <th class="l sortable" data-k="type">Patron</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        </div>
+        <p class="small" id="tblNote"></p>
+      </div>
+    </section>
+
+    <!-- DATOS -->
+    <section class="view" id="view-datos">
+      <div class="info"><b>Como se reparte el trabajo.</b> En este borrador todo corre en el navegador: la parte "backend" esta simulada con funciones locales. En la app real, el <b>backend</b> lee y valida los archivos y calcula patrones, similitudes y genes comunes; el <b>LLM</b> solo redacta a partir de esos resultados; y esta pantalla (el <b>frontend</b>) pide los datos, los dibuja y deja revisarlos.</div>
+      <div class="card">
+        <h3>Cargar datos</h3>
+        <div class="toolbar">
+          <button class="ghost" id="btnReal">Datos recibidos (reales, solo significativas)</button>
+          <button class="ghost" id="btnSim">Demo simulado ampliado (tabla completa)</button>
+          <button class="ghost" id="btnTpl">Descargar plantilla CSV</button>
+        </div>
+        <div class="drop" id="drop">
+          Arrastra aqui archivos <b>.xlsx, .csv o .tsv</b> de GSEA, o
+          <label style="color:#1f6f8b;font-weight:700;cursor:pointer;text-decoration:underline">elige archivos<input type="file" id="fileIn" multiple accept=".xlsx,.csv,.tsv,.txt" style="display:none"></label>.
+          <div class="small" style="margin-top:6px">Un archivo por tipo celular y coleccion. Columnas minimas: ruta, NES y p ajustado. Opcionales: p valor, q, tamano y genes del core_enrichment. El resto de columnas se ignora.</div>
+        </div>
+        <div id="loadMsg"></div>
+      </div>
+      <div class="card">
+        <h3>Archivos cargados</h3>
+        <div class="scroll" style="max-height:none;overflow-x:auto">
+        <table id="files">
+          <thead><tr><th class="l">Archivo</th><th class="l">Tipo celular</th><th class="l">Coleccion</th><th>Filas</th><th>Signif.</th><th class="l">Estado</th><th class="l">Columnas</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+        <div class="warn" id="emptyWarn" style="display:none"></div>
+      </div>
+      <div class="card">
+        <h3>Como se obtuvieron los datos recibidos</h3>
+        <ul class="plain">
+          <li>Datos de celula unica de cabeza y cuello (HNSC), agregados por tipo celular y muestra (pseudobulk).</li>
+          <li>Para cada tipo celular, expresion diferencial Tumor frente a Control con DESeq2 y contraccion de log2FC.</li>
+          <li>Genes ordenados por log2FC y GSEA contra las rutas Hallmark de MSigDB.</li>
+          <li>Los archivos recibidos contienen solo las rutas que superan el corte de GSEA. Una tabla completa permitiria ver tambien las no significativas.</li>
+        </ul>
+        <h3 style="margin-top:14px">Columnas</h3>
+        <table>
+          <thead><tr><th class="l">Columna</th><th class="l">Significado</th></tr></thead>
+          <tbody>
+            <tr><td><b>ID / Description</b></td><td class="l">Nombre de la ruta.</td></tr>
+            <tr><td><b>NES</b></td><td class="l">Enriquecimiento normalizado. Mayor valor absoluto = mas fuerte. Positivo = enriquecida en tumor. Negativo = suprimida.</td></tr>
+            <tr><td><b>p.adjust (pvalue, qvalue)</b></td><td class="l">Significancia. p.adjust ya esta corregido por tests multiples.</td></tr>
+            <tr><td><b>setSize</b></td><td class="l">Genes de la ruta incluidos en el analisis.</td></tr>
+            <tr><td><b>core_enrichment</b></td><td class="l">Genes que mas contribuyen al resultado (borde de enriquecimiento).</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Que calcula el backend (aqui simulado)</h3>
+        <b>Patron de una ruta</b>
+        <pre class="formula">mismo sentido   = significativa en 2 o mas tipos, todos con el mismo signo de NES
+sentido opuesto = significativa en 2 o mas tipos, con signos distintos
+especifica      = significativa en un solo tipo</pre>
+        <b>Similitud entre dos tipos (Jaccard con signo)</b>
+        <pre class="formula">J(A,B) = concordantes / ( nA + nB - concordantes )</pre>
+        <b>Genes comunes en una ruta</b>
+        <pre class="formula">comunes          = genes del core_enrichment presentes en todos los tipos donde la ruta es significativa
+% sobre union    = comunes / genes distintos totales
+% sobre el menor = comunes / tamano del core mas pequeno (por parejas)</pre>
+        <div class="warn">No se recalcula ningun p valor ni NES. Los porcentajes de genes comunes son descriptivos, no un test.</div>
+        <details><summary>Configuracion actual (JSON)</summary><pre class="formula" id="cfg"></pre></details>
+      </div>
+    </section>
+
+    <!-- INTERPRETACION -->
+    <section class="view" id="view-interp">
+      <div class="card">
+        <h3>Como se combinan backend y LLM</h3>
+        <div class="pipe">
+          <div class="st fe"><b>1. Frontend</b>envia los filtros actuales</div><div class="ar">&gt;</div>
+          <div class="st be"><b>2. Backend</b>calcula los hechos y los devuelve como JSON</div><div class="ar">&gt;</div>
+          <div class="st ai"><b>3. LLM</b>redacta solo con esos hechos</div><div class="ar">&gt;</div>
+          <div class="st be"><b>4. Backend</b>comprueba que cada cifra del texto esta en los hechos</div><div class="ar">&gt;</div>
+          <div class="st fe"><b>5. Frontend</b>muestra texto, hechos y comprobacion</div>
+        </div>
+        <p class="small">En el borrador, los pasos 2 y 4 son funciones locales y el paso 3 es una plantilla.</p>
+      </div>
+      <div class="card">
+        <div class="toolbar">
+          <button class="primary" id="btnGen">Generar interpretacion</button>
+          <button class="ghost" id="btnCopy" disabled>Copiar texto</button>
+          <span class="small">En la app real el texto lo genera un LLM a partir de los hechos de abajo.</span>
+        </div>
+        <div class="llm" id="llm">Pulsa "Generar interpretacion" para ver un ejemplo.</div>
+        <div id="verify"></div>
+        <div class="warn">Texto generado por IA. Revisar antes de usarlo. Las comparaciones son tumor frente a normal dentro de cada tipo celular. Los genes comunes son genes del borde de enriquecimiento, no medidas de expresion.</div>
+      </div>
+      <div class="card">
+        <h3>Hechos enviados al modelo</h3>
+        <p class="small">El LLM solo puede citar rutas, cifras y genes que aparezcan aqui.</p>
+        <table id="tblUsed">
+          <thead><tr><th class="l">Ruta</th><th class="l">Patron</th><th class="l">Tipos y NES</th><th>Genes comunes</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <details><summary>Ver JSON completo</summary><pre class="formula" id="jsonUsed" style="max-height:360px;overflow:auto"></pre></details>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var REAL = {"cts":[{"name":"Tumor","file":"Tumor_cells_GSEA_Hallmark.xlsx","rows":[{"id":"HALLMARK_MYOGENESIS","size":88,"es":-0.689468,"nes":-2.118989,"p":1.68213208792032e-06,"padj":8.24244723080959e-05,"q":5.48906260268737e-05,"rank":164,"le":"tags=20%, list=3%, signal=20%","genes":["SIRT2","GADD45B","SSPN","IGFBP7","GSN","SOD3","HSPB2","TNNT2","FHL1","FXYD1","TNNC1","DES","CFD","TNNC2","APOD","CKM","MYF6","ACTA1"]},{"id":"HALLMARK_P53_PATHWAY","size":136,"es":0.576735,"nes":1.830687,"p":5.55395133215154e-06,"padj":0.000136071807637713,"q":9.06171006824724e-05,"rank":1091,"le":"tags=38%, list=17%, signal=32%","genes":["IL1A","NDRG1","SFN","RNF19B","CLCA2","TP63","PERP","KRT17","UPP1","CDKN2A","SERPINB5","RHBDF2","TM4SF1","IER5","HRAS","CDKN2B","TGFB1","SPHK1","RAP2B","HBEGF","DDIT4","SEC61A1","VAMP8","MDM2","RAD9A","ITGB4","TAP1","WRAP73","NINJ1","SDC1","CTSD","MKNK2","CCNK","PCNA","TPRKB","TM7SF3","PHLDA3","BLCAP","SAT1","S100A10","SOCS1","BAX","ST14","BAIAP2","KLK8","SLC3A2","TRIAP1","DDB2","TNFSF9","GADD45A","FAM162A","BMP2"]},{"id":"HALLMARK_ESTROGEN_RESPONSE_LATE","size":114,"es":0.557611,"nes":1.737934,"p":0.000540996722073876,"padj":0.0088362797938733,"q":0.00588452574887373,"rank":477,"le":"tags=25%, list=8%, signal=23%","genes":["CA2","TIAM1","SFN","FABP5","PPIF","PKP3","PERP","SULT2B1","CDH1","TRIM29","SIAH2","LAMC2","PTGES","GJB3","SGK1","DHCR7","MAPK13","TSPAN13","ISG20","ST6GALNAC2","RAB31","DLG5","CKB","CCND1","FKBP4","LSR","DUSP2","MDK"]},{"id":"HALLMARK_INFLAMMATORY_RESPONSE","size":86,"es":0.572866,"nes":1.728518,"p":0.000790085118189909,"padj":0.00943771338292059,"q":0.00628505080280426,"rank":742,"le":"tags=28%, list=12%, signal=25%","genes":["IL1A","CXCL10","CCL20","IL6","CHST2","PLAUR","GNA15","CXCL8","BST2","SPHK1","HBEGF","ATP2A2","TNFSF10","LYN","IL4R","IRF7","RELA","ITGA5","MMP14","LY6E","ADRM1","RGS1","OSMR","PSEN1"]},{"id":"HALLMARK_MTORC1_SIGNALING","size":151,"es":0.501604,"nes":1.609206,"p":0.00096303197784904,"padj":0.00943771338292059,"q":0.00628505080280426,"rank":650,"le":"tags=28%, list=10%, signal=26%","genes":["HK2","AK4","PDK1","SLC2A1","SQLE","ERO1A","DHCR7","MCM4","ENO1","LDHA","YKT6","SRD5A1","GPI","PGK1","TFRC","SERP1","TES","ATP2A2","G6PD","SDF2L1","DDIT4","CTSC","ALDOA","ARPC5L","TPI1","TUBA4A","GAPDH","ATP6V1D","PSME3","PNP","GSK3B","EIF2S2","PSMD14","BHLHE40","GOT1","EGLN3","SLC1A5","CXCR4","SLC7A5","CALR","RPN1","TUBG1"]},{"id":"HALLMARK_GLYCOLYSIS","size":118,"es":0.525871,"nes":1.649705,"p":0.00161116903417562,"padj":0.0131578804457675,"q":0.00876249825604283,"rank":614,"le":"tags=25%, list=10%, signal=23%","genes":["DSC2","HK2","CHST2","AK4","GPR87","ERO1A","IGFBP3","VEGFA","ENO1","LDHA","ISG20","SOX9","AGRN","PGM2","PGK1","IL13RA1","G6PD","DDIT4","ALDOA","GLCE","PKM","TPI1","PGAM1","FKBP4","GFPT1","GOT1","SDC1","EGLN3","EXT1","CXCR4"]},{"id":"HALLMARK_HYPOXIA","size":132,"es":0.50827,"nes":1.604464,"p":0.00219665749127823,"padj":0.0153766024389476,"q":0.0102400574781391,"rank":622,"le":"tags=27%, list=10%, signal=24%","genes":["EFNA1","IL6","NDRG1","HK2","SULT2B1","PKP1","CHST2","PGF","SIAH2","AK4","PLAUR","PDK1","SLC2A1","ERO1A","IGFBP3","VEGFA","ENO1","LDHA","ISG20","PGM2","GPI","PGK1","TES","DDIT4","ALDOA","TPI1","GAPDH","TNFAIP3","BNIP3L","MYH9","BHLHE40","PLIN2","EXT1","CXCR4","KDM3A"]},{"id":"HALLMARK_TNFA_SIGNALING_VIA_NFKB","size":158,"es":0.461476,"nes":1.488776,"p":0.0037976941173988,"padj":0.0232608764690677,"q":0.015490594426232,"rank":578,"le":"tags=22%, list=9%, signal=21%","genes":["IL1A","CXCL10","CCL20","EFNA1","IL6","IL23A","RNF19B","LAMB3","PLAUR","SGK1","PLAU","PHLDA2","IER5","VEGFA","RELB","SPHK1","PMEPA1","CXCL3","DUSP4","HBEGF","CXCL2","CCND1","TNIP2","TAP1","CXCL1","FOSL1","TRIB1","NINJ1","IFIH1","DUSP2","TNFAIP3","RELA","REL","BHLHE40","SMAD3"]},{"id":"HALLMARK_INTERFERON_ALPHA_RESPONSE","size":64,"es":0.567104,"nes":1.64807,"p":0.00562197230121342,"padj":0.0275476642759458,"q":0.0183453832986964,"rank":1416,"le":"tags=55%, list=23%, signal=43%","genes":["CXCL10","RSAD2","OASL","ISG15","BST2","ISG20","IFI27","TAP1","PSMB9","IL4R","IFIH1","UBE2L6","IRF7","LAP3","MX1","IFI44","CD74","LY6E","ADAR","EPSTI1","OAS1","IFIT3","PSME2","RIPK2","IRF2","PARP9","B2M","IFI44L","HLA-C","PSMA3","IFI35","MVB12A","USP18","NMI","NCOA7"]},{"id":"HALLMARK_PI3K_AKT_MTOR_SIGNALING","size":67,"es":0.564591,"nes":1.64329,"p":0.0050763747284049,"padj":0.0275476642759458,"q":0.0183453832986964,"rank":998,"le":"tags=28%, list=16%, signal=24%","genes":["TIAM1","SFN","PDK1","SLC2A1","HRAS","RAC1","GSK3B","CLTC","MKNK2","CXCR4","CALR","MAPKAP1","ARPC3","PPP1CA","MAP2K3","GRB2","HSP90B1","CFL1","CAB39"]}]},{"name":"NK","file":"NK_GSEA_hallmark.xlsx","rows":[{"id":"HALLMARK_IL2_STAT5_SIGNALING","size":75,"es":0.653698,"nes":2.01032,"p":3.92087831195078e-06,"padj":0.000168597767413883,"q":0.000119689969522708,"rank":234,"le":"tags=41%, list=7%, signal=39%","genes":["CAPG","TNFRSF18","CSF1","CD83","PLPP1","TRAF1","RGS16","MYC","IRF4","FURIN","TNFRSF4","TNFRSF9","SNX9","TNFSF10","LTB","SYNGR2","CTSZ","IL2RB","IFITM3","ICOS","IL4R","DHRS3","NFKBIZ","PLSCR1","CD44","SELL","CASP3","ITGAE","IRF8","ARL4A","HOPX"]},{"id":"HALLMARK_INTERFERON_ALPHA_RESPONSE","size":54,"es":0.627577,"nes":1.839195,"p":0.000598150893966413,"padj":0.0103196627663122,"q":0.00732607638244928,"rank":446,"le":"tags=48%, list=13%, signal=43%","genes":["CSF1","IRF7","ISG15","IFI44L","IFITM3","IFI44","MX1","OAS1","IL4R","IFI35","PLSCR1","EPSTI1","BST2","SELL","LY6E","CD74","LAP3","PSME2","UBE2L6","SAMD9L","ADAR","NMI","IFITM2","EIF2AK2","TRIM26","NCOA7"]},{"id":"HALLMARK_INFLAMMATORY_RESPONSE","size":63,"es":0.590195,"nes":1.771781,"p":0.000982993374223538,"padj":0.0103196627663122,"q":0.00732607638244928,"rank":275,"le":"tags=35%, list=8%, signal=33%","genes":["CXCR6","CSF1","GNA15","RGS16","MYC","CD82","GPR183","TNFRSF9","CCR7","TNFSF10","IRF7","IL2RB","NFKB1","IL4R","ICAM1","HIF1A","BST2","RGS1","SELL","LY6E","RELA","NAMPT"]},{"id":"HALLMARK_MYOGENESIS","size":34,"es":-0.692624,"nes":-1.770106,"p":0.00119996078678049,"padj":0.0103196627663122,"q":0.00732607638244928,"rank":196,"le":"tags=35%, list=6%, signal=34%","genes":["MEF2D","COL3A1","SIRT2","EIF4A2","COL1A1","IGFBP7","GSN","COL6A2","GPX3","APOD","ACTA1","CFD"]},{"id":"HALLMARK_MYC_TARGETS_V1","size":155,"es":0.472076,"nes":1.617119,"p":0.000872938785475978,"padj":0.0103196627663122,"q":0.00732607638244928,"rank":947,"le":"tags=43%, list=27%, signal=33%","genes":["MYC","NME1","LSM2","MCM5","SRM","IMPDH2","HSPD1","PABPC4","HSPE1","HPRT1","VDAC1","COX5A","TFDP1","NHP2","RANBP1","PGK1","PSMB2","NOP16","NOLC1","PABPC1","CCT7","SNRPD1","PSMA1","HSP90AB1","TRIM28","NAP1L1","GNL3","PPM1G","CCT4","CLNS1A","EIF4E","SNRPA","PSMD7","GSPT1","PSMB3","SERBP1","CCT2","NDUFAB1","PSMC4","RPLP0","SNRPD3","ILF2","TUFM","CCT3","PHB2","EIF3J","HNRNPC","MRPL23","STARD7","RPS5","YWHAE","PSMA4","SLC25A3","LSM7","C1QBP","RSL1D1","HNRNPD","SNRPA1","PSMD8","LDHA","CBX3","VBP1","XRCC6","MRPL9","TXNL4A","PSMD3"]},{"id":"HALLMARK_MYC_TARGETS_V2","size":19,"es":0.736944,"nes":1.744599,"p":0.00453092772808309,"padj":0.0278328417582247,"q":0.0197589329495353,"rank":636,"le":"tags=63%, list=18%, signal=52%","genes":["MYC","DCTPP1","MCM5","SRM","GRWD1","HSPD1","HSPE1","NOP16","NOLC1","GNL3","MPHOSPH10","IMP4"]},{"id":"HALLMARK_TNFA_SIGNALING_VIA_NFKB","size":103,"es":0.49888,"nes":1.627202,"p":0.00400314923218333,"padj":0.0278328417582247,"q":0.0197589329495353,"rank":433,"le":"tags=36%, list=12%, signal=32%","genes":["GEM","CSF1","CD83","DUSP4","TRAF1","MYC","GPR183","NINJ1","TNFRSF9","BCL2A1","AREG","PFKFB3","NFKB1","PMEPA1","IRS2","ICAM1","REL","KDM6B","CD44","RELB","NFKB2","TNIP1","NR4A1","MAP2K3","RELA","NAMPT","BIRC3","IER5","MAFF","BCL3","BIRC2","FOSL2","EHD1","CEBPB","PDE4B","ZC3H12A","TANK"]},{"id":"HALLMARK_INTERFERON_GAMMA_RESPONSE","size":109,"es":0.476259,"nes":1.55203,"p":0.0054851823686273,"padj":0.0294828552313717,"q":0.0209303011434463,"rank":435,"le":"tags=39%, list=12%, signal=35%","genes":["IRF4","XCL1","TNFSF10","IRF7","ISG15","IFI44L","IL2RB","IFITM3","IFI44","NFKB1","MX1","IL4R","IFI35","ICAM1","HIF1A","PLSCR1","EPSTI1","BST2","CASP3","IRF8","HLA-DMA","ARL4A","XAF1","LY6E","NAMPT","CD74","LAP3","PSME2","UBE2L6","SAMD9L","IFIT1","ADAR","PSMB2","NMI","GZMA","IFITM2","PDE4B","LCP2","MTHFD2","EIF2AK2","STAT3","TRIM26"]},{"id":"HALLMARK_UV_RESPONSE_DN","size":32,"es":-0.652837,"nes":-1.658742,"p":0.00679446377674454,"padj":0.0324624380444461,"q":0.023045549652116,"rank":477,"le":"tags=56%, list=14%, signal=49%","genes":["CDKN1B","RASA2","ATP2B4","COL3A1","ANXA2","PHF3","NIPBL","CELF2","DUSP1","SMAD7","COL1A1","ADD3","CITED2","ATP2B1","ANXA4","SYNE1","TGFBR3","MT1E"]},{"id":"HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION","size":45,"es":-0.598088,"nes":-1.634683,"p":0.00996550576873373,"padj":0.042851674805555,"q":0.0304210176098187,"rank":223,"le":"tags=31%, list=6%, signal=30%","genes":["FLNA","EMP3","COL1A1","FN1","TPM1","LUM","COL6A2","FBLN1","TGFBR3","FBLN2","DCN","MGP","FSTL1","MFAP5"]}]},{"name":"CD8 T","file":"CD8T_cells_GSEA_Hallmark.xlsx","rows":[{"id":"HALLMARK_INTERFERON_ALPHA_RESPONSE","size":81,"es":0.73884,"nes":2.379236,"p":6.23785357883384e-10,"padj":2.089415531924e-08,"q":1.48121831479038e-08,"rank":568,"le":"tags=59%, list=7%, signal=56%","genes":["RSAD2","CCRL2","OAS1","USP18","CMPK2","PLSCR1","IFIT3","MX1","IFI35","IFI44L","IFI44","TRAFD1","BST2","ISG15","RTP4","UBE2L6","TMEM140","SAMD9L","CD74","GBP2","TAP1","PARP9","OASL","EPSTI1","EIF2AK2","CNP","DHX58","PSME2","PSMB9","PSMB8","LAP3","TRIM25","HERC6","SP110","ISG20","CASP1","NMI","TRIM26","GBP4","PARP12","IRF7","IFI27","UBA7","IRF9","MOV10","OGFR","ADAR","PSME1"]},{"id":"HALLMARK_MYOGENESIS","size":66,"es":-0.77951,"nes":-2.363455,"p":1.27923399913714e-09,"padj":2.089415531924e-08,"q":1.48121831479038e-08,"rank":163,"le":"tags=27%, list=2%, signal=27%","genes":["CDKN1A","GADD45B","APP","IGFBP3","KLF5","COL6A2","SORBS3","FXYD1","IGFBP7","CLU","TPM2","CRYAB","GSN","FHL1","GPX3","APOD","CFD","CKM"]},{"id":"HALLMARK_INTERFERON_GAMMA_RESPONSE","size":158,"es":0.628773,"nes":2.174968,"p":9.59668994471619e-10,"padj":2.089415531924e-08,"q":1.48121831479038e-08,"rank":942,"le":"tags=53%, list=12%, signal=48%","genes":["VCAM1","CD86","RSAD2","IFIT1","CD38","USP18","HLA-DQA1","CMPK2","OAS3","PLSCR1","IFIT3","HLA-DMA","MX1","OAS2","IFI35","XAF1","IFI44L","IFI44","TRAFD1","BST2","ISG15","RTP4","UBE2L6","HLA-DRB1","SAMD9L","STAT1","IRF4","CD74","TAP1","GPR18","OASL","EPSTI1","PTPN6","TNFSF10","IRF8","EIF2AK2","CASP7","DHX58","PSME2","PSMB9","GZMA","PSMB8","LAP3","NUP93","CASP3","TRIM25","MTHFD2","HERC6","PML","SP110","ISG20","CASP1","NMI","IL2RB","TRIM26","GBP4","PARP12","IRF7","IFI27","PSMB2","RBCK1","IRF9","CASP4","OGFR","ADAR","PSME1","HLA-A","PFKP","MYD88","ZBP1","STAT3","STAT2","TRIM14","VAMP5","TRIM21","PSMB10","DDX60","ST8SIA4","HELZ2","LY6E","NLRC5","CCL5","IFIH1","HLA-B"]},{"id":"HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION","size":79,"es":-0.724931,"nes":-2.230215,"p":4.64031832831937e-08,"padj":5.68438995219122e-07,"q":4.02975012722471e-07,"rank":296,"le":"tags=30%, list=4%, signal=30%","genes":["TNFRSF12A","PLOD3","PLAUR","GADD45B","EMP3","LGALS1","NOTCH2","PCOLCE","IGFBP3","TPM1","COL6A2","TIMP1","NNMT","TPM2","FBLN1","FBLN2","MMP2","FSTL1","LOXL1","TIMP3","CXCL12","DCN","MGP","MFAP5"]},{"id":"HALLMARK_COAGULATION","size":48,"es":-0.787853,"nes":-2.277249,"p":1.17001292697711e-07,"padj":1.14661266843757e-06,"q":8.12851086110414e-07,"rank":179,"le":"tags=33%, list=2%, signal=33%","genes":["ANXA1","CPQ","DUSP6","DPP4","S100A13","C1R","SERPING1","TIMP1","CLU","CFH","CRIP2","C1S","GSN","MMP2","TIMP3","CFD"]},{"id":"HALLMARK_ANGIOGENESIS","size":10,"es":-0.891145,"nes":-1.862272,"p":0.000267145124318674,"padj":0.00187001587023072,"q":0.00132568257180695,"rank":111,"le":"tags=50%, list=1%, signal=49%","genes":["FGFR1","S100A4","APP","TIMP1","FSTL1"]},{"id":"HALLMARK_ALLOGRAFT_REJECTION","size":133,"es":0.528155,"nes":1.786836,"p":0.000236412102506266,"padj":0.00187001587023072,"q":0.00132568257180695,"rank":986,"le":"tags=37%, list=12%, signal=33%","genes":["CXCL13","CD86","CRTAM","HLA-DRA","HLA-DQA1","HLA-DMA","STAT1","IRF4","CD74","CD79A","GBP2","TAP1","HLA-DMB","FASLG","PTPN6","IRF8","GZMB","CD8A","CDKN2A","PRF1","GZMA","CD7","TAP2","MAP4K1","CCR5","IL2RB","KLRD1","NME1","MMP9","CSK","CD96","IFNG","IRF7","CD8B","HLA-A","MTIF2","TRAF2","NCF4","TRAT1","GCNT1","DEGS1","PSMB10","F2R","ST8SIA4","CD3D","CCL5","ZAP70","GALNT1","CSF1"]},{"id":"HALLMARK_APOPTOSIS","size":125,"es":-0.546402,"nes":-1.827938,"p":0.00037116389992514,"padj":0.00227337888704148,"q":0.00161163272335916,"rank":493,"le":"tags=23%, list=6%, signal=22%","genes":["ANKH","CASP8","SMAD7","SC5D","TIMP2","BTG2","SOD2","TNFRSF12A","IFNGR1","DDIT3","DPYD","ATF3","ANXA1","WEE1","TXNIP","CDKN1A","GADD45B","LEF1","LMNA","APP","TIMP1","CLU","EMP1","IGFBP6","GSN","MMP2","TIMP3","GPX3","DCN"]},{"id":"HALLMARK_HYPOXIA","size":108,"es":-0.534368,"nes":-1.746561,"p":0.0019467622961769,"padj":0.0105990391680742,"q":0.00751381938875295,"rank":872,"le":"tags=32%, list=11%, signal=29%","genes":["NDRG1","JUN","IDS","CDKN1B","PHKG1","UGP2","KLF6","MT2A","MIF","SLC2A3","ERO1A","TES","PRKCA","FOXO3","MT1E","PNRC1","DDIT4","ZFP36","PPP1R15A","DUSP1","ERRFI1","DDIT3","TPD52","MXI1","ATF3","RORA","CDKN1A","PLAUR","CITED2","TIPARP","PLAC8","S100A4","IGFBP3","FOS","DCN"]},{"id":"HALLMARK_TNFA_SIGNALING_VIA_NFKB","size":148,"es":-0.477245,"nes":-1.654052,"p":0.0025918377822484,"padj":0.0127000051330172,"q":0.00900322598044182,"rank":683,"le":"tags=30%, list=8%, signal=28%","genes":["KLF6","SMAD3","NR4A3","TNF","SOCS3","SLC2A3","NR4A2","KLF9","EIF1","PHLDA1","CCNL1","GFPT2","PNRC1","BTG2","NFKBIA","SOD2","MYC","IL6ST","ZFP36","PPP1R15A","DUSP1","KLF10","LDLR","CEBPD","IER2","KLF2","ATF3","IL23A","PTGER4","JUNB","CDKN1A","PLAUR","GADD45B","TIPARP","SGK1","IL7R","FOSB","ATP2B1","TUBB2A","IFNGR2","EGR1","PHLDA2","CCL2","FOS","KLF4"]},{"id":"HALLMARK_UV_RESPONSE_DN","size":74,"es":-0.56512,"nes":-1.727739,"p":0.0029188720498517,"padj":0.0130022482220667,"q":0.00921749068374221,"rank":1502,"le":"tags=47%, list=19%, signal=39%","genes":["GRK5","ARHGEF9","BHLHE40","INSIG1","NEK7","CDK13","RUNX1","AKT3","ANXA2","TGFBR2","NIPBL","ATP2B4","PDLIM5","RASA2","CELF2","SFMBT1","PHF3","YTHDC1","CDKN1B","INPP4B","SMAD3","ANXA4","PRKCA","SMAD7","MT1E","MYC","NR1D2","DUSP1","LDLR","ID1","ADD3","CITED2","NOTCH2","ATP2B1","EFEMP1"]},{"id":"HALLMARK_REACTIVE_OXYGEN_SPECIES_PATHWAY","size":42,"es":-0.638787,"nes":-1.798562,"p":0.00337690526408838,"padj":0.0137890298283609,"q":0.00977525208025583,"rank":902,"le":"tags=29%, list=11%, signal=26%","genes":["FTL","HMOX2","PRNP","PRDX2","TXN","SOD2","HHEX","JUNB","PDLIM1","CDKN2D","MGST1","GPX3"]},{"id":"HALLMARK_KRAS_SIGNALING_UP","size":87,"es":-0.505831,"nes":-1.585107,"p":0.00540920275301797,"padj":0.0203885334536831,"q":0.0144537401497646,"rank":665,"le":"tags=21%, list=8%, signal=19%","genes":["CBL","TMEM176B","IL10RA","ERO1A","IKZF1","ANKH","GFPT2","PCSK1N","PPP1R15A","PLAUR","IL7R","IGFBP3","DUSP6","KLF4","EMP1","CFH","SPARCL1","APOD"]}]},{"name":"Fibroblastos","file":"Fibroblasts_GSEA_Hallmark.xlsx","rows":[{"id":"HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION","size":183,"es":0.619483,"nes":2.46681,"p":1e-10,"padj":5e-09,"q":3.36842105263158e-09,"rank":1228,"le":"tags=47%, list=10%, signal=43%","genes":["MMP1","ADAM12","COL11A1","MMP3","SDC1","LRRC15","COL7A1","CTHRC1","CXCL8","POSTN","CXCL6","GREM1","COL1A1","TNC","COL5A1","SPARC","COL5A2","COL3A1","PMEPA1","TNFAIP3","LOXL2","BMP1","MMP14","THY1","INHBA","WNT5A","COL1A2","COL5A3","COL4A2","CDH11","BGN","SERPINE1","TGM2","EDIL3","TPM4","COL12A1","SAT1","GPC1","SERPINH1","BASP1","FMOD","TNFRSF12A","IL32","CXCL1","COL4A1","PDGFRB","PDLIM4","COL6A3","ITGB5","TGFB1","PLOD2","MXRA5","THBS2","LGALS1","ANPEP","CALD1","FN1","GLIPR1","P3H1","COL6A2","LOX","TGFBI","COLGALT1","GPX7","PLAUR","SLC6A8","WIPF1","COL16A1","PPIB","FLNA","ITGAV","MMP2","GJA1","CALU","NTM","ITGA5","EFEMP2","VEGFC","IGFBP3","MEST","TIMP1","LUM","GEM","PLOD3","NID2","QSOX1"]},{"id":"HALLMARK_ALLOGRAFT_REJECTION","size":114,"es":0.609487,"nes":2.289358,"p":3.32520119508654e-09,"padj":8.31300298771635e-08,"q":5.6003388548826e-08,"rank":1137,"le":"tags=36%, list=9%, signal=33%","genes":["CXCL13","IL11","LIF","CD7","LTB","CCL11","CXCL9","HIF1A","DYRK3","THY1","INHBA","IL1B","IL2RG","C2","NME1","TGFB1","ITGB2","CCL5","TAP1","ETS1","STAT1","IL4R","IFNAR2","CD3D","B2M","AKT1","SRGN","CD2","HLA-DQA1","RPS19","SOCS5","FLNA","CCL4","TRAF2","TAP2","HLA-DRA","JAK2","TAPBP","IRF7","TIMP1","HLA-A"]},{"id":"HALLMARK_TNFA_SIGNALING_VIA_NFKB","size":181,"es":0.530516,"nes":2.115307,"p":5.322294283223e-09,"padj":8.87049047203833e-08,"q":5.97590937063635e-08,"rank":1516,"le":"tags=35%, list=12%, signal=31%","genes":["CXCL6","SPHK1","DUSP4","LIF","TNC","CXCL3","PMEPA1","IL7R","TNFAIP3","LAMB3","CCL20","CXCL2","INHBA","SLC2A6","IL1B","SERPINE1","BMP2","SAT1","SGK1","IER3","PHLDA1","RELB","PHLDA2","CXCL1","RNF19B","NFKBIE","PDE4B","TNFAIP8","CCL5","SOD2","TAP1","NINJ1","FOSL1","BCL2A1","TNIP1","EGR3","MAP2K3","TRIB1","MSC","KLF6","PLAUR","DRAM1","TSC22D1","LDLR","PANX1","PLAU","CEBPB","CCL4","TRAF1","B4GALT1","NFKB1","PFKFB3","GEM","ETS2","ZC3H12A","KDM6B","TNIP2","FOSL2","GCH1","NFKB2","BIRC3","BHLHE40","IRS2"]},{"id":"HALLMARK_INFLAMMATORY_RESPONSE","size":120,"es":0.532636,"nes":2.02321,"p":3.14257290390345e-06,"padj":3.92821612987931e-05,"q":2.64637718223449e-05,"rank":1237,"le":"tags=30%, list=10%, signal=27%","genes":["CXCL8","CXCL6","SPHK1","LIF","CD82","SCN1B","PCDH7","CXCL9","IL7R","CCL20","HIF1A","MMP14","INHBA","IL1B","SERPINE1","PDPN","BST2","IL1R1","SLC31A1","PDE4B","ATP2A2","CCL5","TNFRSF1B","IL4R","KLF6","PLAUR","LDLR","NFKB1","ITGA5","LY6E","TAPBP","SLC7A1","IRF7","TIMP1","OSMR","RGS1"]},{"id":"HALLMARK_IL6_JAK_STAT3_SIGNALING","size":63,"es":0.557912,"nes":1.879495,"p":0.000241236970482705,"padj":0.00197022167210241,"q":0.00132730723173215,"rank":958,"le":"tags=33%, list=8%, signal=31%","genes":["CXCL13","LTB","CXCL3","CXCL9","IL1B","IL2RG","HMOX1","STAT2","TNFRSF12A","IL1R1","CXCL1","TGFB1","TNFRSF1B","A2M","STAT1","IL4R","PDGFC","TNFRSF21","BAK1","PTPN1","PTPN11"]},{"id":"HALLMARK_INTERFERON_GAMMA_RESPONSE","size":162,"es":0.43014,"nes":1.689753,"p":0.000201271620604008,"padj":0.00197022167210241,"q":0.00132730723173215,"rank":1703,"le":"tags=33%, list=14%, signal=29%","genes":["CXCL9","TNFAIP3","ISG15","HIF1A","BPGM","EPSTI1","STAT2","OAS3","NLRC5","BST2","HLA-B","PDE4B","ISG20","CCL5","SOD2","TAP1","OAS2","STAT1","UPP1","PSMB9","IL4R","IFNAR2","PSME2","CMPK2","B2M","ADAR","HLA-DQA1","ARL4A","VAMP8","PTPN1","PELI1","PNP","NFKB1","IFI35","LY6E","IFITM3","JAK2","TAPBP","RSAD2","IRF7","HLA-A","PARP14","SECTM1","CFB","NCOA3","PSMB8","GCH1","UBE2L6","IL15","PML","FAS","IFITM2","RNF213","HLA-DMA"]},{"id":"HALLMARK_MYOGENESIS","size":153,"es":-0.481826,"nes":-1.639907,"p":0.000275831034094337,"padj":0.00197022167210241,"q":0.00132730723173215,"rank":962,"le":"tags=25%, list=8%, signal=23%","genes":["HSPB2","PYGM","TNNC1","SGCA","AGL","CD36","APOD","HSPB8","GPX3","TNNT1","FOXO4","LAMA2","COL15A1","FXYD1","TNNI2","SLN","SSPN","PGAM2","LSP1","SGCG","CLU","CFD","MYOM1","TNNC2","MB","FHL1","CKB","GSN","NCAM1","COX6A2","FABP3","TNNT3","MYL2","CKM","ABLIM1","MYL1","TCAP","ACTA1"]},{"id":"HALLMARK_ADIPOGENESIS","size":182,"es":-0.449775,"nes":-1.559779,"p":0.00091792870793581,"padj":0.00573705442459882,"q":0.00386496298078236,"rank":1791,"le":"tags=23%, list=15%, signal=20%","genes":["SUCLG1","PLIN2","HIBCH","APLP2","UBC","ACADM","ACAA2","MGLL","ACADS","C3","ECH1","BCL6","ELOVL6","UCP2","PHYH","DHRS7","HADH","ALDH2","CCNG2","CDKN2C","PPARG","IFNGR1","EPHX2","CD302","CD36","PDCD4","MCCC1","CMBL","HSPB8","RTN3","GPX3","COL15A1","FZD4","SSPN","OMD","CAT","SULT1A1","LIFR","ITIH5","ACADL","CYP4B1"]},{"id":"HALLMARK_BILE_ACID_METABOLISM","size":74,"es":-0.545839,"nes":-1.679714,"p":0.00129376589150232,"padj":0.00718758828612398,"q":0.00484216474012563,"rank":1766,"le":"tags=30%, list=14%, signal=26%","genes":["ABCA5","ALDH9A1","ABCA3","ABCD3","ACSL5","LONP2","PHYH","HSD17B4","EPHX2","HSD3B7","PEX11G","CYP27A1","AR","SLC29A1","HSD17B11","CAT","NR3C2","ABCA8","ABCA6","ABCA9","RXRG","ALDH1A1"]},{"id":"HALLMARK_UNFOLDED_PROTEIN_RESPONSE","size":104,"es":0.448847,"nes":1.638761,"p":0.00183006860095568,"padj":0.00915034300477839,"q":0.00616444160321913,"rank":2189,"le":"tags=37%, list=18%, signal=30%","genes":["STC2","EIF4EBP1","SLC7A5","HYOU1","SHC1","TATDN2","SLC1A4","YIF1A","ALDH18A1","WIPI1","CEBPB","EXOSC4","EDEM1","PDIA5","ERN1","CALR","LSM1","GOSR2","HSP90B1","KDELR3","SERP1","ARFGAP1","EIF4G1","PARN","SPCS3","SRPRB","DDX10","FKBP14","ERO1A","NFYA","VEGFA","BANF1","PREB","SEC31A","DCP2","CNOT6","HSPA5","EXOSC5"]},{"id":"HALLMARK_GLYCOLYSIS","size":155,"es":0.384034,"nes":1.506835,"p":0.00374250097482629,"padj":0.0170113680673922,"q":0.0114602900664537,"rank":1784,"le":"tags=28%, list=15%, signal=24%","genes":["SDC1","SLC16A3","STC2","COL5A1","AGRN","B4GALT2","GPC1","CHPF","IER3","B3GALT6","CHPF2","GMPPB","PLOD2","ISG20","GALE","TGFBI","GMPPA","HS2ST1","PKM","MIF","B4GALT1","GFPT1","HDLBP","STMN1","LHPP","KDELR3","IGFBP3","B4GALT7","GYS1","QSOX1","STC1","GOT2","TPI1","IRS2","CLN6","ERO1A","AKR1A1","VEGFA","ALG1","PGAM1","VCAN","ALDOA","GCLC"]},{"id":"HALLMARK_KRAS_SIGNALING_DN","size":56,"es":-0.541746,"nes":-1.585993,"p":0.00627847204094857,"padj":0.0209282401364952,"q":0.01409902493406,"rank":2100,"le":"tags=30%, list=17%, signal=25%","genes":["THNSL2","VPS50","BTG2","TCF7L1","CAMK1D","PTGFR","MTHFR","SLC16A7","ZC2HC1C","THRB","YPEL1","HSD11B2","EFHD1","C5","ZBTB16","CNTFR","CKM"]},{"id":"HALLMARK_COAGULATION","size":83,"es":0.439862,"nes":1.565109,"p":0.00596520934460258,"padj":0.0209282401364952,"q":0.01409902493406,"rank":758,"le":"tags=20%, list=6%, signal=19%","genes":["MMP1","MMP11","MMP3","C1QA","SPARC","BMP1","MMP14","PRSS23","SERPINE1","C2","CTSB","A2M","FN1","CTSK","PECAM1","FURIN","PLAU"]},{"id":"HALLMARK_KRAS_SIGNALING_UP","size":138,"es":0.387393,"nes":1.477518,"p":0.00515459686708828,"padj":0.0209282401364952,"q":0.01409902493406,"rank":831,"le":"tags=20%, list=7%, signal=19%","genes":["MMP11","SCG5","LIF","SCN1B","PRDM1","TMEM158","IL7R","TNFAIP3","CCL20","FCER1G","BPGM","INHBA","IL1B","IL2RG","MMD","BMP2","LAPTM5","ANO1","SPON1","ITGB2","TNFRSF1B","ETS1","CD37","PECAM1","TRIB1","PLAUR","PLAU","TRAF1"]},{"id":"HALLMARK_P53_PATHWAY","size":168,"es":0.364715,"nes":1.456048,"p":0.00615719512173157,"padj":0.0209282401364952,"q":0.01409902493406,"rank":1043,"le":"tags=19%, list=9%, signal=18%","genes":["SDC1","SPHK1","LIF","KRT17","CD82","TRAF4","RRAD","HMOX1","BMP2","SAT1","IER3","BAX","PLXNB2","RNF19B","IRAK1","TGFB1","TAP1","NINJ1","PITPNC1","UPP1","SEC61A1","FDXR","DRAM1","TSC22D1","PIDD1","TP53","VAMP8","BAK1","MXD4","TRIAP1","CDH13","SLC35D1"]}]},{"name":"Macrofagos","file":"Macrphages_GSEA_Hallmark.xlsx","rows":[{"id":"HALLMARK_INTERFERON_GAMMA_RESPONSE","size":168,"es":0.634473,"nes":2.192169,"p":2.22878514913724e-10,"padj":1.11439257456862e-08,"q":8.4459226704148e-09,"rank":772,"le":"tags=35%, list=11%, signal=32%","genes":["CXCL9","CXCL11","CXCL10","IL2RB","IDO1","IFI27","CD38","STAT1","LGALS3BP","GZMA","CD274","IL18BP","TAP1","RSAD2","PARP12","PSME2","OAS3","TAPBP","SERPING1","SOCS1","IFIT1","UBE2L6","IL6","CMPK2","IL15RA","SAMD9L","GBP4","APOL6","CCL5","LAP3","CD40","PIM1","BST2","EPSTI1","OAS2","IFI35","ARID5B","NLRC5","MX1","NMI","PSMB9","HIF1A","PARP14","HLA-A","PSMB2","LYSMD2","SLAMF7","PML","STAT2","IRF1","VAMP5","SPPL2A","PSMB8","B2M","CASP7","RNF213","HLA-B","CD74","PFKP"]},{"id":"HALLMARK_ALLOGRAFT_REJECTION","size":139,"es":0.615617,"nes":2.074047,"p":2.2569978333081e-08,"padj":5.64249458327025e-07,"q":4.27641694732061e-07,"rank":556,"le":"tags=26%, list=8%, signal=24%","genes":["CXCL13","CXCL9","IL2RA","IL2RB","C2","CD247","LTB","LCK","CD80","GZMB","CD3E","STAT1","MMP9","GZMA","IL2RG","CAPG","TAP1","CD7","CD3D","CD3G","TAPBP","SOCS1","TPD52","IL6","NME1","CCL5","CD40","INHBA","TAP2","ETS1","CD4","HIF1A","HLA-A","CD2","HLA-DOA","CCL22"]},{"id":"HALLMARK_IL2_STAT5_SIGNALING","size":137,"es":0.606297,"nes":2.033626,"p":3.18808136309041e-07,"padj":5.31346893848402e-06,"q":4.02705014285105e-06,"rank":850,"le":"tags=32%, list=12%, signal=29%","genes":["CXCL10","CSF2","SPP1","ICOS","IL2RA","IL2RB","LTB","CD81","TGM2","SOCS2","TNFRSF18","CISH","CAPG","CST7","RHOH","BCL2L1","GALM","SYNGR2","MYO1E","SOCS1","BATF","HK2","TNFRSF4","IL3RA","GBP4","IGF2R","PIM1","NRP1","SMPDL3A","GSTO1","GPX4","BHLHE40","ITGAV","NDRG1","TNFRSF9","CTLA4","CTSZ","BMPR2","RRAGD","ADAM19","FAH","DCPS","CD86","DHRS3"]},{"id":"HALLMARK_IL6_JAK_STAT3_SIGNALING","size":69,"es":0.682258,"nes":2.078971,"p":2.13396736006416e-06,"padj":2.66745920008019e-05,"q":2.02165328848183e-05,"rank":374,"le":"tags=26%, list=5%, signal=25%","genes":["CXCL13","CXCL9","CXCL11","CXCL10","CSF2","IL2RA","LTB","CD38","STAT1","IL2RG","A2M","SOCS1","IL6","EBI3","IL15RA","IL3RA","CD9","PIM1"]},{"id":"HALLMARK_INTERFERON_ALPHA_RESPONSE","size":81,"es":0.635851,"nes":1.977932,"p":1.4023813890277e-05,"padj":0.00014023813890277,"q":0.000106285747378941,"rank":910,"le":"tags=40%, list=13%, signal=35%","genes":["CXCL11","CXCL10","LAMP3","IFI27","LGALS3BP","TAP1","RSAD2","PARP12","PSME2","TMEM140","UBE2L6","CMPK2","SAMD9L","GBP4","LAP3","BST2","EPSTI1","PROCR","IFI35","MX1","NMI","PSMB9","PARP14","STAT2","IRF1","PSMB8","B2M","PARP9","CD74","NUB1","ADAR","CNP"]},{"id":"HALLMARK_MYOGENESIS","size":75,"es":-0.596155,"nes":-1.960736,"p":5.22319356744723e-05,"padj":0.000435266130620602,"q":0.000329885909522983,"rank":586,"le":"tags=25%, list=8%, signal=23%","genes":["GADD45B","EIF4A2","LPIN1","TAGLN","BIN1","CDKN1A","IGFBP7","TNNT1","SVIL","CD36","TNNI2","MEF2C","TPM2","CFD","CLU","FHL1","APOD","ACTA1","TNNC2"]},{"id":"HALLMARK_COMPLEMENT","size":137,"es":0.542833,"nes":1.820759,"p":7.3339045187698e-05,"padj":0.000523850322769272,"q":0.000397023402519869,"rank":483,"le":"tags=26%, list=7%, signal=24%","genes":["MMP12","APOC1","MMP14","C2","SPOCK2","PLA2G7","LCK","GZMB","GZMA","CTSL","CTSD","CTSC","FN1","CTSB","C1QC","ATOX1","CD59","C1QA","GNGT2","DOCK4","LGMN","SERPING1","IL6","LIPA","CCL5","RCE1","LAP3","CALM3","PIM1","LAMP2","ADAM9","APOBEC3G","PSMB9","GNB4","CTSH"]},{"id":"HALLMARK_INFLAMMATORY_RESPONSE","size":148,"es":0.513763,"nes":1.743848,"p":0.000177419082401176,"padj":0.00110886926500735,"q":0.000840406179795044,"rank":488,"le":"tags=21%, list=7%, signal=20%","genes":["CXCL9","CXCL11","CXCR6","CXCL10","IL2RB","MMP14","LAMP3","PDPN","IL7R","LCK","SLAMF1","CD82","CLEC5A","ITGB8","SLC31A1","ATP2C1","TAPBP","ABCA1","IL6","EBI3","IL15RA","RGS1","SCARF1","PTAFR","CCL5","CD40","INHBA","BST2","GNA15","NMI","HIF1A"]},{"id":"HALLMARK_KRAS_SIGNALING_UP","size":110,"es":0.504053,"nes":1.631208,"p":0.000904842243983098,"padj":0.00502690135546165,"q":0.00380986207992883,"rank":414,"le":"tags=19%, list=6%, signal=18%","genes":["ADAMDEC1","CXCL10","CSF2","SPP1","ACE","IL7R","MMP10","PDCD1LG2","MMP9","EPHB2","IL2RG","TMEM176A","GPNMB","ERO1A","TMEM176B","FUCA1","GADD45G","INHBA","ENG","NRP1","ADAM8"]},{"id":"HALLMARK_MTORC1_SIGNALING","size":151,"es":0.440917,"nes":1.502365,"p":0.0082140450477081,"padj":0.0410702252385405,"q":0.0311269075492097,"rank":866,"le":"tags=25%, list=12%, signal=23%","genes":["SCD","NUPR1","SLC7A11","ERO1A","CTSC","SLC2A1","IDH1","SLC1A4","PPA1","LGMN","TFRC","HK2","CALR","HSP90B1","LDHA","CD9","SDF2L1","PRDX1","RPN1","GAPDH","TPI1","HMGCR","PSMC2","GPI","GGA2","ENO1","PSMB5","BHLHE40","PFKL","YKT6","ALDOA","PSMC4","PSMD14","ATP6V1D","ARPC5L","CANX","PGK1","RPA1"]},{"id":"HALLMARK_GLYCOLYSIS","size":102,"es":0.482016,"nes":1.547549,"p":0.00951947706266185,"padj":0.0432703502848266,"q":0.0327943707421844,"rank":885,"le":"tags=30%, list=13%, signal=27%","genes":["SDC3","ERO1A","MERTK","IDH1","QSOX1","PLOD1","SLC16A3","HK2","CYB5A","GFPT1","PKM","TGFBI","LDHA","AKR1A1","GOT2","TXN","TPI1","AGRN","ENO1","DLD","ANGPTL4","ALDOA","PSMC4","SDC2","RRAGD","B3GAT3","ALDH9A1","PFKP","GMPPA","PGK1","MDH1"]}]}]};
+
+  // =====================================================================
+  // UTILIDADES
+  // =====================================================================
+  function $(id) { return document.getElementById(id); }
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+  function fmt(x, d) { return (x >= 0 ? "" : "-") + Math.abs(x).toFixed(d); }
+  function fmtS(x, d) { return (x >= 0 ? "+" : "-") + Math.abs(x).toFixed(d); }
+  function fmtP(p) { return p < 0.001 ? p.toExponential(1) : p.toFixed(4); }
+  function stars(p) { return p < 0.001 ? "***" : (p < 0.01 ? "**" : (p < 0.05 ? "*" : "")); }
+  function pct(x) { return Math.round(x) + " %"; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function clip(s, n) { return s.length > n ? s.slice(0, n - 1) + "." : s; }
+  function norm(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  function parseNum(x) {
+    if (typeof x === "number") return isFinite(x) ? x : null;
+    if (x == null) return null;
+    var s = String(x).trim().replace(",", ".");
+    if (s === "" || s.toUpperCase() === "NA" || s.toUpperCase() === "NAN") return null;
+    var v = parseFloat(s);
+    return isFinite(v) ? v : null;
+  }
+  function rng(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(r) { var u = 0, v = r(); while (u === 0) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  function erfc(x) {
+    var t = 1 / (1 + 0.3275911 * x);
+    var poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+    return poly * Math.exp(-x * x);
+  }
+  var TOK = { tnfa: "TNFA", nfkb: "NFKB", il2: "IL2", il6: "IL6", stat5: "STAT5", stat3: "STAT3", jak: "JAK", myc: "MYC", v1: "V1", v2: "V2", uv: "UV", dn: "DN", kras: "KRAS", up: "UP", pi3k: "PI3K", akt: "AKT", mtor: "mTOR", mtorc1: "mTORC1", p53: "p53", dna: "DNA", e2f: "E2F", g2m: "G2M", tgf: "TGF", wnt: "WNT" };
+  function pretty(id) {
+    return String(id).replace(/^(HALLMARK|KEGG|REACTOME|GOBP|GOCC|GOMF|WP|BIOCARTA|PID)_/, "").toLowerCase().split("_").map(function (x, i) {
+      if (TOK[x]) return TOK[x];
+      return i === 0 ? x.charAt(0).toUpperCase() + x.slice(1) : x;
+    }).join(" ");
+  }
+  function colorFor(v) {
+    var t = clamp(v / 2.6, -1, 1);
+    var from = t < 0 ? [43, 108, 176] : [197, 48, 48];
+    var white = [247, 250, 252], k = Math.abs(t);
+    var c = [0, 1, 2].map(function (i) { return Math.round(white[i] + (from[i] - white[i]) * k); });
+    return "rgb(" + c.join(",") + ")";
+  }
+  function txtColor(v) { return Math.abs(v) > 1.5 ? "#fff" : "#1a202c"; }
+  function teal(v) {
+    var white = [247, 250, 252], to = [31, 111, 139];
+    var c = [0, 1, 2].map(function (i) { return Math.round(white[i] + (to[i] - white[i]) * clamp(v, 0, 1)); });
+    return "rgb(" + c.join(",") + ")";
+  }
+
+  // =====================================================================
+  // BACKEND SIMULADO 1: lectura y validacion de archivos
+  // (en la app real esto lo hace el servidor y devuelve el mismo resultado)
+  // =====================================================================
+  var FIELDS = [
+    { k: "id", label: "Ruta (ID)" }, { k: "nes", label: "NES" }, { k: "padj", label: "p ajustado" },
+    { k: "p", label: "p valor" }, { k: "q", label: "q valor" }, { k: "size", label: "Tamano" }, { k: "genes", label: "Genes core" }
+  ];
+  var SYN = {
+    id: ["id", "description", "pathway", "term", "name", "geneset", "setname", "pathwayname", "descripcion"],
+    nes: ["nes", "normalizedenrichmentscore"],
+    padj: ["padjust", "padj", "fdr", "adjpval", "adjustedpvalue", "pvalueadjusted", "qvaluefdr"],
+    p: ["pvalue", "pval", "p", "nompval", "nominalpvalue"],
+    q: ["qvalue", "qval"],
+    size: ["setsize", "size", "genesetsize"],
+    genes: ["coreenrichment", "leadingedgegenes", "coregenes", "genes"],
+    es: ["enrichmentscore", "es"], rank: ["rank"], le: ["leadingedge"]
+  };
+  function detectMap(headers) {
+    var nh = headers.map(norm), m = {};
+    Object.keys(SYN).forEach(function (k) {
+      m[k] = "";
+      for (var s = 0; s < SYN[k].length && !m[k]; s++) { var i = nh.indexOf(SYN[k][s]); if (i >= 0) m[k] = headers[i]; }
+    });
+    return m;
+  }
+  function splitGenes(v) {
+    if (v == null) return [];
+    var s = String(v).trim();
+    if (!s) return [];
+    var parts = s.indexOf("/") >= 0 ? s.split("/") : s.split(/[,;\s]+/);
+    return parts.map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function detectColl(ids) {
+    var n = ids.length || 1;
+    function share(re) { return ids.filter(function (x) { return re.test(x); }).length / n; }
+    if (share(/^HALLMARK_/) >= 0.5) return "Hallmark";
+    if (share(/^KEGG_/) >= 0.5) return "KEGG";
+    if (share(/^REACTOME_/) >= 0.5) return "Reactome";
+    if (share(/^GO(BP|CC|MF)_/) >= 0.5) return "GO";
+    return "Coleccion 1";
+  }
+  function nameFromFile(f) {
+    var s = f.replace(/\.[^.]+$/, "").replace(/^[0-9a-f]{8}-/i, "").replace(/[_-]+/g, " ");
+    s = s.replace(/\b(gsea|hallmark|hallmarks|results|resultados|table|tabla|kegg|reactome|go|completa|full)\b/ig, " ").replace(/\s+/g, " ").trim();
+    if (!s) s = f.replace(/\.[^.]+$/, "");
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function applyMap(e) {
+    e.warn = []; e.rows = []; var m = e.map;
+    if (!e.raw.length) { e.status = "vacio"; return; }
+    var sig = m.padj || m.q || m.p;
+    if (!m.id || !m.nes || !sig) {
+      e.status = "error";
+      e.warn.push("Faltan columnas obligatorias: " + [!m.id ? "ruta" : "", !m.nes ? "NES" : "", !sig ? "p ajustado" : ""].filter(Boolean).join(", ") + ". Elige la columna correcta en 'Columnas'.");
+      return;
+    }
+    if (!m.padj) e.warn.push("No hay columna de p ajustado: se usa '" + sig + "' tal cual (puede no estar corregido por tests multiples).");
+    var skipped = 0, seen = {}, dup = 0;
+    e.raw.forEach(function (r) {
+      var id = String(r[m.id] == null ? "" : r[m.id]).trim(), nes = parseNum(r[m.nes]), pa = parseNum(r[sig]);
+      if (!id || nes == null || pa == null) { skipped++; return; }
+      if (seen[id]) dup++; seen[id] = 1;
+      var pv = m.p ? parseNum(r[m.p]) : null, qv = m.q ? parseNum(r[m.q]) : null;
+      e.rows.push({
+        id: id, size: m.size ? (parseNum(r[m.size]) || 0) : 0, es: m.es ? (parseNum(r[m.es]) || 0) : 0,
+        nes: nes, p: pv == null ? pa : pv, padj: pa, q: qv == null ? pa : qv,
+        rank: m.rank ? (parseNum(r[m.rank]) || 0) : 0, le: m.le ? String(r[m.le] || "") : "",
+        genes: m.genes ? splitGenes(r[m.genes]) : []
+      });
+    });
+    if (skipped) e.warn.push(skipped + " filas ignoradas por falta de ruta, NES o p ajustado.");
+    if (dup) e.warn.push(dup + " rutas repetidas en el archivo; se usa la ultima.");
+    if (e.rows.length && !e.rows.some(function (r) { return r.genes.length; })) e.warn.push("Sin genes core: no habra analisis de genes comunes para este archivo.");
+    e.status = e.rows.length ? "ok" : "error";
+    if (!e.rows.length) e.warn.push("Ninguna fila valida.");
+  }
+  // --- lector CSV/TSV
+  function parseDelim(text) {
+    if (text.charCodeAt(0) === 65279) text = text.slice(1);
+    var first = text.split(/\r?\n/)[0] || "";
+    var delim = [",", ";", "\t"].map(function (d) { return [d, first.split(d).length]; }).sort(function (a, b) { return b[1] - a[1]; })[0][0];
+    var rows = [], row = [], f = "", inq = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charAt(i);
+      if (inq) {
+        if (c === '"') { if (text.charAt(i + 1) === '"') { f += '"'; i++; } else inq = false; } else f += c;
+      } else if (c === '"') inq = true;
+      else if (c === delim) { row.push(f); f = ""; }
+      else if (c === "\n" || c === "\r") { if (c === "\r" && text.charAt(i + 1) === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+      else f += c;
+    }
+    if (f !== "" || row.length) { row.push(f); rows.push(row); }
+    return rows;
+  }
+  // --- lector xlsx sin librerias (zip + deflate nativo del navegador)
+  function inflateRaw(u8) {
+    var s = new Blob([u8]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Response(s).arrayBuffer().then(function (b) { return new Uint8Array(b); });
+  }
+  function unzip(buf) {
+    var dv = new DataView(buf), u8 = new Uint8Array(buf), n = u8.length, eocd = -1;
+    for (var i = n - 22; i >= Math.max(0, n - 65557); i--) { if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; } }
+    if (eocd < 0) throw new Error("No parece un xlsx valido (no es un zip).");
+    var count = dv.getUint16(eocd + 10, true), off = dv.getUint32(eocd + 16, true), files = {}, dec = new TextDecoder();
+    for (var k = 0; k < count; k++) {
+      if (dv.getUint32(off, true) !== 0x02014b50) break;
+      var nl = dv.getUint16(off + 28, true), el = dv.getUint16(off + 30, true), cl = dv.getUint16(off + 32, true);
+      files[dec.decode(u8.subarray(off + 46, off + 46 + nl))] = { method: dv.getUint16(off + 10, true), csize: dv.getUint32(off + 20, true), lo: dv.getUint32(off + 42, true) };
+      off += 46 + nl + el + cl;
+    }
+    return { u8: u8, dv: dv, files: files, dec: dec };
+  }
+  function zipText(z, name) {
+    var f = z.files[name];
+    if (!f) return Promise.resolve(null);
+    var ln = z.dv.getUint16(f.lo + 26, true), le = z.dv.getUint16(f.lo + 28, true), st = f.lo + 30 + ln + le;
+    var data = z.u8.subarray(st, st + f.csize);
+    var p = f.method === 0 ? Promise.resolve(data) : inflateRaw(data);
+    return p.then(function (out) { return z.dec.decode(out); });
+  }
+  function readXlsx(buf) {
+    var z = unzip(buf), dp = new DOMParser(), ss = [];
+    return zipText(z, "xl/sharedStrings.xml").then(function (x) {
+      if (x) Array.prototype.forEach.call(dp.parseFromString(x, "application/xml").getElementsByTagName("si"), function (si) {
+        ss.push(Array.prototype.map.call(si.getElementsByTagName("t"), function (t) { return t.textContent; }).join(""));
+      });
+      var names = Object.keys(z.files).filter(function (n) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(n); }).sort(function (a, b) { return parseInt(a.replace(/\D/g, ""), 10) - parseInt(b.replace(/\D/g, ""), 10); });
+      if (!names.length) throw new Error("El xlsx no tiene hojas.");
+      return zipText(z, names[0]);
+    }).then(function (xml) {
+      var sd = dp.parseFromString(xml, "application/xml"), rows = [];
+      Array.prototype.forEach.call(sd.getElementsByTagName("row"), function (row) {
+        var arr = [];
+        Array.prototype.forEach.call(row.getElementsByTagName("c"), function (c) {
+          var ref = c.getAttribute("r") || "", m = ref.match(/^[A-Z]+/), col = arr.length;
+          if (m) { col = 0; for (var j = 0; j < m[0].length; j++) col = col * 26 + (m[0].charCodeAt(j) - 64); col -= 1; }
+          var t = c.getAttribute("t"), v = c.getElementsByTagName("v")[0], val = "";
+          if (t === "inlineStr") val = Array.prototype.map.call(c.getElementsByTagName("t"), function (x) { return x.textContent; }).join("");
+          else if (v) { val = v.textContent; if (t === "s") val = ss[+val] || ""; }
+          arr[col] = val;
+        });
+        rows.push(arr);
+      });
+      return rows;
+    });
+  }
+  function tableFromRows(rows) {
+    var hdr = (rows[0] || []).map(function (h) { return String(h == null ? "" : h).trim(); });
+    while (hdr.length && !hdr[hdr.length - 1]) hdr.pop();
+    var data = rows.slice(1).filter(function (r) { return r.some(function (x) { return String(x == null ? "" : x).trim() !== ""; }); }).map(function (r) {
+      var o = {}; hdr.forEach(function (h, i) { if (h) o[h] = r[i] == null ? "" : r[i]; }); return o;
+    });
+    return { headers: hdr.filter(Boolean), data: data };
+  }
+  function readFile(file) {
+    if (/\.xlsx$/i.test(file.name)) return file.arrayBuffer().then(readXlsx).then(tableFromRows);
+    if (/\.(csv|tsv|txt)$/i.test(file.name)) return file.text().then(function (t) { return tableFromRows(parseDelim(t)); });
+    return Promise.reject(new Error("Formato no admitido (usa .xlsx, .csv o .tsv)."));
+  }
+
+  // =====================================================================
+  // DATOS DE EJEMPLO
+  // =====================================================================
+  var entries = [], uid = 0;
+  function addEntry(o) { o.uid = ++uid; o.warn = o.warn || []; o.openMap = false; entries.push(o); return o; }
+  function loadReal() {
+    entries = [];
+    REAL.cts.forEach(function (c) {
+      addEntry({ file: c.file, ct: c.name, coll: "Hallmark", source: "real", raw: null, headers: null, map: null, rows: c.rows, status: c.rows.length ? "ok" : "vacio" });
+    });
+  }
+  var HALL = ["ADIPOGENESIS", "ALLOGRAFT_REJECTION", "ANDROGEN_RESPONSE", "ANGIOGENESIS", "APICAL_JUNCTION", "APICAL_SURFACE", "APOPTOSIS", "BILE_ACID_METABOLISM", "CHOLESTEROL_HOMEOSTASIS", "COAGULATION", "COMPLEMENT", "DNA_REPAIR", "E2F_TARGETS", "EPITHELIAL_MESENCHYMAL_TRANSITION", "ESTROGEN_RESPONSE_EARLY", "ESTROGEN_RESPONSE_LATE", "FATTY_ACID_METABOLISM", "G2M_CHECKPOINT", "GLYCOLYSIS", "HEDGEHOG_SIGNALING", "HEME_METABOLISM", "HYPOXIA", "IL2_STAT5_SIGNALING", "IL6_JAK_STAT3_SIGNALING", "INFLAMMATORY_RESPONSE", "INTERFERON_ALPHA_RESPONSE", "INTERFERON_GAMMA_RESPONSE", "KRAS_SIGNALING_DN", "KRAS_SIGNALING_UP", "MITOTIC_SPINDLE", "MTORC1_SIGNALING", "MYC_TARGETS_V1", "MYC_TARGETS_V2", "MYOGENESIS", "NOTCH_SIGNALING", "OXIDATIVE_PHOSPHORYLATION", "P53_PATHWAY", "PANCREAS_BETA_CELLS", "PEROXISOME", "PI3K_AKT_MTOR_SIGNALING", "PROTEIN_SECRETION", "REACTIVE_OXYGEN_SPECIES_PATHWAY", "SPERMATOGENESIS", "TGF_BETA_SIGNALING", "TNFA_SIGNALING_VIA_NFKB", "UNFOLDED_PROTEIN_RESPONSE", "UV_RESPONSE_DN", "UV_RESPONSE_UP", "WNT_BETA_CATENIN_SIGNALING", "XENOBIOTIC_METABOLISM"];
+  function bh(rows) {
+    var o = rows.slice().sort(function (x, y) { return x.p - y.p; }), m = o.length, prev = 1;
+    for (var i = m - 1; i >= 0; i--) { var q = Math.min(prev, o[i].p * m / (i + 1)); o[i].padj = Math.min(q, 1); prev = o[i].padj; }
+  }
+  function pad(n, w) { var s = String(n); while (s.length < w) s = "0" + s; return s; }
+  function loadSim() {
+    entries = [];
+    var rand = rng(4242), types = ["Tumor", "NK", "CD8 T", "Fibroblastos", "Macrofagos", "Linfocitos B"], scale = [1.0, 1.0, 1.1, 0.75, 0.85, 0.9];
+    var shared = HALL.map(function () { return gauss(rand); });
+    types.forEach(function (t, ti) {
+      var rows = HALL.map(function (h, i) {
+        var nes = clamp(scale[ti] * 1.15 * (0.45 * shared[i] + 0.9 * gauss(rand)), -2.9, 2.9);
+        var size = 20 + Math.floor(rand() * 180), p = Math.max(erfc(Math.abs(nes) * 1.9 / Math.SQRT2), 1e-12);
+        return { id: "HALLMARK_" + h, size: size, es: nes / 3, nes: nes, p: p, padj: 1, q: 1, rank: Math.floor(rand() * 2000), le: "", genes: [], _i: i };
+      });
+      bh(rows);
+      rows.forEach(function (r) {
+        r.q = r.padj * 0.7;
+        var n = Math.max(5, Math.round(r.size * (0.15 + rand() * 0.3))), seen = {}, g = [];
+        var guard = 0;
+        while (g.length < Math.min(n, 70) && guard++ < 400) {
+          var k = rand() < 0.55 ? Math.floor(rand() * 22) : Math.floor(rand() * 70);
+          var name = "SIM" + pad(r._i, 2) + "G" + pad(k, 2);
+          if (!seen[name]) { seen[name] = 1; g.push(name); }
+        }
+        r.genes = g; delete r._i;
+      });
+      addEntry({ file: "SIM_" + t.replace(/ /g, "_") + "_GSEA_completa.csv", ct: t, coll: "Hallmark", source: "sim", raw: null, headers: null, map: null, rows: rows, status: "ok", warn: ["Datos inventados. Los genes SIM..G.. no existen."] });
+    });
+  }
+
+  // =====================================================================
+  // MODELO (se reconstruye cada vez que cambian los datos)
+  // =====================================================================
+  var CTS = [], IDX = [], ALL = [], COLLS = [];
+  var state = {
+    coll: "", cts: [], padj: 0.05, nes: 0, dir: "all", q: "", maxRows: 40, showNS: false,
+    a: 0, b: 1, pw: "", tsort: { k: "padj", dir: 1 }, tblAll: false, gsearch: "", onlyShared: true
+  };
+  var pats = [];
+
+  function rebuildModel() {
+    var seenC = {}; COLLS = [];
+    entries.forEach(function (e) { if (!seenC[e.coll]) { seenC[e.coll] = 1; COLLS.push(e.coll); } });
+    if (COLLS.indexOf(state.coll) < 0) state.coll = COLLS[0] || "";
+    var by = {}; CTS = [];
+    entries.filter(function (e) { return e.coll === state.coll; }).forEach(function (e) {
+      var c = by[e.ct];
+      if (!c) { c = by[e.ct] = { name: e.ct, short: clip(e.ct, 12), files: [], rows: [], entries: [] }; CTS.push(c); }
+      c.files.push(e.file); c.entries.push(e); e.rows.forEach(function (r) { c.rows.push(r); });
+    });
+    IDX = CTS.map(function (c) { var m = {}; c.rows.forEach(function (r) { m[r.id] = r; }); return m; });
+    var seen = {}; ALL = [];
+    CTS.forEach(function (c) { c.rows.forEach(function (r) { if (!seen[r.id]) { seen[r.id] = 1; ALL.push(r.id); } }); });
+    ALL.sort(function (a, b) { return pretty(a).localeCompare(pretty(b)); });
+    state.cts = CTS.map(function () { return true; });
+    var withD = CTS.map(function (c, i) { return i; }).filter(function (i) { return CTS[i].rows.some(function (r) { return r.padj <= state.padj; }); });
+    var order = withD.concat(CTS.map(function (c, i) { return i; }).filter(function (i) { return withD.indexOf(i) < 0; }));
+    state.a = order[0] == null ? 0 : order[0]; state.b = order[1] == null ? state.a : order[1];
+    computePats();
+    var best = pats.slice().sort(function (x, y) { return y.list.length - x.list.length || y.mean - x.mean; })[0];
+    state.pw = best ? best.id : (ALL[0] || "");
+  }
+
+  function selIdx() { var r = []; state.cts.forEach(function (v, i) { if (v) r.push(i); }); return r; }
+  function isSig(r) {
+    return !!r && r.padj <= state.padj + 1e-12 && Math.abs(r.nes) >= state.nes &&
+      (state.dir === "all" || (state.dir === "up" && r.nes > 0) || (state.dir === "down" && r.nes < 0));
+  }
+  function matchQ(id) { var q = state.q.trim().toLowerCase(); return !q || pretty(id).toLowerCase().indexOf(q) >= 0 || id.toLowerCase().indexOf(q) >= 0; }
+  function sigList(ci) { return CTS[ci].rows.filter(function (r) { return isSig(r) && matchQ(r.id); }); }
+  function typeOf(list) {
+    if (list.length === 1) return "especifica";
+    var pos = list.filter(function (e) { return e.row.nes > 0; }).length;
+    return (pos === 0 || pos === list.length) ? "mismo" : "opuesto";
+  }
+  function typeLabel(t) { return t === "mismo" ? "mismo sentido" : (t === "opuesto" ? "sentido opuesto" : "especifica"); }
+  function typePill(t) { return '<span class="pill ' + (t === "mismo" ? "s" : (t === "opuesto" ? "o" : "n")) + '">' + typeLabel(t) + '</span>'; }
+  function dirWord(nes) { return nes > 0 ? "enriquecida" : "suprimida"; }
+
+  // =====================================================================
+  // BACKEND SIMULADO 2: patrones, similitud, genes comunes
+  // =====================================================================
+  function computePats() {
+    var sel = selIdx(); pats = [];
+    ALL.forEach(function (id) {
+      if (!matchQ(id)) return;
+      var list = [];
+      sel.forEach(function (ci) { var r = IDX[ci][id]; if (isSig(r)) list.push({ ci: ci, row: r }); });
+      if (!list.length) return;
+      var mean = list.reduce(function (s, e) { return s + Math.abs(e.row.nes); }, 0) / list.length;
+      pats.push({ id: id, list: list, type: typeOf(list), mean: mean });
+    });
+  }
+  function overlapAll(list) {
+    var cnt = {}, genes = [];
+    list.forEach(function (e) { e.row.genes.forEach(function (g) { if (!cnt[g]) { cnt[g] = 0; genes.push(g); } cnt[g]++; }); });
+    var inter = genes.filter(function (g) { return cnt[g] === list.length; }).sort();
+    return { union: genes.length, inter: inter, pct: genes.length ? inter.length / genes.length * 100 : 0, cnt: cnt, genes: genes };
+  }
+  function overlapPair(ra, rb) {
+    var sb = {}; rb.genes.forEach(function (g) { sb[g] = 1; });
+    var inter = ra.genes.filter(function (g) { return sb[g]; }).sort();
+    var u = ra.genes.length + rb.genes.length - inter.length, mn = Math.min(ra.genes.length, rb.genes.length);
+    return { inter: inter, nA: ra.genes.length, nB: rb.genes.length, pctU: u ? inter.length / u * 100 : 0, pctMin: mn ? inter.length / mn * 100 : 0 };
+  }
+  function pairInfo(a, b) {
+    var A = sigList(a), B = sigList(b), mb = {}, used = {};
+    B.forEach(function (r) { mb[r.id] = r; });
+    var conc = [], opp = [], onlyA = [];
+    A.forEach(function (r) {
+      var o = mb[r.id];
+      if (o) { used[r.id] = 1; ((r.nes > 0) === (o.nes > 0) ? conc : opp).push({ id: r.id, ra: r, rb: o }); } else onlyA.push(r);
+    });
+    var onlyB = B.filter(function (r) { return !used[r.id]; });
+    var jac = (A.length === 0 || B.length === 0) ? null : conc.length / (A.length + B.length - conc.length);
+    return { conc: conc, opp: opp, onlyA: onlyA, onlyB: onlyB, nA: A.length, nB: B.length, jac: jac };
+  }
+  function commonInfo(p) {
+    if (p.list.length < 2) return null;
+    if (p.list.some(function (e) { return !e.row.genes.length; })) return null;
+    return overlapAll(p.list);
+  }
+  function chips(genes, max, cls) {
+    var show = genes.slice(0, max).map(function (g) { return '<span class="chip' + (cls ? " " + cls : "") + '">' + esc(g) + '</span>'; }).join("");
+    if (genes.length > max) show += '<span class="small" style="align-self:center">+' + (genes.length - max) + ' mas</span>';
+    return genes.length ? '<div class="chips">' + show + '</div>' : '<span class="small">ninguno</span>';
+  }
+  function otherNote(ci, id) {
+    var r = IDX[ci][id];
+    if (!r) return ' <span class="small">(no esta en la tabla de ' + esc(CTS[ci].short) + ')</span>';
+    return ' <span class="small">(en ' + esc(CTS[ci].short) + ': NES ' + fmtS(r.nes, 2) + ', p aj. ' + fmtP(r.padj) + ', fuera de filtros)</span>';
+  }
+
+  // =====================================================================
+  // PANTALLAS
+  // =====================================================================
+  function renderSide() {
+    $("coll").innerHTML = COLLS.map(function (c) { return '<option value="' + esc(c) + '"' + (c === state.coll ? " selected" : "") + '>' + esc(c) + '</option>'; }).join("");
+    $("cts").innerHTML = CTS.map(function (c, i) {
+      var n = sigList(i).length;
+      return '<label class="chk' + (c.rows.length ? "" : " empty") + '"><input type="checkbox" data-c="' + i + '"' + (state.cts[i] ? " checked" : "") + '> ' + esc(c.name) + ' (' + n + ')</label>';
+    }).join("");
+    Array.prototype.forEach.call(document.querySelectorAll("#cts input"), function (el) {
+      el.addEventListener("change", function () {
+        var i = +el.getAttribute("data-c");
+        state.cts[i] = el.checked;
+        if (selIdx().length < 2 && CTS.length >= 2) { state.cts[i] = true; el.checked = true; return; }
+        fixAB(); renderAll(); resetLlm();
+      });
+    });
+    var opts = selIdx().map(function (i) { return '<option value="' + i + '">' + esc(CTS[i].name) + '</option>'; }).join("");
+    $("selA").innerHTML = opts; $("selB").innerHTML = opts;
+    $("selA").value = String(state.a); $("selB").value = String(state.b);
+  }
+  function fixAB() {
+    var s = selIdx();
+    if (!s.length) return;
+    if (!state.cts[state.a]) state.a = s[0];
+    if (!state.cts[state.b] || state.b === state.a) { var o = s.filter(function (i) { return i !== state.a; }); state.b = o.length ? o[0] : state.a; }
+  }
+  function sourceBadge() {
+    var src = {}; entries.forEach(function (e) { src[e.source] = 1; });
+    var b = $("dataBadge");
+    if (!entries.length) { b.textContent = "SIN DATOS"; b.className = "badge sim"; }
+    else if (src.sim) { b.textContent = "DATOS SIMULADOS (demo)"; b.className = "badge sim"; }
+    else if (src.upload) { b.textContent = "DATOS SUBIDOS"; b.className = "badge up"; }
+    else { b.textContent = "DATOS REALES GSEA (solo significativas)"; b.className = "badge"; }
+  }
+
+  function renderKpis() {
+    var sel = selIdx();
+    var withD = sel.filter(function (ci) { return sigList(ci).length > 0; }).length;
+    var same = pats.filter(function (p) { return p.type === "mismo"; }).length;
+    var opp = pats.filter(function (p) { return p.type === "opuesto"; }).length;
+    $("kpis").innerHTML =
+      '<div class="kpi"><div class="k">Tipos con resultados</div><div class="v">' + withD + ' de ' + sel.length + '</div><div class="s">' + (sel.length - withD) + ' sin rutas significativas con estos filtros</div></div>' +
+      '<div class="kpi"><div class="k">Rutas significativas</div><div class="v">' + pats.length + '</div><div class="s">distintas, de ' + ALL.length + ' en los datos</div></div>' +
+      '<div class="kpi up"><div class="k">Se repiten, mismo sentido</div><div class="v">' + same + '</div><div class="s">en 2 o mas tipos</div></div>' +
+      '<div class="kpi down"><div class="k">Sentido opuesto</div><div class="v">' + opp + '</div><div class="s">cambian al reves entre tipos</div></div>';
+  }
+
+  function renderHeat() {
+    var cols = selIdx(), nc = cols.length;
+    var g1 = pats.filter(function (p) { return p.type === "mismo"; }).sort(function (x, y) { return y.list.length - x.list.length || y.mean - x.mean; });
+    var g2 = pats.filter(function (p) { return p.type === "opuesto"; }).sort(function (x, y) { return y.mean - x.mean; });
+    var g3 = pats.filter(function (p) { return p.type === "especifica"; }).sort(function (x, y) { return x.list[0].ci - y.list[0].ci || Math.abs(y.list[0].row.nes) - Math.abs(x.list[0].row.nes); });
+    var inPats = {}; pats.forEach(function (p) { inPats[p.id] = 1; });
+    var g4 = [];
+    if (state.showNS) {
+      ALL.forEach(function (id) {
+        if (inPats[id] || !matchQ(id)) return;
+        var best = null;
+        cols.forEach(function (c) { var r = IDX[c][id]; if (r && (best == null || r.padj < best)) best = r.padj; });
+        if (best != null) g4.push({ id: id, best: best });
+      });
+      g4.sort(function (x, y) { return x.best - y.best; });
+    }
+    var total = g1.length + g2.length + g3.length + g4.length, budget = state.maxRows;
+    function take(arr) { var t = arr.slice(0, Math.max(0, budget)); budget -= t.length; return t; }
+    var seq = [];
+    function add(label, full, arr) { if (arr.length) { seq.push({ h: label + " (" + full + ")" }); arr.forEach(function (p) { seq.push({ id: p.id }); }); } }
+    add("Mismo sentido en 2 o mas tipos", g1.length, take(g1)); add("Sentido opuesto entre tipos", g2.length, take(g2));
+    add("Especificas de un tipo", g3.length, take(g3)); add("No significativas en ningun tipo", g4.length, take(g4));
+    var shownRows = seq.filter(function (s) { return s.id; }).length;
+    $("heatNote").textContent = total > shownRows ? "Mostrando " + shownRows + " de " + total + " rutas. Sube el limite en la barra lateral o filtra por nombre." : "";
+    if (!seq.length) { $("heat").innerHTML = '<p class="small">Ninguna ruta cumple los filtros actuales.</p>'; return; }
+    var W = 700, labelW = 250, rowH = 26, hdrH = 22, top = 52, colW = Math.min(112, (W - labelW - 8) / Math.max(nc, 1)), H = top + 6;
+    seq.forEach(function (s) { H += s.h ? hdrH : rowH; });
+    var o = ['<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Mapa de calor de NES por tipo celular">'];
+    o.push('<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#f7fafc"/><line x1="0" y1="0" x2="0" y2="6" stroke="#d5dde8" stroke-width="2"/></pattern></defs>');
+    cols.forEach(function (c, ci) {
+      var cx = labelW + ci * colW + colW / 2, n = sigList(c).length;
+      o.push('<text x="' + cx + '" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#1a202c">' + esc(CTS[c].short) + '</text>');
+      o.push('<text x="' + cx + '" y="35" text-anchor="middle" font-size="10.5" fill="#5a6577">' + n + (n === 1 ? " ruta" : " rutas") + '</text>');
+    });
+    var y = top;
+    seq.forEach(function (s) {
+      if (s.h) {
+        o.push('<rect x="0" y="' + y + '" width="' + W + '" height="' + (hdrH - 2) + '" fill="#edf2f7"/><text x="6" y="' + (y + 15) + '" font-size="12" font-weight="700" fill="#14506a">' + esc(s.h) + '</text>');
+        y += hdrH; return;
+      }
+      var id = s.id, sel = id === state.pw;
+      o.push('<g class="clk" data-id="' + esc(id) + '"><title>' + esc(pretty(id)) + '</title>');
+      o.push('<rect class="hov" x="0" y="' + y + '" width="' + (labelW - 4) + '" height="' + (rowH - 3) + '" fill="' + (sel ? "#dff0f7" : "#fff") + '"/>');
+      o.push('<text x="' + (labelW - 10) + '" y="' + (y + 17) + '" text-anchor="end" font-size="12" font-weight="600" fill="#1a202c">' + esc(clip(pretty(id), 34)) + '</text>');
+      cols.forEach(function (c, ci) {
+        var r = IDX[c][id], x = labelW + ci * colW, w = colW - 3, ok = isSig(r) && matchQ(id);
+        var st = sel ? ' stroke="#d69e2e" stroke-width="2"' : "";
+        if (ok) {
+          o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + (rowH - 3) + '" rx="3" fill="' + colorFor(r.nes) + '"' + st + '><title>' + esc(CTS[c].name) + ': NES ' + fmtS(r.nes, 2) + ', p ajustado ' + fmtP(r.padj) + '</title></rect>');
+          o.push('<text x="' + (x + w / 2 - 6) + '" y="' + (y + 17) + '" text-anchor="middle" font-size="12" font-weight="700" fill="' + txtColor(r.nes) + '" style="pointer-events:none">' + fmtS(r.nes, 2) + '</text>');
+          o.push('<text x="' + (x + w - 4) + '" y="' + (y + 11) + '" text-anchor="end" font-size="10" fill="' + txtColor(r.nes) + '" style="pointer-events:none">' + stars(r.padj) + '</text>');
+        } else if (r) {
+          o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + (rowH - 3) + '" rx="3" fill="' + colorFor(r.nes) + '" fill-opacity="0.35"' + st + '><title>' + esc(CTS[c].name) + ': NES ' + fmtS(r.nes, 2) + ', p ajustado ' + fmtP(r.padj) + ' (no significativa con los filtros)</title></rect>');
+          o.push('<text x="' + (x + w / 2) + '" y="' + (y + 17) + '" text-anchor="middle" font-size="11.5" fill="#718096" style="pointer-events:none">' + fmtS(r.nes, 2) + '</text>');
+        } else {
+          o.push('<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + (rowH - 3) + '" rx="3" fill="url(#hatch)"' + st + '><title>' + esc(CTS[c].name) + ': la ruta no esta en la tabla de este tipo</title></rect>');
+        }
+      });
+      o.push('</g>'); y += rowH;
+    });
+    o.push('</svg>');
+    $("heat").innerHTML = o.join("");
+    Array.prototype.forEach.call($("heat").querySelectorAll("[data-id]"), function (n) {
+      n.addEventListener("click", function () { state.pw = n.getAttribute("data-id"); renderAll(); showTab("ruta"); });
+    });
+  }
+  function renderBars() {
+    var sel = selIdx(), W = 420, rowH = 38, H = sel.length * rowH + 8;
+    var counts = sel.map(function (ci) {
+      var l = sigList(ci);
+      return { ci: ci, up: l.filter(function (r) { return r.nes > 0; }).length, down: l.filter(function (r) { return r.nes < 0; }).length };
+    });
+    var mx = Math.max(1, Math.max.apply(null, counts.map(function (c) { return c.up + c.down; }).concat([1])));
+    var labelW = 100, sc = (W - labelW - 20) / mx;
+    var o = ['<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Rutas significativas por tipo">'];
+    counts.forEach(function (c, i) {
+      var y = 4 + i * rowH;
+      o.push('<text x="' + (labelW - 8) + '" y="' + (y + 20) + '" text-anchor="end" font-size="12" font-weight="600" fill="#1a202c">' + esc(CTS[c.ci].short) + '</text>');
+      if (c.up + c.down === 0) { o.push('<text x="' + labelW + '" y="' + (y + 20) + '" font-size="12" fill="#5a6577">' + (CTS[c.ci].rows.length ? "0 significativas" : "sin filas en el archivo") + '</text>'); return; }
+      var x = labelW;
+      if (c.up) { o.push('<rect x="' + x + '" y="' + (y + 6) + '" width="' + (c.up * sc) + '" height="22" rx="2" fill="#c53030"/><text x="' + (x + c.up * sc / 2) + '" y="' + (y + 22) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">' + c.up + '</text>'); x += c.up * sc; }
+      if (c.down) o.push('<rect x="' + x + '" y="' + (y + 6) + '" width="' + (c.down * sc) + '" height="22" rx="2" fill="#2b6cb0"/><text x="' + (x + c.down * sc / 2) + '" y="' + (y + 22) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">' + c.down + '</text>');
+    });
+    o.push('</svg>');
+    $("bars").innerHTML = o.join("");
+  }
+
+  // ---------- comparar tipos
+  function renderSim() {
+    var sel = selIdx(), n = sel.length, cell = 78, labelW = 110, top = 36;
+    var W = labelW + n * cell + 4, H = top + n * 40 + 4;
+    var o = ['<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Matriz de similitud entre tipos celulares">'];
+    o.push('<defs><pattern id="hatch2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#f7fafc"/><line x1="0" y1="0" x2="0" y2="6" stroke="#d5dde8" stroke-width="2"/></pattern></defs>');
+    sel.forEach(function (c, j) { o.push('<text x="' + (labelW + j * cell + cell / 2) + '" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#1a202c">' + esc(CTS[c].short) + '</text>'); });
+    sel.forEach(function (ci, i) {
+      var y = top + i * 40;
+      o.push('<text x="' + (labelW - 8) + '" y="' + (y + 24) + '" text-anchor="end" font-size="12" font-weight="700" fill="#1a202c">' + esc(CTS[ci].short) + '</text>');
+      sel.forEach(function (cj, j) {
+        var x = labelW + j * cell, isSel = (ci === state.a && cj === state.b) || (ci === state.b && cj === state.a);
+        if (ci === cj) { o.push('<rect x="' + x + '" y="' + y + '" width="' + (cell - 3) + '" height="37" rx="4" fill="#edf2f7"/><text x="' + (x + cell / 2) + '" y="' + (y + 24) + '" text-anchor="middle" font-size="12" fill="#5a6577">' + sigList(ci).length + ' rutas</text>'); return; }
+        var info = pairInfo(ci, cj);
+        if (info.jac === null) { o.push('<g><title>No calculable: un tipo no tiene rutas significativas</title><rect x="' + x + '" y="' + y + '" width="' + (cell - 3) + '" height="37" rx="4" fill="url(#hatch2)"/><text x="' + (x + cell / 2) + '" y="' + (y + 24) + '" text-anchor="middle" font-size="12" fill="#5a6577">n/c</text></g>'); return; }
+        o.push('<g class="clk" data-a="' + ci + '" data-b="' + cj + '"><title>' + esc(CTS[ci].name) + ' y ' + esc(CTS[cj].name) + ': ' + info.conc.length + ' concordantes, ' + info.opp.length + ' opuestas</title><rect class="hov" x="' + x + '" y="' + y + '" width="' + (cell - 3) + '" height="37" rx="4" fill="' + teal(info.jac / 0.5) + '"' + (isSel ? ' stroke="#d69e2e" stroke-width="3"' : "") + '/><text x="' + (x + cell / 2) + '" y="' + (y + 24) + '" text-anchor="middle" font-size="13" font-weight="700" fill="' + (info.jac / 0.5 > 0.55 ? "#fff" : "#1a202c") + '" style="pointer-events:none">' + info.jac.toFixed(2) + '</text></g>');
+      });
+    });
+    o.push('</svg>');
+    $("sim").innerHTML = o.join("");
+    Array.prototype.forEach.call($("sim").querySelectorAll("[data-a]"), function (g) {
+      g.addEventListener("click", function () { state.a = +g.getAttribute("data-a"); state.b = +g.getAttribute("data-b"); renderAll(); });
+    });
+  }
+  function renderPair() {
+    if (state.a === state.b) {
+      $("pairKpis").innerHTML = '<p class="small">Se necesitan al menos 2 tipos celulares distintos.</p>';
+      $("dumb").innerHTML = ""; $("pairLists").innerHTML = ""; $("pairGenes").innerHTML = ""; return;
+    }
+    var a = state.a, b = state.b, A = CTS[a].short, B = CTS[b].short, info = pairInfo(a, b);
+    $("pairKpis").innerHTML =
+      '<div class="rel"><b>' + info.conc.length + '</b> rutas con el mismo sentido</div><div class="rel"><b>' + info.opp.length + '</b> rutas con sentido opuesto</div>' +
+      '<div class="rel"><b>' + info.onlyA.length + '</b> solo en ' + esc(A) + ', <b>' + info.onlyB.length + '</b> solo en ' + esc(B) + '</div>' +
+      '<div class="rel">Jaccard con signo: <b>' + (info.jac === null ? "no calculable" : info.jac.toFixed(2)) + '</b></div>';
+    var items = info.conc.concat(info.opp);
+    if (!items.length) {
+      $("dumb").innerHTML = '<p class="small">' + (info.nA === 0 || info.nB === 0 ? 'Uno de los dos tipos no tiene rutas significativas con estos filtros, asi que no hay nada que comparar.' : 'Estos dos tipos no comparten ninguna ruta significativa con los filtros actuales.') + '</p>';
+    } else {
+      items.sort(function (x, y) { return (Math.abs(y.ra.nes) + Math.abs(y.rb.nes)) - (Math.abs(x.ra.nes) + Math.abs(x.rb.nes)); });
+      var W = 700, labelW = 250, rowH = 30, top = 34, plotW = W - labelW - 24, sc = plotW / 6, cx = labelW + plotW / 2, H = top + items.length * rowH + 26;
+      var o = ['<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="NES de A y B en las rutas compartidas">'];
+      o.push('<circle cx="' + labelW + '" cy="14" r="6" fill="#0072B2"/><text x="' + (labelW + 10) + '" y="18" font-size="12" fill="#1a202c">' + esc(A) + '</text>');
+      o.push('<circle cx="' + (labelW + 110) + '" cy="14" r="6" fill="#E69F00"/><text x="' + (labelW + 120) + '" y="18" font-size="12" fill="#1a202c">' + esc(B) + '</text>');
+      for (var t = -3; t <= 3; t++) {
+        var x = cx + t * sc;
+        o.push('<line x1="' + x + '" x2="' + x + '" y1="' + top + '" y2="' + (top + items.length * rowH) + '" stroke="' + (t === 0 ? "#718096" : "#edf2f7") + '"/><text x="' + x + '" y="' + (top + items.length * rowH + 16) + '" text-anchor="middle" font-size="11" fill="#5a6577">' + t + '</text>');
+      }
+      items.forEach(function (it, i) {
+        var y = top + i * rowH + 14, xa = cx + clamp(it.ra.nes, -3, 3) * sc, xb = cx + clamp(it.rb.nes, -3, 3) * sc, opp = (it.ra.nes > 0) !== (it.rb.nes > 0);
+        o.push('<g class="clk" data-id="' + esc(it.id) + '"><title>' + esc(pretty(it.id)) + ': ' + esc(A) + ' ' + fmtS(it.ra.nes, 2) + ', ' + esc(B) + ' ' + fmtS(it.rb.nes, 2) + '</title>');
+        o.push('<text x="' + (labelW - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="12" font-weight="600" fill="#1a202c">' + esc(clip(pretty(it.id), 30)) + (opp ? " (opuesta)" : "") + '</text>');
+        o.push('<line x1="' + xa + '" x2="' + xb + '" y1="' + y + '" y2="' + y + '" stroke="' + (opp ? "#d69e2e" : "#a0aec0") + '" stroke-width="3"/><circle cx="' + xa + '" cy="' + y + '" r="7" fill="#0072B2"/><circle cx="' + xb + '" cy="' + y + '" r="7" fill="#E69F00"/></g>');
+      });
+      o.push('</svg>');
+      $("dumb").innerHTML = o.join("") + '<div class="legend"><span>Izquierda de 0: suprimida en tumor</span><span>Derecha de 0: enriquecida en tumor</span><span>Linea amarilla: sentido opuesto</span></div>';
+      Array.prototype.forEach.call($("dumb").querySelectorAll("[data-id]"), function (n) {
+        n.addEventListener("click", function () { state.pw = n.getAttribute("data-id"); renderAll(); showTab("ruta"); });
+      });
+    }
+    function card(title, arr, fn) {
+      var body = arr.length ? arr.slice(0, 40).map(fn).join("") + (arr.length > 40 ? '<p class="small">+' + (arr.length - 40) + ' mas</p>' : "") : '<p class="small">Ninguna.</p>';
+      return '<div class="card"><h3>' + title + ' (' + arr.length + ')</h3>' + body + '</div>';
+    }
+    $("pairLists").innerHTML =
+      card("Mismo sentido en " + esc(A) + " y " + esc(B), info.conc, function (e) { return '<div class="rel"><b>' + esc(pretty(e.id)) + '</b> ' + dirWord(e.ra.nes) + ' (' + fmtS(e.ra.nes, 2) + ' / ' + fmtS(e.rb.nes, 2) + ')</div>'; }) +
+      card("Sentido opuesto", info.opp, function (e) { return '<div class="rel"><b>' + esc(pretty(e.id)) + '</b>: ' + esc(A) + ' ' + dirWord(e.ra.nes) + ' (' + fmtS(e.ra.nes, 2) + '), ' + esc(B) + ' ' + dirWord(e.rb.nes) + ' (' + fmtS(e.rb.nes, 2) + ')</div>'; }) +
+      card("Solo en " + esc(A), info.onlyA, function (r) { return '<div class="rel"><b>' + esc(pretty(r.id)) + '</b> ' + dirWord(r.nes) + ' (' + fmtS(r.nes, 2) + ')' + otherNote(b, r.id) + '</div>'; }) +
+      card("Solo en " + esc(B), info.onlyB, function (r) { return '<div class="rel"><b>' + esc(pretty(r.id)) + '</b> ' + dirWord(r.nes) + ' (' + fmtS(r.nes, 2) + ')' + otherNote(a, r.id) + '</div>'; });
+    var withG = items.filter(function (it) { return it.ra.genes.length && it.rb.genes.length; });
+    if (!withG.length) { $("pairGenes").innerHTML = '<p class="small">' + (items.length ? 'Los datos no incluyen genes core para estas rutas.' : 'No hay rutas compartidas.') + '</p>'; return; }
+    $("pairGenes").innerHTML = '<table><thead><tr><th class="l">Ruta</th><th class="l">Patron</th><th>Genes ' + esc(A) + '</th><th>Genes ' + esc(B) + '</th><th>Comunes</th><th>% sobre union</th><th>% sobre el menor</th><th class="l">Genes comunes</th></tr></thead><tbody>' +
+      withG.slice(0, 40).map(function (it) {
+        var ov = overlapPair(it.ra, it.rb), opp2 = (it.ra.nes > 0) !== (it.rb.nes > 0);
+        return '<tr><td class="l"><b>' + esc(pretty(it.id)) + '</b></td><td class="l">' + typePill(opp2 ? "opuesto" : "mismo") + '</td><td>' + ov.nA + '</td><td>' + ov.nB + '</td><td><b>' + ov.inter.length + '</b></td><td>' + pct(ov.pctU) + '</td><td>' + pct(ov.pctMin) + '</td><td class="l">' + chips(ov.inter, 8) + '</td></tr>';
+      }).join("") + '</tbody></table>';
+  }
+
+  // ---------- ruta
+  function renderPathway() {
+    var id = state.pw, sel = selIdx();
+    $("pwList").innerHTML = ALL.slice(0, 3000).map(function (x) { return '<option value="' + esc(pretty(x)) + '"></option>'; }).join("");
+    if (document.activeElement !== $("pwIn")) $("pwIn").value = id ? pretty(id) : "";
+    if (!id) { $("pwHead").innerHTML = '<p class="small">No hay rutas cargadas.</p>'; $("pwBars").innerHTML = ""; $("pwStats").innerHTML = ""; $("pwOverlap").innerHTML = ""; return; }
+    var entriesP = sel.map(function (ci) { var r = IDX[ci][id] || null; return { ci: ci, row: r, ok: isSig(r) }; });
+    var okList = entriesP.filter(function (e) { return e.ok; }).map(function (e) { return { ci: e.ci, row: e.row }; });
+    var t = okList.length ? typeOf(okList) : null;
+    var head = '<b style="font-size:16px">' + esc(pretty(id)) + '</b> ' + (t ? typePill(t) : '<span class="pill n">no cumple los filtros</span>');
+    head += okList.length ? '<p class="small" style="margin:6px 0 0">' + okList.map(function (e) { return esc(CTS[e.ci].short) + ' ' + fmtS(e.row.nes, 2) + ' (' + dirWord(e.row.nes) + ')'; }).join("; ") + '.</p>' : '<p class="small" style="margin:6px 0 0">En los tipos seleccionados esta ruta no es significativa con los filtros actuales.</p>';
+    $("pwHead").innerHTML = head;
+    var W = 480, H = 250, m = { l: 36, r: 10, t: 16, b: 44 }, zero = m.t + (H - m.t - m.b) / 2, half = (H - m.t - m.b) / 2, sc = half / 3;
+    var slot = (W - m.l - m.r) / Math.max(entriesP.length, 1), bw = Math.min(56, slot - 14);
+    var o = ['<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="NES de la ruta en cada tipo celular">'];
+    [-3, -2, -1, 0, 1, 2, 3].forEach(function (v) {
+      var y = zero - v * sc;
+      o.push('<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y + '" y2="' + y + '" stroke="' + (v === 0 ? "#718096" : "#edf2f7") + '"/><text x="' + (m.l - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#5a6577">' + v + '</text>');
+    });
+    entriesP.forEach(function (e, i) {
+      var cx = m.l + slot * i + slot / 2;
+      o.push('<text x="' + cx + '" y="' + (H - 22) + '" text-anchor="middle" font-size="11.5" font-weight="600" fill="#1a202c">' + esc(CTS[e.ci].short) + '</text>');
+      if (!e.row) { o.push('<text x="' + cx + '" y="' + (zero - 6) + '" text-anchor="middle" font-size="11" fill="#5a6577">no esta</text>'); return; }
+      var v = e.row.nes, h = Math.abs(v) * sc, y = v >= 0 ? zero - h : zero;
+      o.push('<rect x="' + (cx - bw / 2) + '" y="' + y.toFixed(1) + '" width="' + bw + '" height="' + h.toFixed(1) + '" rx="3" fill="' + (v >= 0 ? "#c53030" : "#2b6cb0") + '"' + (e.ok ? "" : ' fill-opacity="0.3"') + '/>');
+      o.push('<text x="' + cx + '" y="' + (v >= 0 ? y - 4 : y + h + 13).toFixed(1) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#1a202c">' + fmtS(v, 2) + '</text><text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10.5" fill="#5a6577">' + stars(e.row.padj) + '</text>');
+    });
+    o.push('</svg>');
+    $("pwBars").innerHTML = o.join("") + '<p class="small">Barras claras: la ruta esta en la tabla pero no cumple los filtros.</p>';
+    var withRow = entriesP.filter(function (e) { return e.row; });
+    $("pwStats").innerHTML = withRow.length ? '<table><thead><tr><th class="l">Tipo</th><th>NES</th><th>p ajustado</th><th>q</th><th>Tamano</th><th>Genes core</th></tr></thead><tbody>' + withRow.map(function (e) {
+      var r = e.row;
+      return '<tr><td class="l"><b>' + esc(CTS[e.ci].short) + '</b>' + (e.ok ? "" : ' <span class="pill n">fuera de filtros</span>') + '</td><td>' + fmtS(r.nes, 2) + '</td><td>' + fmtP(r.padj) + '</td><td>' + fmtP(r.q) + '</td><td>' + r.size + '</td><td>' + r.genes.length + '</td></tr>';
+    }).join("") + '</tbody></table><p class="small">Valores del archivo. No se recalculan.</p>' : '<p class="small">Esta ruta no esta en la tabla de ninguno de los tipos seleccionados.</p>';
+    var box = $("pwOverlap");
+    if (okList.length < 2) {
+      box.innerHTML = '<p class="small">' + (okList.length === 1 ? 'La ruta es significativa solo en ' + esc(CTS[okList[0].ci].name) + ', asi que no hay genes que comparar con otros tipos.' : 'No hay tipos con esta ruta significativa.') + '</p>';
+      if (okList.length === 1 && okList[0].row.genes.length) box.innerHTML += '<p class="small">Genes del core_enrichment (' + okList[0].row.genes.length + '):</p>' + chips(okList[0].row.genes.slice().sort(), 40);
+      return;
+    }
+    if (okList.some(function (e) { return !e.row.genes.length; })) { box.innerHTML = '<p class="small">Algun archivo no incluye genes core para esta ruta, asi que no se puede calcular el solapamiento.</p>'; return; }
+    var ov = overlapAll(okList), names = okList.map(function (e) { return CTS[e.ci].short; });
+    var h = '<div class="info"><b>' + ov.inter.length + ' genes comunes a ' + esc(names.join(", ")) + '</b>, de ' + ov.union + ' genes distintos en total (<b>' + pct(ov.pct) + '</b>).' + (t === "opuesto" ? ' Ojo: esta ruta cambia en sentido opuesto entre tipos.' : '') + '</div>';
+    h += '<b>Genes comunes a todos</b>' + chips(ov.inter, 60, "all");
+    var pr = [];
+    for (var i = 0; i < okList.length; i++) for (var j = i + 1; j < okList.length; j++) {
+      var p2 = overlapPair(okList[i].row, okList[j].row), same = (okList[i].row.nes > 0) === (okList[j].row.nes > 0);
+      pr.push('<tr><td class="l"><b>' + esc(CTS[okList[i].ci].short) + ' y ' + esc(CTS[okList[j].ci].short) + '</b></td><td class="l">' + typePill(same ? "mismo" : "opuesto") + '</td><td>' + p2.nA + ' / ' + p2.nB + '</td><td><b>' + p2.inter.length + '</b></td><td>' + pct(p2.pctU) + '</td><td>' + pct(p2.pctMin) + '</td></tr>');
+    }
+    h += '<b style="display:block;margin-top:12px">Solapamiento por parejas</b><table><thead><tr><th class="l">Pareja</th><th class="l">Patron</th><th>Genes (A / B)</th><th>Comunes</th><th>% sobre union</th><th>% sobre el menor</th></tr></thead><tbody>' + pr.join("") + '</tbody></table>';
+    var genes = ov.genes.slice().sort(function (x, y) { return ov.cnt[y] - ov.cnt[x] || x.localeCompare(y); });
+    var shown = state.onlyShared ? genes.filter(function (g) { return ov.cnt[g] >= 2; }) : genes;
+    h += '<div class="toolbar" style="margin-top:14px"><b>Presencia de cada gen por tipo</b><label style="margin-left:auto;font-size:13px"><input type="checkbox" id="onlyShared"' + (state.onlyShared ? " checked" : "") + '> Solo genes presentes en 2 o mas tipos</label></div>';
+    h += '<div class="scroll"><table><thead><tr><th class="l">Gen</th>' + okList.map(function (e) { return '<th class="pc">' + esc(CTS[e.ci].short) + '</th>'; }).join("") + '<th class="pc">Tipos</th></tr></thead><tbody>' +
+      shown.map(function (g) {
+        return '<tr><td class="l"><b>' + esc(g) + '</b></td>' + okList.map(function (e) {
+          var has = e.row.genes.indexOf(g) !== -1;
+          return '<td class="pc"><span class="dot ' + (has ? (e.row.nes > 0 ? "up" : "down") : "none") + '" title="' + (has ? "en el core_enrichment" : "no esta") + '"></span></td>';
+        }).join("") + '<td class="pc">' + ov.cnt[g] + ' / ' + okList.length + '</td></tr>';
+      }).join("") + '</tbody></table></div><p class="small">Rojo = el gen esta en el core_enrichment de un tipo donde la ruta esta enriquecida. Azul = suprimida. Gris = no esta. ' + shown.length + ' de ' + genes.length + ' genes mostrados.</p>';
+    box.innerHTML = h;
+    $("onlyShared").addEventListener("change", function (e) { state.onlyShared = e.target.checked; renderPathway(); });
+  }
+
+  // ---------- genes
+  function renderGenes() {
+    var gm = {}, anyGenes = false;
+    pats.forEach(function (p) { p.list.forEach(function (e) {
+      e.row.genes.forEach(function (g) { anyGenes = true; var o = gm[g] = gm[g] || { cts: {}, items: [] }; o.cts[e.ci] = 1; o.items.push({ ci: e.ci, id: p.id, nes: e.row.nes }); });
+    }); });
+    if (!anyGenes) { document.querySelector("#geneTbl tbody").innerHTML = '<tr><td colspan="4" class="small">Los datos cargados no incluyen genes core.</td></tr>'; $("geneNote").textContent = ""; return; }
+    var q = state.gsearch.trim().toUpperCase();
+    var list = Object.keys(gm).filter(function (g) { return !q || g.toUpperCase().indexOf(q) !== -1; }).map(function (g) {
+      var o = gm[g], pw = {}; o.items.forEach(function (it) { pw[it.id] = 1; });
+      return { g: g, nct: Object.keys(o.cts).length, npw: Object.keys(pw).length, items: o.items };
+    }).sort(function (a, b) { return b.nct - a.nct || b.npw - a.npw || a.g.localeCompare(b.g); });
+    var shown = list.slice(0, 80);
+    document.querySelector("#geneTbl tbody").innerHTML = shown.map(function (r) {
+      var det = r.items.slice(0, 5).map(function (it) { return esc(pretty(it.id)) + " (" + esc(CTS[it.ci].short) + (it.nes > 0 ? " +" : " -") + ")"; }).join("; ");
+      if (r.items.length > 5) det += "; +" + (r.items.length - 5) + " mas";
+      return '<tr><td class="l"><b>' + esc(r.g) + '</b></td><td>' + r.nct + '</td><td>' + r.npw + '</td><td class="l small">' + det + '</td></tr>';
+    }).join("") || '<tr><td colspan="4" class="small">Ningun gen coincide.</td></tr>';
+    $("geneNote").textContent = list.length + " genes. Se muestran los " + shown.length + " primeros.";
+  }
+
+  // ---------- tabla
+  function flat() {
+    var out = [], patOf = {}; pats.forEach(function (p) { patOf[p.id] = p; });
+    selIdx().forEach(function (ci) {
+      CTS[ci].rows.forEach(function (r) {
+        if (!matchQ(r.id)) return;
+        var sg = isSig(r);
+        if (!sg && !state.tblAll) return;
+        var p = patOf[r.id];
+        out.push({ ct: CTS[ci].short, id: r.id, name: pretty(r.id), nes: r.nes, padj: r.padj, q: r.q, p: r.p, size: r.size, ncore: r.genes.length, type: sg && p ? p.type : "ns", sign: r.nes > 0 ? "enriquecida" : "suprimida" });
+      });
+    });
+    return out;
+  }
+  function renderTable() {
+    var k = state.tsort.k, d = state.tsort.dir, all = flat();
+    var list = all.slice().sort(function (a, b) { var va = a[k], vb = b[k]; return typeof va === "string" ? d * va.localeCompare(vb) : d * (va - vb); });
+    var shown = list.slice(0, 300);
+    document.querySelector("#tbl tbody").innerHTML = shown.map(function (r) {
+      var pat = r.type === "ns" ? '<span class="pill n">no signif.</span>' : typePill(r.type);
+      return '<tr class="rowc' + (r.id === state.pw ? " sel" : "") + '" data-id="' + esc(r.id) + '"><td class="l"><b>' + esc(r.ct) + '</b></td><td class="l">' + esc(r.name) + '</td><td>' + fmtS(r.nes, 2) + '</td><td>' + fmtP(r.padj) + '</td><td>' + fmtP(r.q) + '</td><td>' + r.size + '</td><td>' + r.ncore + '</td><td class="l">' + pat + '</td></tr>';
+    }).join("") || '<tr><td colspan="8" class="small">Ninguna ruta cumple los filtros.</td></tr>';
+    Array.prototype.forEach.call(document.querySelectorAll("#tbl tbody tr[data-id]"), function (tr) {
+      tr.addEventListener("click", function () { state.pw = tr.getAttribute("data-id"); renderAll(); showTab("ruta"); });
+    });
+    $("tblNote").textContent = list.length > shown.length ? "Mostrando " + shown.length + " de " + list.length + " filas (el CSV incluye todas)." : list.length + " filas.";
+  }
+  function downloadCsv() {
+    var out = ["tipo_celular,ruta,sentido,NES,p_ajustado,q,tamano,genes_core,patron"];
+    flat().forEach(function (r) { out.push([r.ct, r.id, r.sign, r.nes.toFixed(4), r.padj.toExponential(3), r.q.toExponential(3), r.size, r.ncore, r.type === "ns" ? "no significativa" : typeLabel(r.type)].map(function (x) { return /[",\n]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : x; }).join(",")); });
+    saveText(out.join("\n"), "text/csv", "gsea_resultados.csv");
+  }
+  function saveText(txt, type, name) {
+    var blob = new Blob([txt], { type: type }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  // ---------- datos
+  function mapSelect(e, f) {
+    var opts = '<option value="">(ninguna)</option>' + (e.headers || []).map(function (h) { return '<option value="' + esc(h) + '"' + (e.map[f.k] === h ? " selected" : "") + '>' + esc(h) + '</option>'; }).join("");
+    return '<div>' + esc(f.label) + '</div><select class="mini" data-map="' + e.uid + '" data-f="' + f.k + '">' + opts + '</select>';
+  }
+  function renderFiles() {
+    var empties = [];
+    document.querySelector("#files tbody").innerHTML = entries.map(function (e) {
+      var n = e.rows.filter(function (r) { return r.padj <= state.padj + 1e-12; }).length;
+      var st = e.status === "ok" ? '<span class="pill s">cargado</span>' : (e.status === "vacio" ? '<span class="pill o">solo cabecera</span>' : '<span class="pill e">con errores</span>');
+      if (e.status === "ok" && !n) st += ' <span class="pill n">0 significativas</span>';
+      if (e.status === "vacio") empties.push(e.ct);
+      var warn = e.warn.length ? '<div class="small" style="margin-top:3px">' + e.warn.map(esc).join("<br>") + '</div>' : "";
+      var cols = e.raw ? '<details' + (e.openMap || e.status === "error" ? " open" : "") + '><summary>Ver y cambiar</summary><div class="maprow">' + FIELDS.map(function (f) { return mapSelect(e, f); }).join("") + '</div></details>' : '<span class="small">ya normalizado</span>';
+      return '<tr><td class="l">' + esc(e.file) + '</td><td class="l"><input class="mini" data-ct="' + e.uid + '" value="' + esc(e.ct) + '"></td><td class="l"><input class="mini" data-co="' + e.uid + '" value="' + esc(e.coll) + '"></td><td>' + e.rows.length + '</td><td>' + n + '</td><td class="l">' + st + warn + '</td><td class="l">' + cols + '</td></tr>';
+    }).join("") || '<tr><td colspan="7" class="small">Sin archivos. Carga datos arriba.</td></tr>';
+    var w = $("emptyWarn");
+    if (empties.length) { w.style.display = "block"; w.textContent = empties.join(", ") + (empties.length > 1 ? " llegan" : " llega") + " con solo la cabecera. Con una tabla completa se distinguiria entre 'ninguna ruta significativa' y 'archivo mal exportado'. Hay que confirmarlo con quien hizo el analisis."; }
+    else w.style.display = "none";
+    Array.prototype.forEach.call(document.querySelectorAll("#files [data-map]"), function (s) {
+      s.addEventListener("change", function () {
+        var e = entries.filter(function (x) { return x.uid === +s.getAttribute("data-map"); })[0];
+        e.map[s.getAttribute("data-f")] = s.value; e.openMap = true; applyMap(e); afterDataChange();
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#files [data-ct]"), function (s) {
+      s.addEventListener("change", function () { entries.filter(function (x) { return x.uid === +s.getAttribute("data-ct"); })[0].ct = s.value.trim() || "Sin nombre"; afterDataChange(); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#files [data-co]"), function (s) {
+      s.addEventListener("change", function () { entries.filter(function (x) { return x.uid === +s.getAttribute("data-co"); })[0].coll = s.value.trim() || "Coleccion 1"; afterDataChange(); });
+    });
+  }
+  function renderCfg() {
+    $("cfg").textContent = JSON.stringify({
+      collection: state.coll, cell_types_selected: selIdx().map(function (i) { return CTS[i].name; }),
+      max_p_adjust: state.padj, min_abs_nes: state.nes, direction: state.dir, name_filter: state.q || null,
+      comparison: "tumor vs normal dentro de cada tipo celular"
+    }, null, 2);
+  }
+  function setMsg(kind, txt) { $("loadMsg").innerHTML = txt ? '<div class="' + kind + '">' + txt + '</div>' : ""; }
+
+  function handleFiles(files) {
+    files = Array.prototype.slice.call(files);
+    if (!files.length) return;
+    setMsg("info", "Leyendo " + files.length + " archivo(s)...");
+    var errs = [], added = 0;
+    var seq = Promise.resolve();
+    files.forEach(function (f) {
+      seq = seq.then(function () { return readFile(f); }).then(function (t) {
+        if (entries.length && entries.every(function (e) { return e.source !== "upload"; })) entries = [];
+        var map = detectMap(t.headers), e = addEntry({ file: f.name, ct: nameFromFile(f.name), coll: "Coleccion 1", source: "upload", raw: t.data, headers: t.headers, map: map, rows: [], status: "ok" });
+        applyMap(e);
+        if (e.rows.length) e.coll = detectColl(e.rows.map(function (r) { return r.id; }));
+        added++;
+      }).catch(function (err) { errs.push(f.name + ": " + err.message); });
+    });
+    seq.then(function () {
+      afterDataChange();
+      var m = added + " archivo(s) cargado(s).";
+      if (errs.length) setMsg("errbox", m + " Con errores:<br>" + errs.map(esc).join("<br>"));
+      else setMsg("okbox", m + " Revisa el tipo celular, la coleccion y las columnas detectadas.");
+    });
+  }
+  function downloadTemplate() {
+    saveText("ID,NES,p.adjust,pvalue,setSize,core_enrichment\nHALLMARK_P53_PATHWAY,1.83,0.00014,0.000005,136,TP53/CDKN1A/MDM2\nHALLMARK_MYOGENESIS,-2.12,0.00008,0.000002,88,GSN/IGFBP7/APOD\n", "text/csv", "plantilla_gsea.csv");
+  }
+  function afterDataChange() { rebuildModel(); sourceBadge(); renderAll(); resetLlm(); }
+
+  // =====================================================================
+  // BACKEND SIMULADO 3: hechos para el LLM + verificacion
+  // =====================================================================
+  function nesText(list) { return list.map(function (e) { return CTS[e.ci].short + " " + fmtS(e.row.nes, 2); }).join(", "); }
+  function buildFacts() {
+    var sel = selIdx(), order = pats.slice().sort(function (a, b) { return (a.type === b.type ? 0 : (a.type === "mismo" ? -1 : (b.type === "mismo" ? 1 : (a.type === "opuesto" ? -1 : 1)))) || b.mean - a.mean; });
+    var sim = [];
+    for (var i = 0; i < sel.length; i++) for (var j = i + 1; j < sel.length; j++) {
+      var inf = pairInfo(sel[i], sel[j]);
+      sim.push({ a: CTS[sel[i]].short, b: CTS[sel[j]].short, jaccard: inf.jac === null ? null : +inf.jac.toFixed(2), concordant: inf.conc.length, opposite: inf.opp.length });
+    }
+    return {
+      collection: state.coll, comparison: "tumor vs normal dentro de cada tipo celular",
+      filters: { max_p_adjust: state.padj, min_abs_nes: state.nes, direction: state.dir },
+      total_pathways_in_data: ALL.length,
+      cell_types: sel.map(function (i) { return { name: CTS[i].short, rows_in_table: CTS[i].rows.length, significant: sigList(i).length }; }),
+      similarity: sim,
+      pathways: order.map(function (p) {
+        var ov = commonInfo(p);
+        return {
+          pathway: pretty(p.id), pattern: typeLabel(p.type),
+          cell_types: p.list.map(function (e) { return { name: CTS[e.ci].short, nes: +e.row.nes.toFixed(2), p_adjust: +e.row.padj.toPrecision(2), core_genes: e.row.genes.length }; }),
+          common_core_genes: ov ? ov.inter : null, pct_common_over_union: ov ? Math.round(ov.pct) : null
+        };
+      })
+    };
+  }
+  function renderUsed() {
+    var f = buildFacts(), tb = document.querySelector("#tblUsed tbody");
+    tb.innerHTML = f.pathways.length ? f.pathways.slice(0, 60).map(function (p) {
+      var t = p.pattern === "mismo sentido" ? "mismo" : (p.pattern === "sentido opuesto" ? "opuesto" : "especifica");
+      return '<tr><td class="l"><b>' + esc(p.pathway) + '</b></td><td class="l">' + typePill(t) + '</td><td class="l">' + p.cell_types.map(function (c) { return esc(c.name) + " " + fmtS(c.nes, 2); }).join(", ") + '</td><td>' + (p.common_core_genes ? p.common_core_genes.length + " (" + p.pct_common_over_union + " %)" : "-") + '</td></tr>';
+    }).join("") + (f.pathways.length > 60 ? '<tr><td colspan="4" class="small">+' + (f.pathways.length - 60) + ' rutas mas en el JSON</td></tr>' : "") : '<tr><td colspan="4" class="small">Ninguna ruta cumple los filtros.</td></tr>';
+    $("jsonUsed").textContent = JSON.stringify(f, null, 2);
+  }
+  function composeText() {
+    var sel = selIdx(), empty = sel.filter(function (ci) { return sigList(ci).length === 0; }), withD = sel.filter(function (ci) { return sigList(ci).length > 0; });
+    var same = pats.filter(function (p) { return p.type === "mismo"; }).sort(function (a, b) { return b.list.length - a.list.length || b.mean - a.mean; });
+    var opp = pats.filter(function (p) { return p.type === "opuesto"; }).sort(function (a, b) { return b.mean - a.mean; });
+    var spec = pats.filter(function (p) { return p.type === "especifica"; });
+    function names(arr) { return arr.map(function (ci) { return CTS[ci].short; }).join(", "); }
+    var t = ["RESUMEN"];
+    var s = "Se comparan " + sel.length + " tipos celulares (" + names(sel) + ") en la coleccion " + state.coll + ". Cada uno se analizo como tumor frente a normal dentro de su propio tipo. Con los filtros actuales (p ajustado menor o igual que " + state.padj + ", |NES| minimo " + state.nes + "), " + pats.length + " rutas son significativas en al menos un tipo: " + same.length + " se repiten con el mismo sentido, " + opp.length + " cambian en sentido opuesto y " + spec.length + " son propias de un solo tipo.";
+    if (empty.length) s += " " + names(empty) + (empty.length > 1 ? " no tienen" : " no tiene") + " ninguna ruta significativa con estos filtros, asi que no se puede concluir nada sobre su comportamiento (no es lo mismo que decir que no cambian).";
+    t.push(s);
+    if (pats.length) {
+      t.push("SIMILITUDES");
+      var best = null;
+      for (var i = 0; i < withD.length; i++) for (var j = i + 1; j < withD.length; j++) {
+        var inf = pairInfo(withD[i], withD[j]);
+        if (inf.jac !== null && (!best || inf.jac > best.inf.jac)) best = { a: withD[i], b: withD[j], inf: inf };
+      }
+      var l = [];
+      l.push(best ? "- Los tipos mas parecidos son " + CTS[best.a].short + " y " + CTS[best.b].short + " (Jaccard con signo " + best.inf.jac.toFixed(2) + ": " + best.inf.conc.length + " rutas con el mismo sentido y " + best.inf.opp.length + " en sentido opuesto)." : "- No hay suficientes tipos con resultados para calcular similitudes.");
+      same.slice(0, 4).forEach(function (p) {
+        var ov = commonInfo(p), line = "- " + pretty(p.id) + ": " + dirWord(p.list[0].row.nes) + " en " + nesText(p.list) + ".";
+        if (ov) line += " Genes comunes a todos: " + ov.inter.length + " de " + ov.union + " (" + pct(ov.pct) + ").";
+        l.push(line);
+      });
+      t.push(l.join("\n"));
+      t.push("DIFERENCIAS");
+      var d = [];
+      opp.slice(0, 5).forEach(function (p) {
+        var up = p.list.filter(function (e) { return e.row.nes > 0; }), dn = p.list.filter(function (e) { return e.row.nes < 0; });
+        d.push("- " + pretty(p.id) + ": enriquecida en " + nesText(up) + " y suprimida en " + nesText(dn) + ".");
+      });
+      withD.forEach(function (ci) {
+        var mine = spec.filter(function (p) { return p.list[0].ci === ci; }).sort(function (a, b) { return Math.abs(b.list[0].row.nes) - Math.abs(a.list[0].row.nes); }).slice(0, 3);
+        if (mine.length) d.push("- Solo en " + CTS[ci].short + ": " + mine.map(function (p) { return pretty(p.id) + " (" + fmtS(p.list[0].row.nes, 2) + ")"; }).join(", ") + ".");
+      });
+      if (!d.length) d.push("- No se observan rutas con sentido opuesto ni especificas con los filtros actuales.");
+      t.push(d.join("\n"));
+      var withOv = same.concat(opp).filter(function (p) { return commonInfo(p); }).slice(0, 4);
+      if (withOv.length) {
+        t.push("POSIBLE EXPLICACION POR GENES COMUNES");
+        var g = withOv.map(function (p) {
+          var ov = commonInfo(p), nivel = ov.pct >= 50 ? "solapamiento alto" : (ov.pct <= 25 ? "solapamiento bajo" : "solapamiento parcial");
+          var txt = "- " + pretty(p.id) + ": " + nivel + " (" + pct(ov.pct) + ").";
+          txt += ov.inter.length ? " Genes comunes: " + ov.inter.slice(0, 8).join(", ") + (ov.inter.length > 8 ? " y " + (ov.inter.length - 8) + " mas" : "") + "." : " Ningun gen del borde de enriquecimiento es comun a todos los tipos.";
+          if (p.type === "opuesto") txt += " Como el sentido es opuesto, los genes del borde no tienen por que ser los mismos.";
+          else if (ov.pct <= 25) txt += " La misma ruta parece llegar por genes en buena parte distintos en cada tipo.";
+          return txt;
+        });
+        g.push("Estos son genes del borde de enriquecimiento de GSEA, no medidas directas de expresion, y el solapamiento es descriptivo: no es un test estadistico.");
+        t.push(g.join("\n"));
+      }
+    }
+    t.push("LIMITACIONES");
+    t.push("- Si el archivo solo trae rutas significativas, una ruta ausente no es una ruta sin cambio.\n- Se compara la respuesta al tumor de cada tipo, no su nivel absoluto, y NES solo es comparable de forma orientativa entre tipos.\n- No se conoce el numero de muestras por tipo; los tipos con pocas pueden no alcanzar significancia.\n- Los porcentajes de genes comunes son descriptivos.\n- Asociacion no implica causalidad.");
+    t.push("SIGUIENTES PASOS");
+    t.push("- Confirmar el numero de muestras y celulas de los tipos sin resultados.\n- Revisar a nivel de gen las rutas compartidas con solapamiento alto y bajo.\n- Repetir con la tabla completa de GSEA y con otras colecciones si estan disponibles.");
+    return t.join("\n\n");
+  }
+  function verifyText(text, facts) {
+    var nums = [];
+    (function walk(x) { if (typeof x === "number") nums.push(x); else if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === "object") Object.keys(x).forEach(function (k) { walk(x[k]); }); })(facts);
+    var found = [], bad = [], m, reD = /(\d+\.\d+)/g, reP = /(\d+) %/g;
+    function ok(v, isPct) { return nums.some(function (n) { return isPct ? n === v : Math.abs(Math.abs(n) - v) <= 0.0051; }); }
+    while ((m = reD.exec(text))) { var v = parseFloat(m[1]); (ok(v, false) ? found : bad).push(m[1]); }
+    while ((m = reP.exec(text))) { var p = parseInt(m[1], 10); (ok(p, true) ? found : bad).push(m[1] + " %"); }
+    return { checked: found.length + bad.length, ok: found.length, bad: bad };
+  }
+  var timer = null, lastText = "";
+  function generate() {
+    var el = $("llm"), btn = $("btnGen"), cp = $("btnCopy");
+    if (timer) clearInterval(timer);
+    $("verify").innerHTML = "";
+    lastText = composeText();
+    var words = lastText.split(/(\s+)/), i = 0, buf = "";
+    btn.disabled = true; cp.disabled = true;
+    el.innerHTML = '<span class="caret"></span>';
+    timer = setInterval(function () {
+      buf += words[i++] || "";
+      el.textContent = buf;
+      var c = document.createElement("span"); c.className = "caret"; el.appendChild(c);
+      if (i >= words.length) {
+        clearInterval(timer); timer = null;
+        el.textContent = lastText + "\n\n(Texto de ejemplo generado con una plantilla. En la app final lo redacta un LLM usando solo los hechos de abajo.)";
+        btn.disabled = false; cp.disabled = false;
+        var v = verifyText(lastText, buildFacts());
+        $("verify").innerHTML = v.bad.length ? '<div class="errbox"><b>Comprobacion de cifras:</b> ' + v.bad.length + ' de ' + v.checked + ' cifras del texto no aparecen en los hechos (' + esc(v.bad.join(", ")) + '). Revisar antes de usar.</div>' : '<div class="okbox"><b>Comprobacion de cifras:</b> las ' + v.checked + ' cifras con decimales o porcentaje del texto aparecen en los hechos enviados.</div>';
+      }
+    }, 10);
+  }
+  function resetLlm() {
+    if (timer) { clearInterval(timer); timer = null; }
+    $("llm").textContent = 'Los filtros o los datos han cambiado. Pulsa "Generar interpretacion" para actualizar el texto.';
+    $("verify").innerHTML = ""; $("btnGen").disabled = false; $("btnCopy").disabled = true;
+  }
+
+  // =====================================================================
+  // CONTROL
+  // =====================================================================
+  function showTab(name) {
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (x) { x.classList.toggle("active", x.getAttribute("data-tab") === name); });
+    Array.prototype.forEach.call(document.querySelectorAll(".view"), function (x) { x.classList.remove("active"); });
+    $("view-" + name).classList.add("active");
+    window.scrollTo(0, 0);
+  }
+  function renderAll() {
+    computePats(); fixAB(); renderSide();
+    renderKpis(); renderHeat(); renderBars(); renderSim(); renderPair();
+    renderPathway(); renderGenes(); renderTable(); renderFiles(); renderCfg(); renderUsed();
+  }
+  function lightFilter() { renderAll(); resetLlm(); }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (b) { b.addEventListener("click", function () { showTab(b.getAttribute("data-tab")); }); });
+  $("coll").addEventListener("change", function (e) { state.coll = e.target.value; rebuildModel(); renderAll(); resetLlm(); });
+  $("selA").addEventListener("change", function (e) { state.a = +e.target.value; if (state.b === state.a) { var o = selIdx().filter(function (i) { return i !== state.a; }); if (o.length) state.b = o[0]; } renderAll(); });
+  $("selB").addEventListener("change", function (e) { state.b = +e.target.value; if (state.a === state.b) { var o = selIdx().filter(function (i) { return i !== state.b; }); if (o.length) state.a = o[0]; } renderAll(); });
+  $("padj").addEventListener("input", function (e) { state.padj = +e.target.value; $("padjVal").textContent = state.padj.toFixed(3).replace(/0+$/, "").replace(/\.$/, ".0"); lightFilter(); });
+  $("nes").addEventListener("input", function (e) { state.nes = +e.target.value; $("nesVal").textContent = state.nes.toFixed(1); lightFilter(); });
+  $("dir").addEventListener("change", function (e) { state.dir = e.target.value; lightFilter(); });
+  $("q").addEventListener("input", function (e) { state.q = e.target.value; lightFilter(); });
+  $("maxRows").addEventListener("change", function (e) { state.maxRows = +e.target.value; renderHeat(); });
+  $("showNS").addEventListener("change", function (e) { state.showNS = e.target.checked; renderHeat(); });
+  $("tblAll").addEventListener("change", function (e) { state.tblAll = e.target.checked; renderTable(); });
+  $("pwIn").addEventListener("change", function (e) {
+    var v = e.target.value.trim().toLowerCase(), hit = ALL.filter(function (x) { return pretty(x).toLowerCase() === v || x.toLowerCase() === v; })[0];
+    if (hit) { state.pw = hit; renderAll(); }
+  });
+  $("gsearch").addEventListener("input", function (e) { state.gsearch = e.target.value; renderGenes(); });
+  Array.prototype.forEach.call(document.querySelectorAll("#tbl th.sortable"), function (th) {
+    th.addEventListener("click", function () { var k = th.getAttribute("data-k"); state.tsort = { k: k, dir: state.tsort.k === k ? -state.tsort.dir : 1 }; renderTable(); });
+  });
+  $("btnGen").addEventListener("click", generate);
+  $("btnCopy").addEventListener("click", function () { if (navigator.clipboard) navigator.clipboard.writeText(lastText); });
+  $("btnCsv").addEventListener("click", downloadCsv);
+  $("btnReal").addEventListener("click", function () { loadReal(); setMsg("okbox", "Datos recibidos cargados (solo rutas significativas)."); afterDataChange(); });
+  $("btnSim").addEventListener("click", function () { loadSim(); setMsg("warn", "Demo simulado cargado: 6 tipos, 50 rutas, tabla completa. Todo inventado, incluidos los genes SIM..G.."); afterDataChange(); });
+  $("btnTpl").addEventListener("click", downloadTemplate);
+  $("fileIn").addEventListener("change", function (e) { handleFiles(e.target.files); e.target.value = ""; });
+  var drop = $("drop");
+  ["dragenter", "dragover"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); }); });
+  ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); }); });
+  drop.addEventListener("drop", function (e) { handleFiles(e.dataTransfer.files); });
+  document.addEventListener("dragover", function (e) { e.preventDefault(); });
+  document.addEventListener("drop", function (e) { if (e.target !== drop && !drop.contains(e.target)) e.preventDefault(); });
+
+  loadReal(); rebuildModel(); sourceBadge(); renderAll();
+
+  // gancho de pruebas (no forma parte del producto)
+  window.__gp = { state: state, pats: function () { return pats; }, entries: function () { return entries; }, CTS: function () { return CTS; }, ALL: function () { return ALL; }, facts: buildFacts, text: composeText, verify: verifyText, handleFiles: handleFiles };
+})();
+</script>
+</body>
+</html>
