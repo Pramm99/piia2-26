@@ -246,6 +246,26 @@ def tabla_pares(triaje: pd.DataFrame, igs: pd.DataFrame, casos: pd.DataFrame,
     return df
 
 
+def aplicar_criterio(pares: pd.DataFrame, criterio: Dict[Tuple[str, str], str]) -> pd.DataFrame:
+    """Signos fijados a mano por una persona experta («Tu criterio» del frontend), por (Gen, GO_ID): el par pasa a
+    resuelto con ese signo y Origen Experto. Los pares que no están en la tabla se ignoran."""
+    df = pares.copy()
+    for (gen, go), signo in criterio.items():
+        sel = (df["Gen"] == gen) & (df["GO_ID"] == go)
+        if not sel.any():
+            continue
+        signo = normalizar_signo(signo)
+        if signo not in CLASES:
+            raise ValueError(f"Signo de criterio no válido para {gen} en {go}: {signo!r}")
+        d = df.loc[sel, "Estado_Original"].map(DIRECCION)
+        df.loc[sel, ["Signo_par", "Estado_par", "Motivos", "Origen"]] = [signo, ESTADO_RESUELTO, "criterio_experto",
+                                                                        "Experto"]
+        df.loc[sel, "Contribucion"] = (VALOR[signo] * d).astype(float) + 0.0  # sin -0.0
+        df.loc[sel, "Freno_retroalimentacion"] = df.loc[sel, "Contribucion"] < 0
+        df.loc[sel, "c_revisar"] = 0.0
+    return df
+
+
 def _lectura(nps, n_con_signo, cobertura) -> str:
     if n_con_signo < config.MIN_PARES_CON_SIGNO or cobertura < config.MIN_COBERTURA:
         return "insuficiente"
@@ -343,8 +363,10 @@ COLUMNAS_PAR = ["Gen", "GO_ID", "Ruta_Nombre", "Direccion", "Log2FC", "Signo_par
                 "Votos", "PMIDs_consultados", "Signo_revisar", "Contribucion", "Freno_retroalimentacion"]
 
 
-def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None):
-    """Entradas -> (Por_par, Por_ruta, Resumen, Abstracts_sin_signo)."""
+def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None,
+             criterio: Optional[Dict[Tuple[str, str], str]] = None):
+    """Entradas -> (Por_par, Por_ruta, Resumen, Abstracts_sin_signo). `criterio`: signos fijados a mano por
+    (Gen, GO_ID), ver aplicar_criterio."""
     f2 = leer_hojas(fase2, COLUMNAS_FASE2)
     f1 = leer_hojas(fase1, COLUMNAS_FASE1)
     triaje, igs = f1["Triaje_polaridad"], f1["Inmunoglobulinas"]
@@ -353,6 +375,8 @@ def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None
                    pd.concat([triaje, igs])[["Gen", "Estado_Original"]].itertuples(index=False)}
     fc = leer_log2fc(log2fc, direcciones) if log2fc else None
     pares = tabla_pares(triaje, igs, casos, fc)
+    if criterio:
+        pares = aplicar_criterio(pares, criterio)
     rutas = tabla_rutas(pares, fc is not None)
     abstracts = tabla_abstracts_sin_signo(pares, casos, leer_abstracts(fase1))
     res = resumen(pares, rutas, {"Fase 1": Path(fase1), "Fase 2": Path(fase2),

@@ -63,15 +63,17 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
    * a la derecha de la tabla de genes, la columna **Tu criterio**: una persona experta puede decir que un gen activa,
      inhibe o no cambia el proceso. La lectura, el NPS, el veredicto y la tarjeta de la Fase 3 se recalculan al momento
      con las mismas reglas que `fase3_scoring/nps.py`, y un aviso compara el resultado automático con el que tiene los
-     cambios (**Deshacer mis cambios** los quita). Los cambios no se guardan ni pasan al Excel: una nueva ejecución
-     vuelve al resultado automático;
-   * el botón **Descargar Excel de la Fase 3** (siempre el resultado automático).
+     cambios (**Deshacer mis cambios** los quita). Los cambios pasan al momento a los dos Excels (el de la Fase 3 y
+     el de resultados), que guardan también el resultado automático; una nueva ejecución vuelve al automático;
+   * el botón **Descargar Excel de la Fase 3**: el resultado automático o, si has cambiado genes, el que lleva tus
+     cambios, con el automático al lado (`Lectura_automatica`, `NPS_automatico`, `Cambios_experto` y, por gen,
+     `Signo_automatico`).
 5. **Excel de resultados.** Para ir juntando varias rutas en un mismo Excel:
    * **Abrir Excel** pone uno vacío o uno con rutas ya buscadas, y **Crear Excel nuevo** empieza uno. Si ya habías
      ejecutado una ruta, se añade en ese momento (así se completa un Excel al que le faltaba).
    * Cada ruta que se ejecuta se añade sola: una fila en la hoja `Rutas` y sus genes en la hoja `Genes`. Si la ruta ya
-     estaba, se actualiza. Las demás hojas del Excel no se tocan. Se guarda el resultado automático, sin los cambios
-     de «Tu criterio».
+     estaba, se actualiza. Las demás hojas del Excel no se tocan. Si cambias genes en «Tu criterio», la ruta se
+     guarda con tus cambios (marcada con «✎ a mano» en la vista previa) y, al lado, el resultado automático.
    * En Chrome y Edge los cambios se escriben directamente en el fichero elegido; en otros navegadores hay que pulsar
      **Descargar**.
    * **Limpiar Excel** (pide confirmación) borra todas sus rutas para empezar de cero; **Quitar** deja de usarlo sin
@@ -86,6 +88,8 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
   (`codigo/data/respuestas_llm.jsonl`): lo que ya se preguntó no se vuelve a pedir. Si el cupo se agota, las preguntas
   quedan `pendiente` y la interfaz lo avisa; basta con volver a ejecutar la ruta más tarde.
 * **Fase 3** con la tabla de log2FC de CIMUS si existe.
+* **«Tu criterio»** (`POST /criterio`): recalcula la Fase 3 de la ruta con los signos cambiados a mano, sin llamar al
+  LLM, y escribe `fase3_scoring_criterio.xlsx` en su carpeta; `fase3_scoring.xlsx` sigue siendo el automático.
 
 Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md`). Solo se ejecuta una ruta a la vez.
 
@@ -93,7 +97,7 @@ Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md
 
 | Fichero | Contenido |
 |---|---|
-| `api_puente.py` | Puente HTTP con las Fases 1 → 2 → 3 (`/salud`, `/ejecutar-ruta`, `/estado`). |
+| `api_puente.py` | Puente HTTP con las Fases 1 → 2 → 3 (`/salud`, `/ejecutar-ruta`, `/estado`) y el recálculo de «Tu criterio» (`/criterio`). |
 | `src/App.tsx` | Interfaz: Excels de rutas, elección y ejecución de la ruta, veredicto, tarjetas por fase, tabla de genes y «Tu criterio». |
 | `src/ExcelResultados.tsx` | Excel de resultados que acumula las rutas ejecutadas, con su vista previa. |
 | `src/comun.ts` | Utilidades compartidas: carga de SheetJS (desde el CDN, para leer y escribir Excel) y formatos. |
@@ -102,5 +106,6 @@ Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md
 Para comprobar el código antes de un commit, desde `codigo/fase4_frontend/`: `npx tsc -b` y `npx eslint src`.
 
 **Salidas de cada ejecución.** Cada ruta escribe en `codigo/data/frontend/<GO_ID>/` (ignorado por git): los dos Excels de entrada reducidos,
-`fase1_dataset_abstracts.xlsx`, `fase2_resultados.xlsx` y `fase3_scoring.xlsx`. No pisa las salidas del Excel completo.
+`fase1_dataset_abstracts.xlsx`, `fase2_resultados.xlsx`, `fase3_scoring.xlsx` y, si se cambian genes en «Tu criterio»,
+`fase3_scoring_criterio.xlsx`. No pisa las salidas del Excel completo.
 Las cachés de la Fase 1 (`codigo/data/`) son compartidas.

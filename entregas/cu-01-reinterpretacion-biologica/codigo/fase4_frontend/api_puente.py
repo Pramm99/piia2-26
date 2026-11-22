@@ -5,6 +5,7 @@ Desde codigo/: python fase4_frontend/api_puente.py (escucha en http://127.0.0.1:
   GET  /salud           -> {"ok": true}
   POST /ejecutar-ruta   -> {"GO_ID", "Descripcion", "Genes_up", "Genes_down"}: lanza las tres fases seguidas
   GET  /estado          -> fase en curso y, al terminar, el resultado (Por_ruta, Por_par y el Excel de la Fase 3)
+  POST /criterio        -> {"GO_ID", "criterio": {gen: signo}}: Fase 3 de esa ruta con los signos de «Tu criterio»
 
 Las rutas no se precargan: la persona sube en el frontend sus Excels y se envían los genes de la ruta elegida.
 La ejecución va en un hilo y el frontend consulta /estado, porque en frío tarda unos minutos. Solo hay una a la
@@ -46,6 +47,7 @@ from fase3_scoring.nps import COLUMNAS_FASE2, calcular, casos_con_peso, escribir
 DIR_SALIDAS = CODIGO_DIR / "data" / "frontend"
 PATRON_GO = re.compile(r"^GO:\d{7}$")
 COLUMNAS_CIMUS = ["ID", "Description", "geneID"]
+SIGNOS_CRITERIO = ("+1", "-1", "neutro")
 
 _cerrojo = threading.Lock()
 _estado = {"estado": "libre"}  # libre | ejecutando | terminado | error
@@ -94,10 +96,46 @@ def _fase2(carpeta: Path, excel_f1: Path) -> Tuple[Path, dict]:
                        "pendientes": resumen.pendientes, "tokens": tokens}
 
 
+def _log2fc():
+    return f3_config.FICHERO_LOG2FC if f3_config.FICHERO_LOG2FC.exists() else None
+
+
 def _fase3(carpeta: Path, excel_f1: Path, excel_f2: Path):
-    log2fc = f3_config.FICHERO_LOG2FC if f3_config.FICHERO_LOG2FC.exists() else None
-    pares, rutas, res, abstracts = calcular(excel_f1, excel_f2, log2fc)
+    pares, rutas, res, abstracts = calcular(excel_f1, excel_f2, _log2fc())
     return escribir(pares, rutas, res, abstracts, ruta=carpeta / "fase3_scoring.xlsx"), pares, rutas
+
+
+def con_criterio(go_id: str, criterio: dict) -> dict:
+    """Fase 3 de una ruta ya ejecutada con los signos de «Tu criterio» ({gen: "+1" | "-1" | "neutro"}). No vuelve a
+    llamar al LLM: recalcula con las salidas de las Fases 1 y 2 de su carpeta. El Excel lleva el resultado con los
+    cambios y, al lado, el automático (Lectura_automatica, NPS_automatico, Cambios_experto, Signo_automatico); se
+    escribe en fase3_scoring_criterio.xlsx, sin pisar fase3_scoring.xlsx. Sin criterio, devuelve el automático."""
+    carpeta = DIR_SALIDAS / go_id.replace(":", "_")
+    excel_f1, excel_f2 = carpeta / "fase1_dataset_abstracts.xlsx", carpeta / "fase2_resultados.xlsx"
+    if not (excel_f1.exists() and excel_f2.exists()):
+        raise FileNotFoundError(f"No están las salidas de {go_id} en {carpeta}: vuelve a ejecutar la ruta.")
+    auto_p, auto_r, auto_res, auto_abs = calcular(excel_f1, excel_f2, _log2fc())
+    if criterio:
+        pares, rutas, res, abstracts = calcular(excel_f1, excel_f2, _log2fc(),
+                                                criterio={(gen, go_id): s for gen, s in criterio.items()})
+        antes = dict(zip(auto_p["Gen"], auto_p["Signo_par"]))
+        pares.insert(pares.columns.get_loc("Signo_par") + 1, "Signo_automatico", pares["Gen"].map(antes))
+        auto = auto_r.set_index("GO_ID")
+        i = rutas.columns.get_loc("Lectura") + 1
+        rutas.insert(i, "Lectura_automatica", rutas["GO_ID"].map(auto["Lectura"]))
+        rutas.insert(i + 1, "NPS_automatico", rutas["GO_ID"].map(auto["NPS"]))
+        rutas.insert(i + 2, "Cambios_experto", "; ".join(
+            f"{gen}: {antes.get(gen, '?')} → {s}" for gen, s in sorted(criterio.items()) if gen in antes))
+        excel = escribir(pares, rutas, res, abstracts, ruta=carpeta / "fase3_scoring_criterio.xlsx")
+        nombre = f"fase3_scoring_{carpeta.name}_criterio.xlsx"
+    else:
+        pares, rutas = auto_p, auto_r
+        excel = escribir(auto_p, auto_r, auto_res, auto_abs, ruta=carpeta / "fase3_scoring.xlsx")
+        nombre = f"fase3_scoring_{carpeta.name}.xlsx"
+    return {"rutas": json.loads(rutas.to_json(orient="records")),
+            "pares": json.loads(pares.to_json(orient="records")),
+            "excel_b64": base64.b64encode(excel.read_bytes()).decode("ascii"),
+            "nombre_excel": nombre}
 
 
 def _texto(v) -> str:
@@ -233,12 +271,43 @@ class ManejadorPuente(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def _leer_json(self) -> dict:
+        return json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+
+    def _criterio(self):
+        try:
+            datos = self._leer_json()
+            go_id = str(datos.get("GO_ID", "")).strip()
+            criterio = {str(g).strip(): str(s).strip() for g, s in (datos.get("criterio") or {}).items()}
+        except (ValueError, UnicodeDecodeError, AttributeError):
+            self._responder_json(400, {"ok": False, "error": "Petición mal formada."})
+            return
+        if not PATRON_GO.match(go_id):
+            self._responder_json(400, {"ok": False, "error": f"GO_ID no válido: {go_id!r}"})
+            return
+        malos = [g for g, s in criterio.items() if s not in SIGNOS_CRITERIO]
+        if malos:
+            self._responder_json(400, {"ok": False, "error": f"Signo no válido para {', '.join(malos)}."})
+            return
+        with _cerrojo:
+            if _estado.get("estado") == "ejecutando" and _estado.get("GO_ID") == go_id:
+                self._responder_json(409, {"ok": False, "error": f"Se está ejecutando {go_id}."})
+                return
+        try:
+            self._responder_json(200, {"ok": True, **con_criterio(go_id, criterio)})
+        except Exception as exc:
+            traceback.print_exc()
+            self._responder_json(500, {"ok": False, "error": f"{type(exc).__name__}: {exc}"})
+
     def do_POST(self):
+        if self.path == "/criterio":
+            self._criterio()
+            return
         if self.path != "/ejecutar-ruta":
             self.send_error(404)
             return
         try:
-            datos = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+            datos = self._leer_json()
             ruta = {"GO_ID": str(datos.get("GO_ID", "")).strip(),
                     "Descripcion": str(datos.get("Descripcion", "")).strip(),
                     "Genes_up": str(datos.get("Genes_up") or "").strip(),

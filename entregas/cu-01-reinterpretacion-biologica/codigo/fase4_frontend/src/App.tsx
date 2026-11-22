@@ -125,6 +125,14 @@ interface Resultado {
   nombre_excel: string;
 }
 
+// La Fase 3 de la ruta recalculada por el puente con los signos de «Tu criterio» (POST /criterio)
+interface ResultadoCriterio {
+  rutas: PathwayResult[];
+  pares: GeneContribution[];
+  excel_b64: string;
+  nombre_excel: string;
+}
+
 const genes = (s: string) => s.split('/').map((g) => g.trim()).filter(Boolean);
 
 // Umbrales de lectura de la Fase 3 (fase3_scoring/config.py)
@@ -164,7 +172,7 @@ const MOTIVO_TEXTO: Record<string, string> = {
   incoherencia_respuesta: 'La respuesta del LLM era incoherente.',
   json_invalido: 'La respuesta del LLM no se pudo leer.',
   LLM_y_revision: 'Gen con función doble conocida: se revisa siempre.',
-  criterio_experto: 'Cambiado a mano por una persona experta (solo en esta pantalla).',
+  criterio_experto: 'Cambiado a mano por una persona experta.',
 };
 
 // Lo que contestó el modelo antes de que el código decidiera (UMBRAL_VEREDICTO, fase2_inferencia/esquema.py)
@@ -250,8 +258,8 @@ const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
   );
 };
 
-// Signo que puede fijar a mano una persona experta. Solo cambia lo que se ve en esta pantalla: no se guarda,
-// no pasa al Excel y una nueva ejecución vuelve al resultado automático.
+// Signo que puede fijar a mano una persona experta. La pantalla se recalcula aquí al momento; los dos Excels (el de
+// la Fase 3 y el de resultados) los recalcula el puente con fase3_scoring. Una nueva ejecución vuelve al automático.
 type Criterio = '+1' | '-1' | 'neutro';
 
 const aplicarCriterio = (pares: GeneContribution[], criterio: Record<string, Criterio>): GeneContribution[] =>
@@ -464,6 +472,10 @@ export default function App() {
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [criterio, setCriterio] = useState<Record<string, Criterio>>({});
+  const [conCriterio, setConCriterio] = useState<ResultadoCriterio | null>(null);
+  const [calculandoCriterio, setCalculandoCriterio] = useState(false);
+  const [errorCriterio, setErrorCriterio] = useState<string | null>(null);
+  const peticionCriterio = useRef(0);
   const inicioRef = useRef<number>(0);
 
   useEffect(() => {
@@ -550,6 +562,34 @@ export default function App() {
     [rutaRes, paresVista, criterio]
   );
   const automatico = useMemo(() => Object.fromEntries(paresRes.map((g) => [g.Gen, g])), [paresRes]);
+
+  // Con cambios en «Tu criterio», el puente recalcula la Fase 3 de la ruta (sin llamar al LLM): de ahí salen el Excel
+  // de la Fase 3 que se descarga y la fila del Excel de resultados. Solo vale la respuesta a la última petición.
+  useEffect(() => {
+    const id = ++peticionCriterio.current;
+    const sinCambios = !rutaRes || Object.keys(criterio).length === 0;
+    (async () => {
+      setConCriterio(null);
+      setErrorCriterio(null);
+      setCalculandoCriterio(!sinCambios);
+      if (sinCambios) return;
+      try {
+        const res = await fetch(`${API_URL}/criterio`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ GO_ID: rutaRes.GO_ID, criterio }),
+        });
+        const d = await res.json();
+        if (!res.ok || !d.ok) throw new Error(d.error || 'El puente no pudo recalcular la ruta');
+        if (id === peticionCriterio.current) setConCriterio(d);
+      } catch (err) {
+        if (id === peticionCriterio.current) setErrorCriterio(mensaje(err));
+      } finally {
+        if (id === peticionCriterio.current) setCalculandoCriterio(false);
+      }
+    })();
+  }, [rutaRes, criterio]);
+  const paraExcel = cambios.length ? conCriterio : resultado;
 
   const NOMBRE_LISTA = { up: 'rutas sobreexpresadas (upregulated)', down: 'rutas infraexpresadas (downregulated)' };
 
@@ -854,7 +894,7 @@ export default function App() {
         </section>
 
         {/* EXCEL DE RESULTADOS: ACUMULA LAS RUTAS EJECUTADAS */}
-        <ExcelResultados resultado={resultado} />
+        <ExcelResultados resultado={paraExcel} />
 
         {/* RESULTADO DE LA RUTA: UNA TARJETA POR FASE Y EL DESGLOSE POR GEN */}
         <section style={{ backgroundColor: 'var(--c-0f172a)', border: '1px solid var(--c-1e293b)', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -870,11 +910,18 @@ export default function App() {
                   <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold' }}>Resultado · {rutaRes.Ruta_Nombre}</h3>
                 </div>
                 <button
-                  onClick={() => descargarBase64Excel(resultado.excel_b64, resultado.nombre_excel)}
-                  style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--c-14b8a6)', color: 'var(--c-020617)', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  onClick={() => {
+                    const excel = cambios.length && conCriterio ? conCriterio : resultado;
+                    descargarBase64Excel(excel.excel_b64, excel.nombre_excel);
+                  }}
+                  disabled={calculandoCriterio}
+                  style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--c-14b8a6)', color: 'var(--c-020617)', fontWeight: 'bold', cursor: calculandoCriterio ? 'wait' : 'pointer', opacity: calculandoCriterio ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: '5px' }}
                 >
                   <Download size={13} />
-                  <span>Descargar Excel de la Fase 3{cambios.length > 0 && ' (automático, sin tus cambios)'}</span>
+                  <span>
+                    Descargar Excel de la Fase 3
+                    {cambios.length > 0 && (calculandoCriterio ? ' (recalculando con tus cambios…)' : conCriterio ? ' (con tus cambios)' : ' (automático, sin tus cambios)')}
+                  </span>
                 </button>
               </div>
 
@@ -884,7 +931,11 @@ export default function App() {
                     ✎ Has cambiado a mano {cambios.length === 1 ? '1 gen' : `${cambios.length} genes`} ({cambios.join(', ')}). Resultado automático:{' '}
                     <strong style={{ color: colorLectura(rutaRes.Lectura) }}>{rutaRes.Lectura} (NPS {formatoNPS(rutaRes.NPS)})</strong>; con tus cambios:{' '}
                     <strong style={{ color: colorLectura((rutaVista || rutaRes).Lectura) }}>{(rutaVista || rutaRes).Lectura} (NPS {formatoNPS((rutaVista || rutaRes).NPS)})</strong>.
-                    Solo vale para esta pantalla: no se guarda ni pasa al Excel, y una nueva ejecución vuelve al resultado automático.
+                    {errorCriterio ? (
+                      <span style={{ color: 'var(--c-fda4af)' }}> No se pudieron pasar a los Excels: {errorCriterio}.</span>
+                    ) : (
+                      ' Pasan al Excel de la Fase 3 y al de resultados, que guardan también el resultado automático. Una nueva ejecución vuelve al resultado automático.'
+                    )}
                   </span>
                   <button onClick={() => setCriterio({})} style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', cursor: 'pointer' }}>
                     Deshacer mis cambios
@@ -956,7 +1007,7 @@ export default function App() {
                 Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
                 El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
                 Pulsa un gen para ver sus artículos y el cálculo. En la última columna, <strong>Tu criterio</strong>, una persona experta puede
-                decir que un gen activa, inhibe o no cambia el proceso: el resultado se recalcula al momento, pero el cambio no se guarda.
+                decir que un gen activa, inhibe o no cambia el proceso: el resultado se recalcula al momento y el cambio pasa a los Excels.
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -1011,7 +1062,7 @@ export default function App() {
                                     return nuevo;
                                   });
                                 }}
-                                title="Cambia el signo del gen solo en esta pantalla"
+                                title="Cambia el signo del gen: se recalcula la ruta y pasa a los Excels"
                                 style={{ padding: '4px 6px', fontSize: '12px', borderRadius: '6px', backgroundColor: 'var(--c-020617)', color: 'var(--c-f8fafc)', border: `1px solid ${criterio[g.Gen] ? 'var(--c-fbbf24)' : 'var(--c-334155)'}`, cursor: 'pointer' }}
                               >
                                 <option value="">Automático</option>

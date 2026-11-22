@@ -212,6 +212,27 @@ def test_abstracts_de_los_pares_sin_signo(tmp_path):
     assert res[res.Apartado == "Abstracts_sin_signo"].Valor.iloc[0] == "1 (1)"
 
 
+def test_criterio_experto(tmp_path):
+    """El signo que fija a mano una persona experta («Tu criterio» del frontend) sustituye al del par, que pasa a
+    resuelto con Origen Experto, y la ruta se recalcula con las reglas de siempre. Sin criterio, nada cambia."""
+    pares = [par("A", "GO:A"), par("B", "GO:A"), par("C", "GO:A", lista="Suprimida"),
+             par("S", "GO:A", destino="sin_evidencia")]
+    casos = [caso("A", "GO:A", "1", "+1"), caso("B", "GO:A", "2", "+1"), caso("C", "GO:A", "3", "-1")]
+    f1, f2 = entradas(tmp_path, pares, casos)
+    _, r, _, _ = calcular(f1, f2)
+    assert (r.iloc[0].Lectura, r.iloc[0].NPS) == ("activada", 1.0)
+    criterio = {("A", "GO:A"): "-1", ("B", "GO:A"): "-1", ("S", "GO:A"): "-1", ("NO_ESTA", "GO:A"): "+1"}
+    p, r, res, a = calcular(f1, f2, criterio=criterio)
+    s = fila(p, "S")
+    assert (s.Signo_par, s.Estado_par, s.Origen, s.Motivos, s.Contribucion) == ("-1", "resuelto", "Experto",
+                                                                                "criterio_experto", -1.0)
+    assert fila(p, "C").Origen == "LLM" and fila(p, "C").Contribucion == 1.0
+    ruta = r.iloc[0]
+    assert (ruta.Lectura, ruta.NPS, ruta.n_sin_evidencia) == ("inhibida", -0.5, 0)
+    assert (ruta.Genes_activan, ruta.Genes_inhiben) == ("C", "A; B; S")
+    assert len(p) == 4
+
+
 @pytest.mark.parametrize("hoja, columna", [("Por_ruta", None), ("Por_ruta", "Confianza_final")])
 def test_entrada_incompleta(tmp_path, hoja, columna):
     f1, f2 = entradas(tmp_path, RUTA, VOTOS)

@@ -4,14 +4,16 @@ import { colorLectura, formatoNPS, loadXLSX, mensaje, type Fila, type Libro } fr
 
 // Excel de resultados: va acumulando una fila por ruta ejecutada (hoja Rutas) y sus genes (hoja Genes).
 // Se puede empezar con uno vacío o con uno que ya tenga rutas; si la ruta ya estaba, su fila se sustituye.
+// Con cambios en «Tu criterio», la fila lleva el resultado con los cambios y, al lado, el automático.
 // Con Chrome o Edge se guarda directamente en el fichero elegido; en otros navegadores, con «Descargar».
 
 const HOJA_RUTAS = 'Rutas';
 const HOJA_GENES = 'Genes';
-const COLUMNAS_RUTAS = ['Fecha', 'GO_ID', 'Ruta_Nombre', 'Listas', 'Lectura', 'NPS', 'NPS_log2FC', 'Lectura_log2FC',
+const COLUMNAS_RUTAS = ['Fecha', 'GO_ID', 'Ruta_Nombre', 'Listas', 'Lectura', 'NPS', 'Lectura_automatica', 'NPS_automatico',
+  'Cambios_experto', 'NPS_log2FC', 'Lectura_log2FC',
   'Sensible_al_peso', 'n_total', 'n_activan', 'n_inhiben', 'n_neutros', 'n_no_concluyente', 'n_sin_evidencia',
   'n_pendiente', 'Cobertura', 'Genes_activan', 'Genes_inhiben'];
-const COLUMNAS_GENES = ['GO_ID', 'Ruta_Nombre', 'Gen', 'Direccion', 'Log2FC', 'Signo_par', 'Estado_par', 'Origen',
+const COLUMNAS_GENES = ['GO_ID', 'Ruta_Nombre', 'Gen', 'Direccion', 'Log2FC', 'Signo_par', 'Signo_automatico', 'Estado_par', 'Origen',
   'Contribucion', 'Motivos', 'Votos', 'PMIDs_consultados'];
 
 // API de acceso a ficheros de Chrome/Edge: permite volver a escribir en el mismo fichero
@@ -58,8 +60,12 @@ const numero = (v: unknown) => (v === '' || v === null || v === undefined || Num
 const añadirResultado = (acc: Acumulado, res: ResultadoParaExcel): Acumulado => {
   const ruta = res.rutas[0] as Fila;
   const go = String(ruta.GO_ID);
-  const fila = columnas({ ...ruta, Fecha: new Date().toLocaleString('es-ES') }, COLUMNAS_RUTAS);
-  const genes = (res.pares as Fila[]).filter((p) => p.GO_ID === go).map((p) => columnas(p, COLUMNAS_GENES));
+  // Sin cambios a mano, el resultado automático es el mismo que el guardado
+  const fila = columnas({
+    Lectura_automatica: ruta.Lectura, NPS_automatico: ruta.NPS, ...ruta, Fecha: new Date().toLocaleString('es-ES'),
+  }, COLUMNAS_RUTAS);
+  const genes = (res.pares as Fila[]).filter((p) => p.GO_ID === go)
+    .map((p) => columnas({ Signo_automatico: p.Signo_par, ...p }, COLUMNAS_GENES));
   return {
     ...acc,
     rutas: [...acc.rutas.filter((r) => String(r.GO_ID) !== go), fila],
@@ -228,7 +234,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
           </h2>
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--c-94a3b8)', maxWidth: '900px' }}>
             Pon un Excel vacío o uno con rutas ya buscadas: cada ruta que ejecutes se añade sola (si ya estaba, se actualiza).
-            Se guarda el resultado automático, sin los cambios de «Tu criterio».
+            Si cambias genes en «Tu criterio», la ruta se guarda con tus cambios y, al lado, el resultado automático.
             {puedeEscribir ? ' Los cambios se escriben directamente en el fichero.' : ' En este navegador no se puede escribir en el fichero: usa «Descargar» para guardar los cambios.'}
           </p>
         </div>
@@ -379,6 +385,11 @@ function FilaRuta({ go, r, lectura, nps, nueva, abierta, genes, onAbrir, onQuita
         <td style={{ padding: '7px 10px' }}>{String(r.Ruta_Nombre || '')}</td>
         <td style={{ padding: '7px 10px' }}>
           <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '11px', color, border: `1px solid ${color}`, borderRadius: '4px', padding: '1px 6px' }}>{lectura || '—'}</span>
+          {r.Cambios_experto ? (
+            <span title={`Cambios a mano: ${String(r.Cambios_experto)}. Automático: ${String(r.Lectura_automatica)} (NPS ${formatoNPS(numero(r.NPS_automatico))})`} style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--c-fbbf24)' }}>
+              ✎ a mano
+            </span>
+          ) : null}
         </td>
         <td style={{ padding: '7px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

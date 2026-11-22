@@ -31,6 +31,7 @@ No se pueden lanzar las fases por separado ni el Excel entero: para eso está la
 | `GET /salud` | Comprueba que el puente está vivo. | `{"ok": true}` |
 | `POST /ejecutar-ruta` con `{"GO_ID", "Descripcion", "Genes_up", "Genes_down"}` | Valida la petición y lanza las tres fases en un hilo. | `202` si arranca; `400` si el GO_ID no tiene la forma `GO:` + 7 cifras, si la ruta no tiene genes o si el JSON está mal formado; `409` si ya hay una ruta en marcha. |
 | `GET /estado` | Fase en curso (1, 2 o 3) y, al terminar, el resultado o el error. | `estado` ∈ {`libre`, `ejecutando`, `terminado`, `error`}. |
+| `POST /criterio` con `{"GO_ID", "criterio": {gen: signo}}` (`+1`, `-1` o `neutro`) | Recalcula la Fase 3 de una ruta ya ejecutada con los signos de «Tu criterio», sin llamar al LLM (ver Paso 4). | `200` con `rutas`, `pares` y el Excel; `400` si el GO_ID o un signo no son válidos o el JSON está mal formado; `409` si esa ruta se está ejecutando; `500` si no están las salidas de la ruta. |
 
 * **Fase 1:** escribe dos Excels de entrada reducidos a la ruta (una fila cada uno, o ninguna si la lista no tiene genes) y ejecuta la Fase 1 sobre ellos. Redirige sus rutas de entrada y de salida desde fuera, igual que `tests/test_fase1_e2e.py`, **sin tocar `fase1_ingesta/`**. Si la Fase 1 no encuentra ninguna evidencia, la ejecución acaba en `error` con ese mensaje.
 * **Fase 2:** Gemini como principal y gpt-oss solo como respaldo ([ADR-005](../decisions/adr-005-eleccion-modelo-coste-cero.md)), con el registro de siempre (`codigo/data/respuestas_llm.jsonl`): lo ya preguntado no se vuelve a pedir. Si ningún par llega al LLM, escribe un `fase2_resultados.xlsx` con las hojas vacías para que la Fase 3 funcione igual.
@@ -53,7 +54,7 @@ Sin códigos internos a la vista (`+1:15811952(0.36)`, `evidencia_debil`…): to
   * cada artículo con el título enlazado a PubMed, su conclusión, su confianza y la frase citada;
   * el peso de la evidencia con una barra y la cuenta de cada voto (p. ej. 0,36 = confianza 73 % × 0,5 por ser en ratón);
   * en los artículos sin conclusión, el tipo de evidencia y hacia dónde se inclinaba el LLM.
-* **Descargar Excel de la Fase 3:** siempre el resultado automático.
+* **Descargar Excel de la Fase 3:** el resultado automático o, si hay cambios en «Tu criterio», el que los lleva (Paso 4).
 * Si quedaron preguntas `pendiente` (cupo del LLM agotado), un aviso lo dice y pide volver a ejecutar la ruta más tarde.
 
 ### Paso 4 · Criterio de la persona experta («Tu criterio»)
@@ -61,18 +62,21 @@ Sin códigos internos a la vista (`+1:15811952(0.36)`, `evidencia_debil`…): to
 * Elegir uno fija el signo del gen (`+1`, `−1` o `neutro`) como `resuelto` con origen `Experto`, y la contribución vuelve a ser signo × dirección.
 * El veredicto, la tarjeta de la Fase 3 y la tabla se recalculan al momento con **las mismas reglas que `fase3_scoring/nps.py`** (`tabla_rutas` y `_lectura`): NPS, `NPS_log2FC`, `Lectura`, `Lectura_log2FC`, `Sensible_al_peso`, `Cobertura` y recuentos. Los umbrales son los de `fase3_scoring/config.py` (`UMBRAL_NPS` 0,33, `MIN_PARES_CON_SIGNO` 3 y `MIN_COBERTURA` 0,30), copiados en `App.tsx`.
 * Un aviso compara la lectura automática con la que lleva los cambios, y **Deshacer mis cambios** los quita.
-* Los cambios **no se guardan**: no pasan al Excel de la Fase 3 ni al Excel de resultados, y una nueva ejecución vuelve al resultado automático.
+* Los cambios **pasan a los dos Excels**. Con cada cambio, la interfaz llama a `POST /criterio` y el puente recalcula la Fase 3 de la ruta con `fase3_scoring.nps.calcular(..., criterio=...)` (`aplicar_criterio`), a partir de las salidas de las Fases 1 y 2 de su carpeta y sin llamar al LLM:
+  * el **Excel de la Fase 3** que se descarga es `fase3_scoring_criterio.xlsx`, con las cuatro hojas recalculadas y, al lado, el resultado automático: en `Por_ruta`, `Lectura_automatica`, `NPS_automatico` y `Cambios_experto` (p. ej. `IRF4: UNKNOWN → -1`); en `Por_par`, `Signo_automatico`. `fase3_scoring.xlsx` sigue siendo el automático;
+  * en el **Excel de resultados**, la fila de la ruta y sus genes se sustituyen por los recalculados, con las mismas columnas del resultado automático (Paso 5).
+* Los genes cambiados quedan con `Origen` = `Experto` y `Motivos` = `criterio_experto`. **Deshacer mis cambios** devuelve los dos Excels al resultado automático, y una nueva ejecución de la ruta también.
 
 ### Paso 5 · Excel de resultados
 Para juntar varias rutas en un mismo Excel sin copiarlas a mano.
 
 * **Abrir Excel** pone uno vacío o uno con rutas ya buscadas, y **Crear Excel nuevo** empieza uno (`resultados_rutas.xlsx`). Si ya se había ejecutado una ruta, se añade en ese momento.
-* Cada ruta ejecutada se añade sola, con el resultado automático:
+* Cada ruta ejecutada se añade sola, con el resultado automático o, si hay cambios en «Tu criterio», con el que los lleva:
 
   | Hoja | Una fila por | Columnas |
   |---|---|---|
-  | `Rutas` | ruta ejecutada | `Fecha`, `GO_ID`, `Ruta_Nombre`, `Listas`, `Lectura`, `NPS`, `NPS_log2FC`, `Lectura_log2FC`, `Sensible_al_peso`, `n_total`, `n_activan`, `n_inhiben`, `n_neutros`, `n_no_concluyente`, `n_sin_evidencia`, `n_pendiente`, `Cobertura`, `Genes_activan`, `Genes_inhiben` (las de `Por_ruta` de la Fase 3, más la fecha). |
-  | `Genes` | par (gen, ruta) de las rutas ejecutadas | `GO_ID`, `Ruta_Nombre`, `Gen`, `Direccion`, `Log2FC`, `Signo_par`, `Estado_par`, `Origen`, `Contribucion`, `Motivos`, `Votos`, `PMIDs_consultados` (las de `Por_par`). |
+  | `Rutas` | ruta ejecutada | `Fecha`, `GO_ID`, `Ruta_Nombre`, `Listas`, `Lectura`, `NPS`, `Lectura_automatica`, `NPS_automatico`, `Cambios_experto`, `NPS_log2FC`, `Lectura_log2FC`, `Sensible_al_peso`, `n_total`, `n_activan`, `n_inhiben`, `n_neutros`, `n_no_concluyente`, `n_sin_evidencia`, `n_pendiente`, `Cobertura`, `Genes_activan`, `Genes_inhiben` (las de `Por_ruta` de la Fase 3, más la fecha). Sin cambios a mano, `Lectura_automatica` y `NPS_automatico` repiten `Lectura` y `NPS`, y `Cambios_experto` queda vacía. |
+  | `Genes` | par (gen, ruta) de las rutas ejecutadas | `GO_ID`, `Ruta_Nombre`, `Gen`, `Direccion`, `Log2FC`, `Signo_par`, `Signo_automatico`, `Estado_par`, `Origen`, `Contribucion`, `Motivos`, `Votos`, `PMIDs_consultados` (las de `Por_par`). |
 
 * Si la ruta ya estaba, sus filas se **sustituyen**, no se duplican. Las demás hojas del libro se conservan tal cual.
 * Un Excel cuya hoja `Rutas` no tiene la columna `GO_ID` se rechaza, porque no es un Excel de resultados.
@@ -94,17 +98,18 @@ Para juntar varias rutas en un mismo Excel sin copiarlas a mano.
 * **Puente propio sobre `http.server`, sin servidor web nuevo:** solo escucha en `127.0.0.1`, solo hace tres cosas y no añade dependencias a `requirements.txt`. Llama a las funciones de las fases y redirige sus rutas de entrada y salida, así que la Fase 4 no duplica lógica ni cambia el comportamiento de la línea de comandos.
 * **Un hilo y consulta del estado:** la ejecución en frío dura minutos, más que el tiempo de espera normal de una petición HTTP. Lanzarla en un hilo y consultar `/estado` deja ver la fase en curso.
 * **Carpeta propia por ruta y registro compartido** ([ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md)): no pisa las salidas del Excel completo, y una ruta ya consultada no vuelve a gastar llamadas al LLM.
-* **«Tu criterio» solo en pantalla:** el experto tiene que poder ver qué pasaría si un gen tuviera otro signo, porque muchos genes de NK tienen funciones duales. Pero el resultado del pipeline tiene que seguir siendo reproducible y trazable a sus artículos; un signo fijado a mano que se guardara se confundiría con uno inferido.
+* **«Tu criterio» pasa a los Excels, junto al automático:** el experto tiene que poder ver qué pasaría si un gen tuviera otro signo, porque muchos genes de NK tienen funciones duales, y quedarse con ese resultado en sus Excels. Para que no se confunda un signo fijado a mano con uno inferido, el gen cambiado lleva `Origen` = `Experto`, y cada Excel guarda al lado el resultado automático (`Lectura_automatica`, `NPS_automatico`, `Cambios_experto` y `Signo_automatico`). El automático de la Fase 3 sigue en `fase3_scoring.xlsx`, reproducible y trazable a sus artículos.
+* **Los Excels con «Tu criterio» los recalcula `fase3_scoring`, no la interfaz:** la copia de las reglas en `App.tsx` solo recalcula la lectura y el NPS para la pantalla. Las hojas completas (recuentos, `Genes_activan`, `Resumen`…) salen de la Fase 3 real, que tarda menos de un segundo con una ruta.
 * **Excel de resultados en el navegador:** CIMUS ya trabaja con Excel. Acumular las rutas en un fichero que elige la persona evita una base de datos (ADR-004) y que tenga que copiar resultados a mano entre ejecuciones.
 
 **Alternativas descartadas:**
 * **Streamlit o Gradio:** dan una interfaz rápida, pero con poco control del diseño del veredicto, la tabla gen a gen y el desplegable por gen, y ejecutan la lógica en cada interacción.
 * **FastAPI o Flask para el puente:** añaden dependencias para tres rutas que la librería estándar ya cubre.
 * **Llamar a las fases desde el navegador o reescribirlas en TypeScript:** duplicaría la lógica de las Fases 1–3 y dejaría dos versiones que mantener. Solo se copian en `App.tsx` las reglas de lectura del NPS, que son cortas, para recalcular «Tu criterio» al momento.
-* **Guardar el criterio del experto:** se descartó para no mezclar signos inferidos con signos fijados a mano (ver arriba).
+* **Recalcular los Excels de «Tu criterio» en el navegador:** obligaría a copiar en TypeScript toda la Fase 3 (recuentos, `Resumen`), no solo la regla de lectura.
 
 ## Restricciones
-* **No modifica las fases:** no cambia `fase1_ingesta/`, `fase2_inferencia/` ni `fase3_scoring/`; solo redirige sus rutas de entrada y salida.
+* **No modifica las fases:** no cambia `fase1_ingesta/` ni `fase2_inferencia/`; solo redirige sus rutas de entrada y salida. De `fase3_scoring/` usa el parámetro opcional `criterio` de `calcular`, que la línea de comandos no usa, así que su resultado no cambia.
 * **Local:** el puente solo escucha en `127.0.0.1:8000` y la interfaz en `localhost:5173`. Las claves se quedan en `codigo/.env`, que no se versiona, y no pasan por el navegador.
 * **Una ruta a la vez:** una segunda petición mientras hay otra en marcha recibe `409`.
 * **Mismo resultado que la línea de comandos:** con las mismas entradas, cachés y registro, la lectura y el NPS de la ruta coinciden con los de `python -m fase3_scoring`.
@@ -120,9 +125,10 @@ La Fase 4 no tiene pruebas en `codigo/tests/` (#40): estos criterios se comprueb
 * [x] ✅ **Sin nada precargado** (a mano, #42): la interfaz arranca sin rutas; acepta un Excel por lista, **Cambiar** lo sustituye y **Quitar** lo elimina.
 * [x] ✅ **Peticiones no válidas** (a mano con `curl`, 14/11): un GO_ID sin la forma `GO:` + 7 cifras, una ruta sin genes o un JSON mal formado reciben `400`, y una segunda ruta mientras GO:0072678 está en marcha, `409`. Esa ejecución, con las cachés y el registro hechos, da `activada` y NPS 0,333 sin ninguna llamada al LLM (12 respuestas reutilizadas).
 * [x] ✅ **Resultado en lenguaje llano** (a mano, #43): veredicto, tarjetas por fase y tabla de genes sin códigos internos; el peso de cada voto con su cuenta, y en CX3CR1 el tipo de evidencia y la inclinación del LLM («activa», 60 %, pero solo correlación).
-* [x] ✅ **Tu criterio** (a mano, #44): en GO:0072678, GPR183 en «No lo cambia» da `mixta` y NPS 0,25; **Deshacer mis cambios** vuelve a `activada` y 0,333. El Excel de la Fase 3 descargado sigue siendo el automático.
+* [x] ✅ **Tu criterio** (a mano, #44): en GO:0072678, GPR183 en «No lo cambia» da `mixta` y NPS 0,25; **Deshacer mis cambios** vuelve a `activada` y 0,333.
+* [x] ✅ **Tu criterio en los Excels** (a mano con un fichero simulado, 22/11): en GO:0001773, IRF4 en «Inhibe el proceso» da `activada` y NPS 0,333 en pantalla, en `fase3_scoring_criterio.xlsx` y en la fila del Excel de resultados, que se reescribe al momento con `insuficiente` y 1,00 como resultado automático y `Cambios_experto` = `IRF4: UNKNOWN → -1`; **Deshacer mis cambios** devuelve el Excel de resultados al automático. `fase3_scoring.xlsx` no cambia. `test_criterio_experto` (`tests/test_scoring.py`) comprueba el recálculo de la Fase 3.
 * [x] ✅ **Excel de resultados** (a mano con un fichero simulado, #45): crear uno, añadir dos rutas, repetir una sin duplicarla, abrir uno incompleto y completarlo, y limpiarlo.
 * [ ] **Excel de resultados con el diálogo real** (#39): las mismas operaciones con el diálogo de ficheros de Chrome y con **Descargar** en otro navegador.
 * [x] ✅ **Fondo blanco** (a mano, #46): el botón de la cabecera cambia de tema, los textos se leen sobre blanco y el navegador recuerda la elección.
-* [x] ✅ **Código** (14/11): `npx tsc -b` y `npx eslint src` sin errores, y `python -m pytest` en verde (148 pruebas, todas de las Fases 1–3).
+* [x] ✅ **Código** (22/11): `npx tsc -b` y `npx eslint src` sin errores, y `python -m pytest` en verde (149 pruebas, todas de las Fases 1–3).
 * [ ] **Pruebas automáticas** (#40): pruebas del puente (`/salud`, `/ejecutar-ruta` y `/estado`, con las fases simuladas) y del recálculo de «Tu criterio» frente a `fase3_scoring/nps.py`.
