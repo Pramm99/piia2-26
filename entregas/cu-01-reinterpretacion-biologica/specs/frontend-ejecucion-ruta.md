@@ -38,7 +38,7 @@ No se pueden lanzar las fases por separado ni el Excel entero: para eso está la
 * **Fase 3:** con la tabla de log2FC de CIMUS si existe.
 * **Resultado:** las filas de `Por_ruta` y `Por_par` de la Fase 3, el Excel de la Fase 3 (en base64, para descargarlo), los tiempos de cada fase, el uso del LLM (llamadas, reutilizadas, pendientes y tokens) y, por gen, el detalle que explica el signo:
   * los artículos que leyó el LLM, uno por PMID, con su título, signo, estado, motivos, `Confianza_final`, la frase citada y lo que contestó el modelo (efecto, confianza y tipo de evidencia), aunque el código lo dejara en `UNKNOWN`;
-  * los votos de cada artículo, uno por subproceso de la ruta, con su organismo, tipo celular y el peso que les da la Fase 3 (`casos_con_peso` de `fase3_scoring/nps.py`);
+  * los votos de cada artículo, uno por subproceso de la ruta, con su organismo, tipo celular, el peso que les da la Fase 3 (`casos_con_peso` de `fase3_scoring/nps.py`) y `Factor_GO` (`FACTOR_FUENTE_GO` si el artículo lo cita la anotación de GO; si no, vacío);
   * si el signo sale de Gene Ontology, sus códigos de evidencia y PMIDs.
 * La interfaz consulta `/estado` cada 1,5 s y muestra la fase en curso y el tiempo transcurrido.
 
@@ -52,7 +52,7 @@ Sin códigos internos a la vista (`+1:15811952(0.36)`, `evidencia_debil`…): to
   * Fase 3: la lectura con la cuenta del NPS y el NPS pesado por log2FC.
 * **Una fila por gen:** si está sobreexpresado o infraexpresado en NK, qué hace en el proceso, hacia dónde empuja la ruta, de dónde sale el signo (Gene Ontology, N artículos, inmunoglobulina o criterio experto) y por qué. Al abrirla:
   * cada artículo con el título enlazado a PubMed, su conclusión, su confianza y la frase citada;
-  * el peso de la evidencia con una barra y la cuenta de cada voto (p. ej. 0,36 = confianza 73 % × 0,5 por ser en ratón);
+  * el peso de la evidencia con una barra y la cuenta de cada voto (p. ej. 0,36 = confianza 73 % × 0,5 por ser en ratón, o 1,20 = confianza 80 % × 1,5 por citarlo la anotación de GO);
   * en los artículos sin conclusión, el tipo de evidencia y hacia dónde se inclinaba el LLM.
 * **Descargar Excel de la Fase 3:** el resultado automático o, si hay cambios en «Tu criterio», el que los lleva (Paso 4).
 * Si quedaron preguntas `pendiente` (cupo del LLM agotado), un aviso lo dice y pide volver a ejecutar la ruta más tarde.
@@ -130,5 +130,5 @@ La Fase 4 no tiene pruebas en `codigo/tests/` (#40): estos criterios se comprueb
 * [x] ✅ **Excel de resultados** (a mano con un fichero simulado, #45): crear uno, añadir dos rutas, repetir una sin duplicarla, abrir uno incompleto y completarlo, y limpiarlo.
 * [ ] **Excel de resultados con el diálogo real** (#39): las mismas operaciones con el diálogo de ficheros de Chrome y con **Descargar** en otro navegador.
 * [x] ✅ **Fondo blanco** (a mano, #46): el botón de la cabecera cambia de tema, los textos se leen sobre blanco y el navegador recuerda la elección.
-* [x] ✅ **Código** (22/11): `npx tsc -b` y `npx eslint src` sin errores, y `python -m pytest` en verde (149 pruebas, todas de las Fases 1–3).
+* [x] ✅ **Código** (22/11): `npx tsc -b` y `npx eslint src` sin errores, y `python -m pytest` en verde (150 pruebas, todas de las Fases 1–3).
 * [ ] **Pruebas automáticas** (#40): pruebas del puente (`/salud`, `/ejecutar-ruta` y `/estado`, con las fases simuladas) y del recálculo de «Tu criterio» frente a `fase3_scoring/nps.py`.

@@ -106,10 +106,26 @@ def normalizar_signo(v) -> str:
         return s
 
 
-def peso(confianza, organismo, tipo_celular) -> Tuple[float, bool]:
-    """w = Confianza_final / 100 × f_contexto. Devuelve también si se usó la confianza por defecto."""
+def leer_fuentes_go(ruta) -> frozenset:
+    """(Gen, GO_ID, PMID) de los artículos que cita la anotación de GO (Fuente GOA en la hoja Con_abstract de la
+    Fase 1). Es opcional: sin la hoja o sin la columna Fuente, ninguno."""
+    with pd.ExcelFile(ruta) as libro:
+        hojas = libro.sheet_names
+    if "Con_abstract" not in hojas:
+        return frozenset()
+    df = pd.read_excel(ruta, sheet_name="Con_abstract")
+    if not {"Gen", "GO_ID", "PMID", "Fuente"} <= set(df.columns):
+        return frozenset()
+    goa = df["Fuente"].map(lambda f: "GOA" in valor_texto(f).split("|"))
+    return frozenset((valor_texto(g), valor_texto(go), normalizar_pmid(p))
+                     for g, go, p in df.loc[goa, ["Gen", "GO_ID", "PMID"]].itertuples(index=False))
+
+
+def peso(confianza, organismo, tipo_celular, de_go: bool = False) -> Tuple[float, bool]:
+    """w = Confianza_final / 100 × f_contexto (× FACTOR_FUENTE_GO si el artículo lo cita la anotación de GO).
+    Devuelve también si se usó la confianza por defecto."""
     por_defecto = confianza is None or pd.isna(confianza)
-    f = 1.0
+    f = config.FACTOR_FUENTE_GO if de_go else 1.0
     if valor_texto(organismo) not in ("",) + config.ORGANISMOS_VALIDOS:
         f *= config.FACTOR_CONTEXTO
     if valor_texto(tipo_celular) not in ("",) + config.TIPOS_CELULARES_VALIDOS:
@@ -118,8 +134,10 @@ def peso(confianza, organismo, tipo_celular) -> Tuple[float, bool]:
     return c / 100 * f, por_defecto
 
 
-def casos_con_peso(por_ruta: pd.DataFrame, preguntas: pd.DataFrame) -> pd.DataFrame:
-    """Por_ruta con el contexto de su pregunta (unido por Gen, PMID y Proceso_ID) y el peso de cada fila."""
+def casos_con_peso(por_ruta: pd.DataFrame, preguntas: pd.DataFrame,
+                   fuentes_go: frozenset = frozenset()) -> pd.DataFrame:
+    """Por_ruta con el contexto de su pregunta (unido por Gen, PMID y Proceso_ID) y el peso de cada fila.
+    fuentes_go: (Gen, GO_ID, PMID) de los artículos de la anotación de GO (leer_fuentes_go); marca De_GO."""
     clave = ["Gen", "PMID", "Proceso_ID"]
     p = preguntas[clave + ["Organismo", "Tipo_celular"]].copy()
     r = por_ruta.copy()
@@ -127,7 +145,10 @@ def casos_con_peso(por_ruta: pd.DataFrame, preguntas: pd.DataFrame) -> pd.DataFr
         df["PMID"] = df["PMID"].map(normalizar_pmid)
         df["Proceso_ID"] = df["Proceso_ID"].map(valor_texto)
     r = r.merge(p.drop_duplicates(clave), on=clave, how="left")
-    pesos = [peso(c, o, t) for c, o, t in zip(r["Confianza_final"], r["Organismo"], r["Tipo_celular"])]
+    r["De_GO"] = [(valor_texto(g), valor_texto(go), p) in fuentes_go
+                  for g, go, p in zip(r["Gen"], r["GO_ID"], r["PMID"])]
+    pesos = [peso(c, o, t, d) for c, o, t, d in
+             zip(r["Confianza_final"], r["Organismo"], r["Tipo_celular"], r["De_GO"])]
     r["w"] = [w for w, _ in pesos]
     r["peso_por_defecto"] = [d for _, d in pesos]
     r["Motivos"] = r["Motivos"].map(valor_texto)
@@ -353,7 +374,7 @@ def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Option
         filas.append(("Sensibilidad", "rutas Sensible_al_peso", int((rutas["Sensible_al_peso"] == "sí").sum())))
     filas += [("Entrada", k, f"{v} ({_fecha(v)})" if v else "no") for k, v in entradas.items()]
     filas += [("Parametro", k, str(getattr(config, k))) for k in
-              ("ORGANISMOS_VALIDOS", "TIPOS_CELULARES_VALIDOS", "FACTOR_CONTEXTO", "CONFIANZA_POR_DEFECTO",
+              ("ORGANISMOS_VALIDOS", "TIPOS_CELULARES_VALIDOS", "FACTOR_CONTEXTO", "FACTOR_FUENTE_GO", "CONFIANZA_POR_DEFECTO",
                "UMBRAL_MINORIA", "MIN_PESO_EVIDENCIA", "MIN_PARES_CON_SIGNO", "MIN_COBERTURA", "UMBRAL_NPS")]
     return pd.DataFrame(filas, columns=["Apartado", "Clave", "Valor"])
 
@@ -370,7 +391,7 @@ def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None
     f2 = leer_hojas(fase2, COLUMNAS_FASE2)
     f1 = leer_hojas(fase1, COLUMNAS_FASE1)
     triaje, igs = f1["Triaje_polaridad"], f1["Inmunoglobulinas"]
-    casos = casos_con_peso(f2["Por_ruta"], f2["Preguntas"])
+    casos = casos_con_peso(f2["Por_ruta"], f2["Preguntas"], leer_fuentes_go(fase1))
     direcciones = {valor_texto(g).upper(): DIRECCION.get(valor_texto(e)) for g, e in
                    pd.concat([triaje, igs])[["Gen", "Estado_Original"]].itertuples(index=False)}
     fc = leer_log2fc(log2fc, direcciones) if log2fc else None

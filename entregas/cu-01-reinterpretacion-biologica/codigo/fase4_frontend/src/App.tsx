@@ -103,6 +103,7 @@ interface Voto {
   Tipo_celular: string;
   Confianza: number | null;
   Peso: number;
+  Factor_GO: number | null; // FACTOR_FUENTE_GO si el artículo lo cita la anotación de GO del gen
 }
 
 interface DetalleGen {
@@ -190,8 +191,9 @@ const TIPO_EVIDENCIA_TEXTO: Record<string, string> = {
 const motivos = (m: string | null | undefined) =>
   (m || '').split('|').map((x) => x.trim()).filter(Boolean).map((x) => MOTIVO_TEXTO[x] || x);
 
-// Peso de cada voto en la Fase 3 (fase3_scoring/config.py): confianza / 100, por 0,5 si el estudio no es en humano
-// y otro 0,5 si no es en células inmunes. Un gen con menos de MIN_PESO_EVIDENCIA a su favor tiene evidencia débil.
+// Peso de cada voto en la Fase 3 (fase3_scoring/config.py): confianza / 100, por 0,5 si el estudio no es en humano,
+// otro 0,5 si no es en células inmunes y por FACTOR_FUENTE_GO (lo envía el puente) si el artículo lo cita la
+// anotación de GO. Un gen con menos de MIN_PESO_EVIDENCIA a su favor tiene evidencia débil.
 const MIN_PESO_EVIDENCIA = 1;
 const ORGANISMOS_VALIDOS = ['human', 'not_stated', ''];
 const TIPOS_CELULARES_VALIDOS = ['NK', 'T', 'other_immune', 'not_stated', ''];
@@ -202,6 +204,7 @@ const coma = (v: number) => v.toFixed(2).replace('.', ',');
 
 const calculoPeso = (v: Voto) => {
   const factores: string[] = [];
+  if (v.Factor_GO) factores.push(`${String(v.Factor_GO).replace('.', ',')} por citarlo la anotación de GO`);
   if (!ORGANISMOS_VALIDOS.includes(v.Organismo)) factores.push(`0,5 por ser en ${ORGANISMO_TEXTO[v.Organismo] || v.Organismo}`);
   if (!TIPOS_CELULARES_VALIDOS.includes(v.Tipo_celular)) factores.push(`0,5 por ser en ${CELULA_TEXTO[v.Tipo_celular] || v.Tipo_celular}`);
   const confianza = v.Confianza === null ? 'confianza por defecto 50 %' : `confianza ${v.Confianza} %`;
@@ -1005,7 +1008,7 @@ export default function App() {
 
               <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)' }}>
                 Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
-                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
+                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes, y por 1,5 si es el artículo que cita la anotación de Gene Ontology del gen; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
                 Pulsa un gen para ver sus artículos y el cálculo. En la última columna, <strong>Tu criterio</strong>, una persona experta puede
                 decir que un gen activa, inhibe o no cambia el proceso: el resultado se recalcula al momento y el cambio pasa a los Excels.
               </div>

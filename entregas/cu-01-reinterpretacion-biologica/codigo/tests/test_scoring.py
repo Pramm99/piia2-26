@@ -212,6 +212,24 @@ def test_abstracts_de_los_pares_sin_signo(tmp_path):
     assert res[res.Apartado == "Abstracts_sin_signo"].Valor.iloc[0] == "1 (1)"
 
 
+def test_articulo_de_go_pesa_mas(tmp_path):
+    """El artículo que cita la anotación de GO (Fuente GOA en la Fase 1) multiplica su peso por FACTOR_FUENTE_GO:
+    con un solo artículo humano de confianza 80 ya no es evidencia débil. Los de otra fuente no cambian, y el
+    signo y la contribución tampoco."""
+    pares = [par("G", "GO:A"), par("E", "GO:A")]
+    casos = [caso("G", "GO:A", "1", "+1", conf=80), caso("E", "GO:A", "2", "+1", conf=80)]
+    textos = [{"Gen": "G", "GO_ID": "GO:A", "PMID": "1", "Fuente": "GOA", "Titulo": "t", "Abstract": "a"},
+              {"Gen": "E", "GO_ID": "GO:A", "PMID": "2", "Fuente": "EuropePMC", "Titulo": "t", "Abstract": "a"}]
+    f1, f2 = entradas(tmp_path, pares, casos, con_abstract=textos)
+    p, *_ = calcular(f1, f2)
+    g, e = fila(p, "G"), fila(p, "E")
+    assert config.FACTOR_FUENTE_GO == 1.5
+    assert (g.W_pos, g.Motivos, g.Votos) == (1.2, "", "+1:1(1.20)")
+    assert (e.W_pos, e.Motivos) == (0.8, "evidencia_debil")
+    assert (g.Signo_par, g.Contribucion) == (e.Signo_par, e.Contribucion) == ("+1", 1.0)
+    assert peso(80, "mouse", "NK", de_go=True) == (pytest.approx(0.6), False)
+
+
 def test_criterio_experto(tmp_path):
     """El signo que fija a mano una persona experta («Tu criterio» del frontend) sustituye al del par, que pasa a
     resuelto con Origen Experto, y la ruta se recalcula con las reglas de siempre. Sin criterio, nada cambia."""

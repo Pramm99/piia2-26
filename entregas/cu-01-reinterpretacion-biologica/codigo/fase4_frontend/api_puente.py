@@ -42,7 +42,7 @@ from fase2_inferencia.cliente import MODELOS, ClienteOpenAICompatible  # noqa: E
 from fase2_inferencia.limpieza import normalizar_pmid as limpiar  # noqa: E402
 from fase2_inferencia.pipeline import ejecutar_fase2  # noqa: E402
 from fase3_scoring import config as f3_config  # noqa: E402
-from fase3_scoring.nps import COLUMNAS_FASE2, calcular, casos_con_peso, escribir  # noqa: E402
+from fase3_scoring.nps import COLUMNAS_FASE2, calcular, casos_con_peso, escribir, leer_fuentes_go  # noqa: E402
 
 DIR_SALIDAS = CODIGO_DIR / "data" / "frontend"
 PATRON_GO = re.compile(r"^GO:\d{7}$")
@@ -146,12 +146,14 @@ def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
     """Lo que la interfaz explica en lenguaje llano: un resumen de cada fase y, por gen, los artículos que leyó el
     LLM (título, signo, confianza y la frase citada) y las evidencias de GO cuando el signo sale de la anotación.
     Cada artículo lleva sus votos: uno por subproceso de la ruta por el que se preguntó, con el peso que le da la
-    Fase 3 (confianza / 100, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes)."""
+    Fase 3 (confianza / 100, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes, y por
+    FACTOR_FUENTE_GO si el artículo lo cita la anotación de GO)."""
     f1 = pd.read_excel(excel_f1, sheet_name=["Con_abstract", "Triaje_polaridad"])
     con, triaje = f1["Con_abstract"], f1["Triaje_polaridad"]
     titulos = {limpiar(p): _texto(t) for p, t in zip(con["PMID"], con["Titulo"])}
     hojas = pd.read_excel(excel_f2, sheet_name=["Por_ruta", "Preguntas"])
-    votos = casos_con_peso(hojas["Por_ruta"][hojas["Por_ruta"]["GO_ID"] == go_id], hojas["Preguntas"])
+    votos = casos_con_peso(hojas["Por_ruta"][hojas["Por_ruta"]["GO_ID"] == go_id], hojas["Preguntas"],
+                           leer_fuentes_go(excel_f1))
     f2 = votos.sort_values("Confianza_final", ascending=False).drop_duplicates(["Gen", "PMID"])  # un PMID por gen
     # Lo que respondió el modelo aunque el código lo dejara en UNKNOWN: efecto, confianza y tipo de evidencia
     preguntas = hojas["Preguntas"].copy()
@@ -174,7 +176,8 @@ def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
             "Votos": [{"Proceso": _texto(v["Proceso"]), "Signo": _texto(v["Signo_ruta"]),
                        "Organismo": _texto(v["Organismo"]), "Tipo_celular": _texto(v["Tipo_celular"]),
                        "Confianza": None if pd.isna(v["Confianza_final"]) else int(v["Confianza_final"]),
-                       "Peso": round(float(v["w"]), 2)}
+                       "Peso": round(float(v["w"]), 2),
+                       "Factor_GO": f3_config.FACTOR_FUENTE_GO if v["De_GO"] else None}
                       for _, v in votos[(votos["Gen"] == gen) & (votos["PMID"] == f["PMID"])].iterrows()],
         } for _, f in filas.iterrows()]}
     for _, f in triaje[triaje["GO_ID"] == go_id].iterrows():

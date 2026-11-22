@@ -53,7 +53,8 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
 4. Al terminar aparece el resultado, explicado en lenguaje llano:
    * arriba, el veredicto: si la ruta está activada, inhibida, mixta o sin evidencia suficiente, la escala del NPS
      con sus tres zonas, cuántos genes la sostienen (con evidencia directa de Gene Ontology o por artículos, y cuántos
-     débiles), cuántos tendrían que cambiar para perder la lectura y los genes repartidos en «empujan hacia activada»,
+     débiles: menos de 1 de peso a su favor; el artículo que cita la anotación de Gene Ontology del gen pesa ×1,5),
+     cuántos tendrían que cambiar para perder la lectura y los genes repartidos en «empujan hacia activada»,
      «empujan hacia inhibida» y «no cuentan» (al pulsar uno se abre su detalle);
    * una tarjeta por fase: qué encontró la Fase 1 (genes, signos de Gene Ontology, artículos), qué dicen los
      artículos según el LLM en la Fase 2 y la lectura de la Fase 3 (activada, inhibida, mixta o insuficiente) con la

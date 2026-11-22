@@ -66,7 +66,8 @@ Las otras 8 respuestas coinciden. La causa es doble: el modelo no es determinist
 preguntas de un gen van juntas en la misma llamada, con otras rutas, mientras que con una ruta van solas. Como el NPS
 está justo en el umbral de 0,33, un solo gen cambia la lectura. **KPI: 1 de 9 respuestas del LLM cambió (89 % de
 acuerdo) y la lectura de la ruta cambió.** Con una ruta conviene repetir la ejecución y fijarse en `Sensible_al_peso`
-y en los pares de `evidencia_debil`, que aquí son todos los que dan signo por el LLM (un solo abstract cada uno).
+y en los pares de `evidencia_debil`: aquí son 6 de los 7 que dan signo por el LLM (un solo abstract cada uno); CCL3
+deja de serlo porque su artículo lo cita la anotación de GO y pesa ×1,5 (`FACTOR_FUENTE_GO`).
 
 ## Acierto frente a una persona
 
