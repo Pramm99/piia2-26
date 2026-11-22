@@ -72,3 +72,42 @@ body {
 :root[data-tema="claro"] .lista-genes {
   font-weight: 600;
 }
+
+/* Rueda de carga (Progreso.tsx): anillo con degradado que gira y punto que late */
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes latir { 0%, 100% { transform: scale(0.55); opacity: 0.55; } 50% { transform: scale(1); opacity: 1; } }
+@keyframes franjas { from { background-position: 0 0; } to { background-position: 28px 0; } }
+.girador {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.girador-anillo {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 15%, var(--girador-color) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  animation: girar 0.75s linear infinite;
+}
+.girador-punto {
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background-color: var(--girador-color);
+  box-shadow: 0 0 8px var(--girador-color);
+  animation: latir 1.1s ease-in-out infinite;
+}
+/* Barra de progreso con franjas que avanzan */
+.barra-franjas {
+  background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.22) 25%, transparent 25%, transparent 50%,
+    rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0.22) 75%, transparent 75%, transparent);
+  background-size: 28px 28px;
+  animation: franjas 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .girador-anillo, .girador-punto, .barra-franjas { animation-duration: 3s; }
+}

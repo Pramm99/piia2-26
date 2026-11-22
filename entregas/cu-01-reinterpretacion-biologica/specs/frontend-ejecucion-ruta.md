@@ -32,15 +32,17 @@ No se pueden lanzar las fases por separado ni el Excel entero: para eso está la
 | `POST /ejecutar-ruta` con `{"GO_ID", "Descripcion", "Genes_up", "Genes_down"}` | Valida la petición y lanza las tres fases en un hilo. | `202` si arranca; `400` si el GO_ID no tiene la forma `GO:` + 7 cifras, si la ruta no tiene genes o si el JSON está mal formado; `409` si ya hay una ruta en marcha. |
 | `GET /estado` | Fase en curso (1, 2 o 3) y, al terminar, el resultado o el error. | `estado` ∈ {`libre`, `ejecutando`, `terminado`, `error`}. |
 | `POST /criterio` con `{"GO_ID", "criterio": {gen: signo}}` (`+1`, `-1` o `neutro`) | Recalcula la Fase 3 de una ruta ya ejecutada con los signos de «Tu criterio», sin llamar al LLM (ver Paso 4). | `200` con `rutas`, `pares` y el Excel; `400` si el GO_ID o un signo no son válidos o el JSON está mal formado; `409` si esa ruta se está ejecutando; `500` si no están las salidas de la ruta. |
+| `GET /claves` | Las claves del LLM de cada proveedor (Gemini, principal; Groq, respaldo), en el orden en que se usan y enmascaradas (cuatro primeras y cuatro últimas letras). | `proveedores`: `id`, `modelo`, `papel`, `variable`, `claves` y `de_entorno`. `403` si la petición trae el `Origin` de otra web. |
+| `POST /claves` con `{"proveedor", "accion": "anadir", "clave"}` o `{"proveedor", "accion": "quitar", "indice"}` | Añade una clave al final de las de su proveedor o quita una, y lo guarda en `codigo/.env` (ver Paso 6). | `200` con `proveedores` y `ejecutando`; `400` si el proveedor, la acción o la clave no valen (repetida, con espacios, de otro proveedor), o si la variable está en el entorno del sistema; `403` si trae el `Origin` de otra web. |
 
 * **Fase 1:** escribe dos Excels de entrada reducidos a la ruta (una fila cada uno, o ninguna si la lista no tiene genes) y ejecuta la Fase 1 sobre ellos. Redirige sus rutas de entrada y de salida desde fuera, igual que `tests/test_fase1_e2e.py`, **sin tocar `fase1_ingesta/`**. Si la Fase 1 no encuentra ninguna evidencia, la ejecución acaba en `error` con ese mensaje.
 * **Fase 2:** Gemini como principal y gpt-oss solo como respaldo ([ADR-005](../decisions/adr-005-eleccion-modelo-coste-cero.md)), con el registro de siempre (`codigo/data/respuestas_llm.jsonl`): lo ya preguntado no se vuelve a pedir. Si ningún par llega al LLM, escribe un `fase2_resultados.xlsx` con las hojas vacías para que la Fase 3 funcione igual.
 * **Fase 3:** con la tabla de log2FC de CIMUS si existe.
-* **Resultado:** las filas de `Por_ruta` y `Por_par` de la Fase 3, el Excel de la Fase 3 (en base64, para descargarlo), los tiempos de cada fase, el uso del LLM (llamadas, reutilizadas, pendientes y tokens) y, por gen, el detalle que explica el signo:
+* **Resultado:** las filas de `Por_ruta` y `Por_par` de la Fase 3, el Excel de la Fase 3 (en base64, para descargarlo), los tiempos de cada fase, el uso del LLM (llamadas, reutilizadas, pendientes —preguntas sin ninguna respuesta—, tokens y, en `agotados`, qué proveedor dejó de responder y por qué: `cupo`, `clave`, `sin_clave` o `fallo`) y, por gen, el detalle que explica el signo:
   * los artículos que leyó el LLM, uno por PMID, con su título, signo, estado, motivos, `Confianza_final`, la frase citada y lo que contestó el modelo (efecto, confianza y tipo de evidencia), aunque el código lo dejara en `UNKNOWN`;
   * los votos de cada artículo, uno por subproceso de la ruta, con su organismo, tipo celular, el peso que les da la Fase 3 (`casos_con_peso` de `fase3_scoring/nps.py`) y `Factor_GO` (`FACTOR_FUENTE_GO` si el artículo lo cita la anotación de GO; si no, vacío);
   * si el signo sale de Gene Ontology, sus códigos de evidencia y PMIDs.
-* La interfaz consulta `/estado` cada 1,5 s y muestra la fase en curso y el tiempo transcurrido.
+* La interfaz consulta `/estado` cada 1,5 s. Mientras dura la ejecución muestra una rueda de carga animada, la fase en curso, una barra con el porcentaje y un contador de tiempo (total y de la fase), además de las tres fases con su estado (`src/Progreso.tsx`). El porcentaje es **estimado**: el puente solo informa de la fase, así que cada fase tiene su tramo de la barra (Fase 1 hasta el 40 %, Fase 2 hasta el 92 %, Fase 3 hasta el 99 %) y, dentro de él, avanza cada vez más despacio sin llegar al final; salta al tramo siguiente cuando el puente cambia de fase y marca 100 % solo al terminar, con el tiempo total que midió el puente.
 
 ### Paso 3 · Resultado en lenguaje llano
 Sin códigos internos a la vista (`+1:15811952(0.36)`, `evidencia_debil`…): todo se explica con palabras.
@@ -55,7 +57,7 @@ Sin códigos internos a la vista (`+1:15811952(0.36)`, `evidencia_debil`…): to
   * el peso de la evidencia con una barra y la cuenta de cada voto (p. ej. 0,36 = confianza 73 % × 0,5 por ser en ratón, o 1,20 = confianza 80 % × 1,5 por citarlo la anotación de GO);
   * en los artículos sin conclusión, el tipo de evidencia y hacia dónde se inclinaba el LLM.
 * **Descargar Excel de la Fase 3:** el resultado automático o, si hay cambios en «Tu criterio», el que los lleva (Paso 4).
-* Si quedaron preguntas `pendiente` (cupo del LLM agotado), un aviso lo dice y pide volver a ejecutar la ruta más tarde.
+* Si quedaron preguntas `pendiente`, un aviso lo dice con el motivo de cada proveedor y un botón **Añadir token** que abre ⚙ → token-api (Paso 6). Si es porque no queda ninguna clave con cupo, el aviso dice que se ha acabado el límite diario de llamadas al LLM: que añada el token de otra cuenta o espere al día siguiente. Si Gemini dejó de responder pero respondió Groq, el aviso solo lo menciona.
 
 ### Paso 4 · Criterio de la persona experta («Tu criterio»)
 * A la derecha de la tabla de genes, un desplegable por gen: **Automático**, **Activa**, **Inhibe** o **No lo cambia**.
@@ -84,6 +86,12 @@ Para juntar varias rutas en un mismo Excel sin copiarlas a mano.
 * **Limpiar Excel** (con confirmación) borra todas sus rutas, **Quitar** deja de usarlo sin borrarlo y la papelera de una fila quita solo esa ruta.
 * La vista previa muestra cada ruta con su lectura, una barra del NPS, los genes que activan e inhiben y la fecha; al abrirla, sus genes en colores (verde: empuja hacia activada; rojo: hacia inhibida; gris: no cuenta).
 
+### Paso 6 · Claves del LLM (⚙ → token-api)
+* Arriba a la derecha, una rueda abre un mini-menú con la opción **token-api**. Abre un panel con las claves de **Gemini** (principal) y de **Groq** (respaldo), cada una con sus claves numeradas en el orden en que se usan.
+* Se pega una clave en el campo de su proveedor (de tipo contraseña) y **Añadir** la pone al final; el icono de papelera, con una segunda confirmación, la quita. Cada cambio se guarda al momento en `codigo/.env` (`GEMINI_API_KEY=clave1,clave2`) y vale desde la siguiente ejecución. El panel solo muestra las cuatro primeras y las cuatro últimas letras.
+* **Rotación** (`fase2_inferencia/cliente.py`, también en la línea de comandos): Si una clave se queda sin cupo (un `429` del límite diario, o un `429` que sigue tras los reintentos), se pasa a la siguiente del **mismo proveedor**; es el único fallo que cambia de clave. Una clave no válida, un `5xx` o la red, o quedarse sin cupo en todas las claves, hacen que el modelo deje de llamarse en esa ejecución y responda el respaldo (Groq), que también usa sus claves en orden. Sin ninguna clave con cupo, las preguntas quedan `pendiente`.
+* Si la variable está en las variables de entorno del sistema, que mandan sobre `codigo/.env`, el panel lo dice y no deja cambiarla.
+
 ### Salida
 | Dónde | Qué |
 |---|---|
@@ -100,6 +108,7 @@ Para juntar varias rutas en un mismo Excel sin copiarlas a mano.
 * **Carpeta propia por ruta y registro compartido** ([ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md)): no pisa las salidas del Excel completo, y una ruta ya consultada no vuelve a gastar llamadas al LLM.
 * **«Tu criterio» pasa a los Excels, junto al automático:** el experto tiene que poder ver qué pasaría si un gen tuviera otro signo, porque muchos genes de NK tienen funciones duales, y quedarse con ese resultado en sus Excels. Para que no se confunda un signo fijado a mano con uno inferido, el gen cambiado lleva `Origen` = `Experto`, y cada Excel guarda al lado el resultado automático (`Lectura_automatica`, `NPS_automatico`, `Cambios_experto` y `Signo_automatico`). El automático de la Fase 3 sigue en `fase3_scoring.xlsx`, reproducible y trazable a sus artículos.
 * **Los Excels con «Tu criterio» los recalcula `fase3_scoring`, no la interfaz:** la copia de las reglas en `App.tsx` solo recalcula la lectura y el NPS para la pantalla. Las hojas completas (recuentos, `Genes_activan`, `Resumen`…) salen de la Fase 3 real, que tarda menos de un segundo con una ruta.
+* **Claves en la interfaz y varias por proveedor:** el cupo gratuito diario de una cuenta se acaba con unas pocas rutas en frío. Con varias claves, la persona de CIMUS puede seguir con la clave de otra cuenta sin editar `codigo/.env` a mano. Solo el cupo cambia de clave: un fallo de otro tipo no lo arregla otra clave del mismo proveedor, así que pasa al respaldo, como hasta ahora.
 * **Excel de resultados en el navegador:** CIMUS ya trabaja con Excel. Acumular las rutas en un fichero que elige la persona evita una base de datos (ADR-004) y que tenga que copiar resultados a mano entre ejecuciones.
 
 **Alternativas descartadas:**
@@ -107,19 +116,21 @@ Para juntar varias rutas en un mismo Excel sin copiarlas a mano.
 * **FastAPI o Flask para el puente:** añaden dependencias para tres rutas que la librería estándar ya cubre.
 * **Llamar a las fases desde el navegador o reescribirlas en TypeScript:** duplicaría la lógica de las Fases 1–3 y dejaría dos versiones que mantener. Solo se copian en `App.tsx` las reglas de lectura del NPS, que son cortas, para recalcular «Tu criterio» al momento.
 * **Recalcular los Excels de «Tu criterio» en el navegador:** obligaría a copiar en TypeScript toda la Fase 3 (recuentos, `Resumen`), no solo la regla de lectura.
+* **Guardar las claves en el navegador (`localStorage`) y enviarlas con cada ejecución:** las dejaría al alcance de cualquier script de la página y no valdrían para la línea de comandos. Tampoco un fichero aparte: las claves viven solo en `codigo/.env`.
+* **Probar cada clave al añadirla con una llamada al modelo:** gastaría cupo y tarda; una clave no válida se detecta en la primera llamada y pasa al respaldo.
 
 ## Restricciones
-* **No modifica las fases:** no cambia `fase1_ingesta/` ni `fase2_inferencia/`; solo redirige sus rutas de entrada y salida. De `fase3_scoring/` usa el parámetro opcional `criterio` de `calcular`, que la línea de comandos no usa, así que su resultado no cambia.
-* **Local:** el puente solo escucha en `127.0.0.1:8000` y la interfaz en `localhost:5173`. Las claves se quedan en `codigo/.env`, que no se versiona, y no pasan por el navegador.
+* **No modifica las fases:** no cambia `fase1_ingesta/` ni la lógica de `fase2_inferencia/`; solo redirige sus rutas de entrada y salida. De `fase3_scoring/` usa el parámetro opcional `criterio` de `calcular`, que la línea de comandos no usa, así que su resultado no cambia. La rotación de claves vive en `fase2_inferencia/cliente.py` y vale igual en la línea de comandos.
+* **Local:** el puente solo escucha en `127.0.0.1:8000` y la interfaz en `localhost:5173`. Las claves se guardan solo en `codigo/.env`, que no se versiona. Una clave pasa por el navegador solo al pegarla en ⚙ → token-api, y va directa al puente local; el puente nunca la devuelve entera ni la escribe en el log, y `/claves` rechaza las peticiones con el `Origin` de otra web, para que una página abierta en el navegador no pueda cambiarlas.
 * **Una ruta a la vez:** una segunda petición mientras hay otra en marcha recibe `409`.
 * **Mismo resultado que la línea de comandos:** con las mismas entradas, cachés y registro, la lectura y el NPS de la ruta coinciden con los de `python -m fase3_scoring`.
 * **Mismas reglas en «Tu criterio»:** el recálculo en pantalla sigue `fase3_scoring/nps.py` y `fase3_scoring/config.py`. Si cambian los umbrales o la regla de lectura, hay que cambiarlos también en `App.tsx`.
-* **Cupo del LLM agotado:** la ejecución termina igual, con las preguntas `pendiente` y el aviso en pantalla. No falla.
+* **Cupo del LLM agotado o sin claves:** la ejecución termina igual, con las preguntas `pendiente` y el aviso en pantalla. No falla, tampoco sin ninguna clave: una ruta con todo en el registro se ejecuta sin llamar al LLM.
 * **SheetJS desde el CDN** (`xlsx@0.18.5`): la interfaz lo carga al leer o escribir un Excel, así que necesita conexión para eso.
-* **Comprobación del código:** desde `codigo/fase4_frontend/`, `npx tsc -b` y `npx eslint src` sin errores. La Fase 4 aún no tiene pruebas automáticas (#40).
+* **Comprobación del código:** desde `codigo/fase4_frontend/`, `npx tsc -b` y `npx eslint src` sin errores. De la Fase 4 solo tienen pruebas automáticas las claves (`tests/test_puente_claves.py`); el resto está en #40.
 
 ## Criterios de aceptación
-La Fase 4 no tiene pruebas en `codigo/tests/` (#40): estos criterios se comprueban a mano en el navegador, salvo los de `tsc` y `eslint`.
+Estos criterios se comprueban a mano en el navegador, salvo los de `tsc` y `eslint` y los de las claves, que tienen pruebas en `codigo/tests/` (el resto de pruebas automáticas de la Fase 4 está en #40).
 
 * [x] ✅ **Ruta completa** (a mano, #42): con GO:0072678 y los dos Excels de `codigo/tools_cimus/`, la ejecución pasa por las Fases 1, 2 y 3 y da `activada` con NPS 0,333, igual que la ejecución de referencia, y escribe sus ficheros en `codigo/data/frontend/GO_0072678/`.
 * [x] ✅ **Sin nada precargado** (a mano, #42): la interfaz arranca sin rutas; acepta un Excel por lista, **Cambiar** lo sustituye y **Quitar** lo elimina.
@@ -130,5 +141,9 @@ La Fase 4 no tiene pruebas en `codigo/tests/` (#40): estos criterios se comprueb
 * [x] ✅ **Excel de resultados** (a mano con un fichero simulado, #45): crear uno, añadir dos rutas, repetir una sin duplicarla, abrir uno incompleto y completarlo, y limpiarlo.
 * [x] ✅ **Excel de resultados con el diálogo real** (a mano en Chrome, 23/11, #39): las mismas operaciones con el diálogo de ficheros de Chrome y con **Descargar** en otro navegador.
 * [x] ✅ **Fondo blanco** (a mano, #46): el botón de la cabecera cambia de tema, los textos se leen sobre blanco y el navegador recuerda la elección.
-* [x] ✅ **Código** (22/11): `npx tsc -b` y `npx eslint src` sin errores, y `python -m pytest` en verde (150 pruebas, todas de las Fases 1–3).
+* [x] ✅ **Claves del LLM** (`tests/test_puente_claves.py`): añadir dos claves de Gemini las guarda en `codigo/.env` en ese orden (`GEMINI_API_KEY=clave1,clave2`) sin tocar las demás líneas, y quitar la primera deja la segunda; ninguna respuesta lleva una clave entera (`AIza…xxxx`). Una clave corta, con comas, repetida o de otro proveedor, un índice que no existe o una acción desconocida dan `400` sin cambiar el fichero, y una variable del entorno del sistema no se puede cambiar. Por HTTP, con el `Origin` de otra web, `403` y sin cambios; desde `localhost:5173`, `200`. El aviso cuenta como pendientes solo las preguntas sin ninguna respuesta y pasa el motivo de cada proveedor (`test_aviso_de_la_fase2`).
+* [x] ✅ **Rotación de claves** (`tests/test_cliente.py`): con dos claves de Gemini, un `429` del límite diario pasa a la segunda sin reintentar y las siguientes llamadas siguen con ella; un `429` que sigue tras los reintentos también; sin cupo en todas, `ErrorTransitorio` con motivo `cupo` y responde Groq (`test_sin_cupo_en_todas_las_claves_de_gemini_responde_groq`). Una clave no válida (`400` «API key not valid» o `403`), un `5xx` o la red no cambian de clave. Sin ninguna clave, el cliente falla al llamar con `sin_clave`, no al crearse.
+* [x] ✅ **Progreso en el navegador** (a mano en Chrome, 23/11): con GO:0072678 (cachés y registro hechos, sin llamadas al LLM), la rueda gira durante toda la ejecución, el porcentaje no retrocede nunca, la barra sube dentro de la Fase 1 (hasta un 33 % a los 24 s), salta al 40 % al empezar la Fase 2 y al 92 % en la Fase 3, el contador corre segundo a segundo y al terminar marca 100 % en verde con el tiempo total (00:26) y el de cada fase. No se probó en frío de verdad: todas las rutas de CIMUS están ya en las cachés y el registro.
+* [x] ✅ **Panel token-api en el navegador** (a mano en Chrome, 23/11): la rueda abre el menú y token-api el panel, con las claves numeradas y enmascaradas; una clave de prueba se añade como «2.», una clave de Groq pegada en Gemini se rechaza con «Parece una clave de Groq», y la papelera, tras «Sí, quitarla», la quita. Después, `codigo/.env` queda idéntico byte a byte (también sus saltos de línea). El aviso del límite diario con **Añadir token** no se vio en pantalla (haría falta agotar el cupo de verdad): lo cubren `test_aviso_de_la_fase2` y `test_sin_cupo_en_todas_las_claves_de_gemini_responde_groq`.
+* [x] ✅ **Código** (23/11): `npx tsc -b` y `npx eslint src` sin errores, y `python -m pytest` en verde (165 pruebas).
 * [ ] **Pruebas automáticas** (#40): pruebas del puente (`/salud`, `/ejecutar-ruta` y `/estado`, con las fases simuladas) y del recálculo de «Tu criterio» frente a `fase3_scoring/nps.py`.

@@ -41,7 +41,7 @@ python fase4_frontend/api_puente.py     # Fase 4: puente con las fases (http://1
 cd fase4_frontend && npm install && npm run dev   # Fase 4: interfaz web (http://localhost:5173/)
 ```
 
-* **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta.
+* **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta. Antes de rendirse por cupo, el cliente prueba las demás claves del mismo proveedor (varias por variable, separadas por comas; en la interfaz, ⚙ → token-api); cualquier otro fallo pasa directamente al respaldo.
 * **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b`. **gpt-oss es solo el respaldo de Gemini:** solo recibe una pregunta si Gemini no responde o su JSON no vale, y entonces decide él (`respaldo_secundario`). Si Gemini responde, la pregunta no va a gpt-oss, y una respuesta suya que esté en el registro no se usa. `--contraste` (envía todo a los dos y los contrasta) es solo para experimentos. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
 
 ## Reglas que no se negocian

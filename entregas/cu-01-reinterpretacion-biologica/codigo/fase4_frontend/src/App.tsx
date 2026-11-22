@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -11,13 +11,14 @@ import {
   ChevronRight,
   Download,
   Play,
-  Loader2,
   Moon,
   Sun,
   X
 } from 'lucide-react';
-import { colorLectura, formatoNPS, loadXLSX, mensaje } from './comun';
+import { colorLectura, formatoNPS, loadXLSX, mensaje, MOTIVO_AGOTADO, NOMBRE_PROVEEDOR } from './comun';
 import ExcelResultados from './ExcelResultados';
+import { MenuAjustes, PanelTokens } from './TokenApi';
+import Progreso, { Girador } from './Progreso';
 
 const API_URL = 'http://127.0.0.1:8000';
 
@@ -119,7 +120,8 @@ interface Resultado {
     fase1: { genes: number; inmunoglobulinas: number; signo_GO: number; genes_con_articulos: number; articulos: number; sin_articulos: number };
     fase2: { articulos_leidos: number; no_mencionan_gen: number; con_signo: number; sin_conclusion: number };
   };
-  llm: { llamadas: number; reutilizadas: number; pendientes: number; tokens: number };
+  // agotados: proveedor (gemini | groq) -> por qué dejó de responder en esta ejecución (cupo, clave, sin_clave, fallo)
+  llm: { llamadas: number; reutilizadas: number; pendientes: number; tokens: number; agotados?: Record<string, string> };
   tiempos: { fase1: number; fase2: number; fase3: number };
   carpeta: string;
   excel_b64: string;
@@ -442,6 +444,23 @@ const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribut
   );
 };
 
+// Aviso del LLM al terminar una ruta. Sin ninguna clave con cupo (Gemini y Groq agotados), el aviso del límite diario.
+const avisoLLM = (llm: Resultado['llm']): { texto: string; grave: boolean } | null => {
+  const agotados = llm.agotados || {};
+  const detalle = Object.entries(agotados)
+    .map(([p, m]) => `${NOMBRE_PROVEEDOR[p] || p}: ${MOTIVO_AGOTADO[m] || m}`)
+    .join('; ');
+  if (!llm.pendientes) return detalle ? { texto: ` (${detalle}; respondió el respaldo).`, grave: false } : null;
+  const motivos = ['gemini', 'groq'].map((p) => agotados[p]);
+  if (motivos.every((m) => m === 'sin_clave')) {
+    return { texto: ` ⚠️ No hay ninguna clave del LLM: ${llm.pendientes} preguntas quedaron pendientes. Añade tus claves en ⚙ → token-api y vuelve a ejecutar la ruta.`, grave: true };
+  }
+  if (motivos.every((m) => m === 'cupo' || m === 'sin_clave')) {
+    return { texto: ` ⚠️ Se ha acabado tu límite diario de llamadas al LLM: ${llm.pendientes} preguntas quedaron pendientes. Añade el token de otra cuenta en ⚙ → token-api o espera al día siguiente, y vuelve a ejecutar la ruta.`, grave: true };
+  }
+  return { texto: ` ⚠️ ${llm.pendientes} preguntas quedaron pendientes${detalle ? ` (${detalle})` : ''}: revisa las claves en ⚙ → token-api o vuelve a ejecutar la ruta más tarde.`, grave: true };
+};
+
 export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
   const [tema, setTema] = useState<'oscuro' | 'claro'>(() => {
@@ -471,7 +490,13 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [segundos, setSegundos] = useState<number>(0);
-  const [feedback, setFeedback] = useState<{ type: 'info' | 'ok' | 'err'; msg: string } | null>(null);
+  const [inicioFase, setInicioFase] = useState<number>(0); // ms en que el puente informó de la fase en curso
+  const faseActual = useRef<number>(0);
+  const [inicioRuta, setInicioRuta] = useState<number>(0); // ms del arranque, para el contador de Progreso
+  // tokens: el aviso lleva un botón que abre ⚙ → token-api
+  const [feedback, setFeedback] = useState<{ type: 'info' | 'ok' | 'err'; msg: string; tokens?: boolean } | null>(null);
+  const [panelTokens, setPanelTokens] = useState(false);
+  const cerrarTokens = useCallback(() => setPanelTokens(false), []);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [criterio, setCriterio] = useState<Record<string, Criterio>>({});
@@ -503,6 +528,10 @@ export default function App() {
       try {
         const d = await (await fetch(`${API_URL}/estado`)).json();
         if (d.estado === 'ejecutando') {
+          if (d.fase !== faseActual.current) {
+            faseActual.current = d.fase;
+            setInicioFase(Date.now());
+          }
           setCurrentStep(d.fase);
         } else if (d.estado === 'terminado') {
           const r: Resultado = d.resultado;
@@ -511,10 +540,12 @@ export default function App() {
           setCriterio({});
           setCurrentStep(4);
           setIsRunning(false);
-          const pend = r.llm.pendientes
-            ? ` ⚠️ ${r.llm.pendientes} preguntas quedaron pendientes (cupo del LLM agotado): vuelve a ejecutar la ruta más tarde.`
-            : '';
-          setFeedback({ type: 'ok', msg: `${d.GO_ID} ejecutada en ${r.tiempos.fase1 + r.tiempos.fase2 + r.tiempos.fase3} s.${pend}` });
+          const aviso = avisoLLM(r.llm);
+          setFeedback({
+            type: aviso?.grave ? 'err' : 'ok',
+            msg: `${d.GO_ID} ejecutada en ${r.tiempos.fase1 + r.tiempos.fase2 + r.tiempos.fase3} s.${aviso?.texto || ''}`,
+            tokens: aviso?.grave,
+          });
         } else if (d.estado === 'error') {
           setIsRunning(false);
           setCurrentStep(0);
@@ -646,6 +677,9 @@ export default function App() {
       const d = await res.json();
       if (!res.ok || !d.ok) throw new Error(d.error || 'No se pudo lanzar la ejecución');
       inicioRef.current = Date.now();
+      faseActual.current = 1;
+      setInicioFase(inicioRef.current);
+      setInicioRuta(inicioRef.current);
       setSegundos(0);
       setResultado(null);
       setCriterio({});
@@ -740,15 +774,20 @@ export default function App() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setTema(tema === 'oscuro' ? 'claro' : 'oscuro')}
-          title={tema === 'oscuro' ? 'Cambiar a fondo blanco' : 'Cambiar a fondo oscuro'}
-          style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-        >
-          {tema === 'oscuro' ? <Sun size={15} /> : <Moon size={15} />}
-          <span>{tema === 'oscuro' ? 'Fondo blanco' : 'Fondo oscuro'}</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          <button
+            onClick={() => setTema(tema === 'oscuro' ? 'claro' : 'oscuro')}
+            title={tema === 'oscuro' ? 'Cambiar a fondo blanco' : 'Cambiar a fondo oscuro'}
+            style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            {tema === 'oscuro' ? <Sun size={15} /> : <Moon size={15} />}
+            <span>{tema === 'oscuro' ? 'Fondo blanco' : 'Fondo oscuro'}</span>
+          </button>
+          <MenuAjustes onTokenApi={() => setPanelTokens(true)} />
+        </div>
       </header>
+
+      {panelTokens && <PanelTokens api={API_URL} onCerrar={cerrarTokens} />}
 
       {/* FEEDBACK */}
       {feedback && (
@@ -765,6 +804,11 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Info size={15} />
             <span>{feedback.msg}</span>
+            {feedback.tokens && (
+              <button onClick={() => setPanelTokens(true)} style={{ padding: '3px 10px', borderRadius: '7px', border: '1px solid currentColor', background: 'none', color: 'inherit', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                Añadir token
+              </button>
+            )}
           </div>
           <button onClick={() => setFeedback(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '11px' }}>Cerrar</button>
         </div>
@@ -803,7 +847,7 @@ export default function App() {
                   gap: '8px',
                 }}
               >
-                {isRunning ? <Loader2 size={16} /> : <Play size={16} />}
+                {isRunning ? <Girador size={16} color="var(--c-020617)" /> : <Play size={16} />}
                 <span>{isRunning ? `Ejecutando... (${segundos} s)` : rutaSel ? `Ejecutar ${rutaSel.GO_ID}` : 'Elige una ruta'}</span>
               </button>
             </div>
@@ -815,15 +859,24 @@ export default function App() {
             {huecoExcel('down')}
           </div>
 
-          {/* BARRA DE PROGRESO (fase real que informa el puente) */}
+          {/* PROGRESO: rueda, barra con el porcentaje (estimado dentro de cada fase) y contador de tiempo; debajo, las tres fases */}
           {(isRunning || currentStep > 0) && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px', backgroundColor: 'var(--c-020617)', padding: '12px', borderRadius: '10px', border: '1px solid var(--c-1e293b)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px', backgroundColor: 'var(--c-020617)', padding: '14px', borderRadius: '10px', border: '1px solid var(--c-1e293b)' }}>
+            <Progreso
+              fase={currentStep}
+              corriendo={isRunning}
+              inicio={inicioRuta}
+              inicioFase={inicioFase}
+              nombreFase={PASOS.find((s) => s.step === currentStep)?.title.split('· ')[1] || ''}
+              totalFinal={resultado ? resultado.tiempos.fase1 + resultado.tiempos.fase2 + resultado.tiempos.fase3 : null}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
               {PASOS.map((s) => {
                 const done = currentStep > s.step;
                 const active = currentStep === s.step;
                 return (
                   <div key={s.step} style={{ display: 'flex', alignItems: 'center', gap: '10px', opacity: currentStep >= s.step ? 1 : 0.4 }}>
-                    {done ? <CheckCircle2 size={18} color="var(--c-34d399)" /> : active ? <Loader2 size={18} color="var(--c-2dd4bf)" /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid var(--c-475569)' }} />}
+                    {done ? <CheckCircle2 size={18} color="var(--c-34d399)" /> : active ? <Girador size={18} /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid var(--c-475569)', flexShrink: 0 }} />}
                     <div>
                       <div style={{ fontSize: '12px', fontWeight: 'bold', color: done ? 'var(--c-6ee7b7)' : active ? 'var(--c-2dd4bf)' : 'var(--c-cbd5e1)' }}>
                         {s.title}
@@ -834,6 +887,7 @@ export default function App() {
                   </div>
                 );
               })}
+            </div>
             </div>
           )}
 

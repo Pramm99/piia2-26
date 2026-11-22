@@ -11,7 +11,8 @@ va acumulando las rutas ejecutadas. No se pueden lanzar las fases por separado: 
 1. **Python** con las dependencias de `codigo/requirements.txt` (el entorno `codigo/pia_venv/` sirve).
 2. **Node.js y npm**, para la interfaz (React + Vite).
 3. **Claves** en `codigo/.env` (copia de `codigo/.env.example`): `GEMINI_API_KEY`, `GROQ_API_KEY` y `NCBI_EMAIL`.
-   El `.env` está en el `.gitignore` y nunca se sube a GitHub.
+   El `.env` está en el `.gitignore` y nunca se sube a GitHub. Las de Gemini y Groq también se pueden pegar desde la
+   interfaz (⚙ → token-api, ver «Claves del LLM»).
 
 Dependencias de la interfaz, una sola vez, desde `codigo/fase4_frontend/`:
 
@@ -40,6 +41,19 @@ npm run dev
 Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado** cuando el puente responde. El botón
 **Fondo blanco / Fondo oscuro** de la cabecera cambia el tema, y el navegador lo recuerda para la próxima vez.
 
+**Claves del LLM.** La rueda ⚙ de arriba a la derecha abre un mini-menú; en **token-api** se pegan las claves de
+**Gemini** (el modelo principal) y de **Groq** (el respaldo), varias de cada una si se tienen de varias cuentas:
+pega la clave en el campo de su proveedor y pulsa **Añadir**; la papelera la quita. Se usan en el orden de la lista:
+
+* si una clave de Gemini se queda sin su cupo diario, se pasa a la siguiente clave de Gemini;
+* si Gemini falla por otro motivo (clave no válida, servicio o red caídos) o se acaban todas sus claves, responde
+  Groq, que también usa sus claves en orden;
+* si no queda ninguna clave con cupo, la ruta termina con las preguntas pendientes y un aviso: se ha acabado el
+  límite diario de llamadas al LLM, así que añade el token de otra cuenta (botón **Añadir token**) o espera al día
+  siguiente, y vuelve a ejecutar la ruta.
+
+Se guardan en `codigo/.env` y valen desde la siguiente ejecución; el panel solo enseña sus primeras y últimas letras.
+
 ## 3. Uso
 
 1. Sube los Excels de rutas (columnas `ID`, `Description` y `geneID`). No hay nada precargado. Hay un hueco para el
@@ -49,7 +63,9 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
    `NK_rutas_suprimidas_GO.xlsx`).
 2. Busca la ruta por GO_ID, nombre o gen y márcala. Se ve con sus genes sobreexpresados e infraexpresados: una ruta
    que está en los dos Excels se ejecuta con todos sus genes.
-3. Pulsa **Ejecutar GO:…** y confirma. La barra muestra la fase en curso.
+3. Pulsa **Ejecutar GO:…** y confirma. Mientras se ejecuta, una rueda de carga, la fase en curso, una barra con el
+   porcentaje y un contador de tiempo muestran cómo va. El porcentaje es aproximado: el puente solo dice en qué fase
+   va, y la barra avanza dentro de cada fase hasta que pasa a la siguiente; el 100 % llega al terminar.
 4. Al terminar aparece el resultado, explicado en lenguaje llano:
    * arriba, el veredicto: si la ruta está activada, inhibida, mixta o sin evidencia suficiente, la escala del NPS
      con sus tres zonas, cuántos genes la sostienen (con evidencia directa de Gene Ontology o por artículos, y cuántos
@@ -86,8 +102,11 @@ Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado
 
 * **Fase 1** con los Excels subidos reducidos a la ruta elegida.
 * **Fase 2** con Gemini como principal y gpt-oss solo como respaldo (ADR-005). Usa el registro de siempre
-  (`codigo/data/respuestas_llm.jsonl`): lo que ya se preguntó no se vuelve a pedir. Si el cupo se agota, las preguntas
-  quedan `pendiente` y la interfaz lo avisa; basta con volver a ejecutar la ruta más tarde.
+  (`codigo/data/respuestas_llm.jsonl`): lo que ya se preguntó no se vuelve a pedir. Si una clave se queda sin cupo, pasa a la
+  siguiente; si no queda ninguna, las preguntas quedan `pendiente` y la interfaz lo avisa: basta con añadir otra clave
+  o volver a ejecutar la ruta al día siguiente.
+* **Claves** (`GET` y `POST /claves`): lista enmascaradas, añade y quita las claves de ⚙ → token-api en
+  `codigo/.env`. Solo acepta peticiones desde la propia interfaz (localhost).
 * **Fase 3** con la tabla de log2FC de CIMUS si existe.
 * **«Tu criterio»** (`POST /criterio`): recalcula la Fase 3 de la ruta con los signos cambiados a mano, sin llamar al
   LLM, y escribe `fase3_scoring_criterio.xlsx` en su carpeta; `fase3_scoring.xlsx` sigue siendo el automático.

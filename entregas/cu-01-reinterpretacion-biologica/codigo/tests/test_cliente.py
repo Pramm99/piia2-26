@@ -97,10 +97,46 @@ def test_sin_respuesta_tras_los_reintentos_queda_pendiente(prompt):
 
 
 def test_error_de_configuracion_no_se_reintenta(prompt):
-    cli, _ = conector("groq-gpt-oss-120b", _Resp(401, json_={"error": {"code": "invalid_api_key"}}, text="no"))
-    with pytest.raises(RuntimeError, match="HTTP 401"):
+    cli, _ = conector("groq-gpt-oss-120b", _Resp(404, text="modelo no existe"))
+    with pytest.raises(RuntimeError, match="HTTP 404"):
         cli.completar(prompt)
     assert len(cli.sesion.enviados) == 1
+
+
+DIARIO_GEMINI = _Resp(429, text='{"error": {"status": "RESOURCE_EXHAUSTED", "details": [{"violations": '
+                                '[{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}')
+DIARIO_GROQ = _Resp(429, text="Rate limit reached for model openai/gpt-oss-120b on tokens per day (TPD)")
+
+
+def test_sin_cupo_pasa_a_la_siguiente_clave(prompt, monkeypatch):
+    """El límite diario de una clave pasa a la siguiente del mismo proveedor sin reintentar, y la siguiente
+    llamada sigue con ella. Un 429 que no se va tras los reintentos también cuenta como cupo agotado."""
+    monkeypatch.setenv("GEMINI_API_KEY", "k1, k2 ,k3,k2")  # en orden y sin repetir
+    cli, _ = conector("gemini-3.5-flash-lite", DIARIO_GEMINI, ok(), ok(), rpm=10 ** 6)
+    assert cli.completar(prompt).meta["n_clave"] == 2
+    assert [e["headers"]["Authorization"] for e in cli.sesion.enviados] == ["Bearer k1", "Bearer k2"]
+    cli.completar(prompt)
+    assert cli.sesion.enviados[-1]["headers"]["Authorization"] == "Bearer k2"
+
+    monkeypatch.setenv("GROQ_API_KEY", "g1,g2")
+    cli, _ = conector("groq-gpt-oss-120b", *[_Resp(429, text="per minute")] * 6, DIARIO_GROQ, rpm=10 ** 6)
+    with pytest.raises(ErrorTransitorio, match="sin cupo en sus 2 claves") as e:
+        cli.completar(prompt)
+    assert e.value.motivo == "cupo" and len(cli.sesion.enviados) == 7  # 6 con g1 (reintentos) y 1 con g2
+
+
+def test_clave_no_valida_o_fallo_no_cambia_de_clave(prompt, monkeypatch):
+    """Solo el cupo cambia de clave: una clave rechazada, un 5xx o la red van al respaldo (ErrorTransitorio)."""
+    monkeypatch.setenv("GEMINI_API_KEY", "k1,k2")
+    for rechazo in (_Resp(400, text="API key not valid. Please pass a valid API key."), _Resp(403, text="no")):
+        cli, _ = conector("gemini-3.5-flash-lite", rechazo, ok())
+        with pytest.raises(ErrorTransitorio, match="clave 1 no válida") as e:
+            cli.completar(prompt)
+        assert e.value.motivo == "clave" and len(cli.sesion.enviados) == 1
+    cli, _ = conector("gemini-3.5-flash-lite", *[_Resp(503)] * 6, ok(), rpm=10 ** 6)
+    with pytest.raises(ErrorTransitorio, match="sin respuesta tras 5 reintentos") as e:
+        cli.completar(prompt)
+    assert e.value.motivo == "fallo" and {x["headers"]["Authorization"] for x in cli.sesion.enviados} == {"Bearer k1"}
 
 
 def test_json_rechazado_por_el_esquema_es_una_respuesta(prompt):
@@ -115,11 +151,14 @@ def test_json_rechazado_por_el_esquema_es_una_respuesta(prompt):
             cli.completar(prompt)
 
 
-def test_falta_la_clave(monkeypatch):
+def test_falta_la_clave(monkeypatch, prompt):
+    """Sin clave, el cliente se crea (una ruta con todo en el registro no la necesita) y falla al llamar."""
     monkeypatch.delenv("GROQ_API_KEY")
-    with pytest.raises(RuntimeError, match="Falta GROQ_API_KEY"):
-        ClienteOpenAICompatible(MODELOS["groq-gpt-oss-120b"], sesion=_Sesion())
-    ClienteOpenAICompatible(MODELOS["ollama-qwen3-8b"], sesion=_Sesion())  # Ollama no necesita clave
+    cli = ClienteOpenAICompatible(MODELOS["groq-gpt-oss-120b"], sesion=_Sesion())
+    with pytest.raises(ErrorTransitorio, match="no hay ninguna clave en GROQ_API_KEY") as e:
+        cli.completar(prompt)
+    assert e.value.motivo == "sin_clave" and cli.sesion.enviados == []
+    ClienteOpenAICompatible(MODELOS["ollama-qwen3-8b"], sesion=_Sesion(ok())).completar(prompt)  # Ollama, sin clave
 
 
 def test_leer_env(tmp_path, monkeypatch):
@@ -128,4 +167,29 @@ def test_leer_env(tmp_path, monkeypatch):
     f.write_text("# comentario\nGROQ_API_KEY='abc'\n\nSIN_IGUAL\n", encoding="utf-8")
     assert cliente._leer_env(f) == {"GROQ_API_KEY": "abc"}
     assert cliente._leer_env(tmp_path / "no_existe") == {}
-    assert cliente.clave(None) is None
+    assert cliente.clave(None) is None and cliente.claves(None) == []
+
+
+def test_sin_cupo_en_todas_las_claves_de_gemini_responde_groq(tmp_path, monkeypatch):
+    """De punta a punta con ejecucion.ejecutar: Gemini prueba sus dos claves y, sin cupo en ninguna, responde Groq;
+    el resumen guarda el motivo. Si Groq también se queda sin cupo, todo queda pendiente con motivo cupo en los dos."""
+    import json
+    from conftest import caso, respuesta
+    from fase2_inferencia.ejecucion import ejecutar
+    from fase2_inferencia.prompt import construir_prompt
+    from fase2_inferencia.registro import Registro
+
+    monkeypatch.setenv("GEMINI_API_KEY", "k1,k2")
+    preguntas = [construir_prompt(caso(pmid="1"))]
+    lista_ok = ok(json.dumps({"respuestas": [{"q": "Q1", **json.loads(respuesta())}]}))
+    gemini, _ = conector("gemini-3.5-flash-lite", DIARIO_GEMINI, DIARIO_GEMINI, rpm=10 ** 6)
+    groq, _ = conector("groq-gpt-oss-120b", lista_ok, rpm=10 ** 6)
+    resultados, resumen = ejecutar(preguntas, [gemini, groq], Registro(tmp_path / "r.jsonl"), cada=0)
+    assert len(gemini.sesion.enviados) == 2 and len(groq.sesion.enviados) == 1
+    assert resumen.motivos == {"gemini-3.5-flash-lite": "cupo"} and resumen.pendientes == 1  # la de Gemini
+    assert resultados[0].salidas["groq-gpt-oss-120b"]["signo"] == "+1"
+
+    gemini, _ = conector("gemini-3.5-flash-lite", DIARIO_GEMINI, DIARIO_GEMINI, rpm=10 ** 6)
+    groq, _ = conector("groq-gpt-oss-120b", DIARIO_GROQ, rpm=10 ** 6)
+    _, resumen = ejecutar(preguntas, [gemini, groq], Registro(tmp_path / "r2.jsonl"), cada=0)
+    assert resumen.motivos == {"gemini-3.5-flash-lite": "cupo", "groq-gpt-oss-120b": "cupo"}

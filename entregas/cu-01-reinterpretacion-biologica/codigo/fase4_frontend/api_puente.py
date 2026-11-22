@@ -6,6 +6,12 @@ Desde codigo/: python fase4_frontend/api_puente.py (escucha en http://127.0.0.1:
   POST /ejecutar-ruta   -> {"GO_ID", "Descripcion", "Genes_up", "Genes_down"}: lanza las tres fases seguidas
   GET  /estado          -> fase en curso y, al terminar, el resultado (Por_ruta, Por_par y el Excel de la Fase 3)
   POST /criterio        -> {"GO_ID", "criterio": {gen: signo}}: Fase 3 de esa ruta con los signos de «Tu criterio»
+  GET  /claves          -> claves del LLM por proveedor (Gemini y Groq), enmascaradas: nunca se devuelve una entera
+  POST /claves          -> {"proveedor", "accion": "anadir", "clave"} o {"proveedor", "accion": "quitar", "indice"}
+
+Las claves (⚙ → token-api en la interfaz) se guardan en codigo/.env, varias por variable separadas por comas, y
+valen desde la siguiente ejecución. /claves solo acepta peticiones sin Origin o desde localhost, para que otra web
+abierta en el navegador no pueda cambiarlas.
 
 Las rutas no se precargan: la persona sube en el frontend sus Excels y se envían los genes de la ruta elegida.
 La ejecución va en un hilo y el frontend consulta /estado, porque en frío tarda unos minutos. Solo hay una a la
@@ -15,6 +21,7 @@ que una ruta ya consultada no vuelve a gastar llamadas.
 """
 import base64
 import json
+import os
 import re
 import sys
 import threading
@@ -23,6 +30,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Tuple
+from urllib.parse import urlparse
 
 import pandas as pd
 
@@ -38,7 +46,8 @@ import entrada_excel  # noqa: E402
 import main as f1_main  # noqa: E402
 import salida as f1_salida  # noqa: E402
 from fase2_inferencia.__main__ import PRINCIPAL, SECUNDARIO  # noqa: E402
-from fase2_inferencia.cliente import MODELOS, ClienteOpenAICompatible  # noqa: E402
+from fase2_inferencia.cliente import MODELOS, ClienteOpenAICompatible, claves, guardar_claves  # noqa: E402
+from fase2_inferencia.esquema import ESTADO_PENDIENTE  # noqa: E402
 from fase2_inferencia.limpieza import normalizar_pmid as limpiar  # noqa: E402
 from fase2_inferencia.pipeline import ejecutar_fase2  # noqa: E402
 from fase3_scoring import config as f3_config  # noqa: E402
@@ -48,6 +57,9 @@ DIR_SALIDAS = CODIGO_DIR / "data" / "frontend"
 PATRON_GO = re.compile(r"^GO:\d{7}$")
 COLUMNAS_CIMUS = ["ID", "Description", "geneID"]
 SIGNOS_CRITERIO = ("+1", "-1", "neutro")
+# Una clave de API: letras, cifras, «-», «_» y «.» (las de Gemini empiezan por AIza o AQ., las de Groq por gsk_)
+PATRON_CLAVE = re.compile(r"^[A-Za-z0-9._-]{20,200}$")
+PREFIJOS_AJENOS = {"gemini": (("gsk_",), "Groq"), "groq": (("AIza", "AQ."), "Gemini")}
 
 _cerrojo = threading.Lock()
 _estado = {"estado": "libre"}  # libre | ejecutando | terminado | error
@@ -56,6 +68,61 @@ _estado = {"estado": "libre"}  # libre | ejecutando | terminado | error
 def _actualizar(**cambios):
     with _cerrojo:
         _estado.update(cambios)
+
+
+_cerrojo_claves = threading.Lock()
+
+
+def _proveedores() -> dict:
+    """Proveedor -> (configuración del modelo, papel): Gemini es el principal y Groq (gpt-oss) el respaldo."""
+    return {MODELOS[n].proveedor: (MODELOS[n], papel) for n, papel in ((PRINCIPAL, "principal"),
+                                                                       (SECUNDARIO, "respaldo"))}
+
+
+def _mascara(c: str) -> str:
+    return f"{c[:4]}…{c[-4:]}" if len(c) >= 12 else "…"
+
+
+def estado_claves() -> list:
+    """Las claves de cada proveedor, en el orden en que se usan, enmascaradas. de_entorno: la variable está en el
+    entorno del sistema, que manda sobre .env, así que desde la interfaz no se puede cambiar."""
+    return [{"id": prov, "modelo": cfg.modelo, "papel": papel, "variable": cfg.var_clave,
+             "claves": [_mascara(c) for c in claves(cfg.var_clave)], "de_entorno": bool(os.environ.get(cfg.var_clave))}
+            for prov, (cfg, papel) in _proveedores().items()]
+
+
+def cambiar_claves(datos: dict) -> list:
+    """Añade una clave al final de las de su proveedor o quita una por su posición. ValueError si no se puede; el
+    mensaje nunca lleva la clave."""
+    proveedor = str(datos.get("proveedor", "")).strip()
+    if proveedor not in _proveedores():
+        raise ValueError(f"Proveedor no válido: {proveedor!r}")
+    var = _proveedores()[proveedor][0].var_clave
+    if os.environ.get(var):
+        raise ValueError(f"{var} está en las variables de entorno del sistema, que mandan sobre codigo/.env: "
+                         "quítala de ahí para gestionar las claves desde aquí.")
+    with _cerrojo_claves:
+        actuales = claves(var)
+        accion = datos.get("accion")
+        if accion == "anadir":
+            nueva = str(datos.get("clave") or "").strip()
+            ajenos, otro = PREFIJOS_AJENOS[proveedor]
+            if not PATRON_CLAVE.match(nueva):
+                raise ValueError("No parece una clave de API: pega solo la clave, sin espacios ni comillas.")
+            if nueva.startswith(ajenos):
+                raise ValueError(f"Parece una clave de {otro}: añádela en su apartado.")
+            if nueva in actuales:
+                raise ValueError("Esa clave ya está en la lista.")
+            actuales.append(nueva)
+        elif accion == "quitar":
+            indice = datos.get("indice")
+            if not isinstance(indice, int) or not 0 <= indice < len(actuales):
+                raise ValueError("No existe esa clave.")
+            actuales.pop(indice)
+        else:
+            raise ValueError(f"Acción no válida: {accion!r}")
+        guardar_claves(var, actuales)
+    return estado_claves()
 
 
 def _fase1(carpeta: Path, ruta: dict) -> Path:
@@ -82,18 +149,24 @@ def _fase1(carpeta: Path, ruta: dict) -> Path:
 
 
 def _fase2(carpeta: Path, excel_f1: Path) -> Tuple[Path, dict]:
-    """Fase 2 con los modelos del ADR-005: Gemini y gpt-oss solo como respaldo."""
+    """Fase 2 con los modelos del ADR-005: Gemini y gpt-oss solo como respaldo. Cada cliente lee aquí sus claves,
+    así que un cambio en ⚙ → token-api vale desde la siguiente ejecución. agotados: modelo -> por qué se detuvo
+    (cupo, clave, sin_clave o fallo), para el aviso de la interfaz."""
     salida_f2 = carpeta / "fase2_resultados.xlsx"
     salida_f2.unlink(missing_ok=True)
     clientes = [ClienteOpenAICompatible(MODELOS[n]) for n in (PRINCIPAL, SECUNDARIO)]
-    _, _, resumen, _ = ejecutar_fase2(str(excel_f1), clientes, salida=salida_f2)
+    preguntas, _, resumen, _ = ejecutar_fase2(str(excel_f1), clientes, salida=salida_f2)
+    # Pendientes = preguntas sin ninguna respuesta. resumen.pendientes cuenta también las del principal que ya
+    # respondió el respaldo, y el aviso de la interfaz diría que faltan cuando no falta nada.
+    sin_respuesta = int((preguntas["Estado"] == ESTADO_PENDIENTE).sum()) if "Estado" in preguntas else 0
     if not salida_f2.exists():  # ningún par llegó al LLM: la Fase 3 necesita igualmente las hojas
         with pd.ExcelWriter(salida_f2) as w:
             for hoja, columnas in COLUMNAS_FASE2.items():
                 pd.DataFrame(columns=list(columnas)).to_excel(w, sheet_name=hoja, index=False)
     tokens = sum(t["entrada"] + t["salida"] for t in resumen.tokens.values())
     return salida_f2, {"llamadas": resumen.llamadas, "reutilizadas": resumen.reutilizadas,
-                       "pendientes": resumen.pendientes, "tokens": tokens}
+                       "pendientes": sin_respuesta, "tokens": tokens,
+                       "agotados": {MODELOS[n].proveedor: m for n, m in resumen.motivos.items()}}
 
 
 def _log2fc():
@@ -265,7 +338,39 @@ class ManejadorPuente(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
+    def _origen_local(self) -> bool:
+        """Sin Origin (curl, el propio puente) o desde localhost: la interfaz de Vite. Otra web no puede tocar las
+        claves aunque el puente responda con CORS abierto."""
+        origen = self.headers.get("Origin")
+        return not origen or urlparse(origen).hostname in ("localhost", "127.0.0.1", "::1")
+
+    def _claves(self, post: bool):
+        if not self._origen_local():
+            self._responder_json(403, {"ok": False, "error": "Las claves solo se gestionan desde la interfaz local."})
+            return
+        if not post:
+            self._responder_json(200, {"ok": True, "proveedores": estado_claves()})
+            return
+        try:
+            datos = self._leer_json()
+        except (ValueError, UnicodeDecodeError):
+            self._responder_json(400, {"ok": False, "error": "Petición mal formada."})
+            return
+        try:
+            if not isinstance(datos, dict):
+                raise ValueError("Petición mal formada.")
+            proveedores = cambiar_claves(datos)
+        except ValueError as exc:
+            self._responder_json(400, {"ok": False, "error": str(exc)})
+            return
+        with _cerrojo:
+            ejecutando = _estado.get("estado") == "ejecutando"
+        self._responder_json(200, {"ok": True, "proveedores": proveedores, "ejecutando": ejecutando})
+
     def do_GET(self):
+        if self.path == "/claves":
+            self._claves(post=False)
+            return
         if self.path == "/salud":
             self._responder_json(200, {"ok": True})
         elif self.path == "/estado":
@@ -303,6 +408,9 @@ class ManejadorPuente(BaseHTTPRequestHandler):
             self._responder_json(500, {"ok": False, "error": f"{type(exc).__name__}: {exc}"})
 
     def do_POST(self):
+        if self.path == "/claves":
+            self._claves(post=True)
+            return
         if self.path == "/criterio":
             self._criterio()
             return
