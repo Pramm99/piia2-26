@@ -69,6 +69,13 @@ acuerdo) y la lectura de la ruta cambió.** Con una ruta conviene repetir la eje
 y en los pares de `evidencia_debil`: aquí son 6 de los 7 que dan signo por el LLM (un solo abstract cada uno); CCL3
 deja de serlo porque su artículo lo cita la anotación de GO y pesa ×1,5 (`FACTOR_FUENTE_GO`).
 
+**Decisión (#37, 23/11):** se acepta esta variación como una limitación de la arquitectura, que depende de un LLM
+no determinista, y no se añade ninguna regla de estabilidad. Lo que la compensa es que la persona experta siempre
+puede leer el abstract en la interfaz (artículo, cita y tipo de evidencia de cada gen) y fijar el signo en «Tu
+criterio», que pasa a los dos Excels junto al resultado automático. Se descartan repetir cada ruta varias veces y
+quedarse con la mayoría (multiplica las llamadas al LLM y el tiempo, con un cupo gratuito limitado) y mandar a
+`revisar` los pares que cambian entre ejecuciones (exige esas mismas repeticiones para detectarlos).
+
 ## Acierto frente a una persona
 
 No hay todavía una medida frente a una persona:
@@ -78,7 +85,7 @@ No hay todavía una medida frente a una persona:
   acierto puede estar inflado.
 - Los tiempos a mano de la tabla son estimaciones.
 
-**Cómo convertirlo en KPI real:** que una persona del equipo haga GO:0072678 a mano con cronómetro y sin ver el
+**Cómo convertirlo en KPI real** (encargado a CIMUS, sin fecha de entrega; #38): que una persona haga GO:0072678 a mano con cronómetro y sin ver el
 resultado del sistema. Por cada uno de los 11 genes: buscar en PubMed, elegir los abstracts, decidir el signo (`+1`,
 `−1` o sin signo) con su cita y apuntar los minutos. Con eso se obtienen el tiempo real por gen y por ruta, la
 concordancia gen a gen con el sistema y el NPS a mano.
