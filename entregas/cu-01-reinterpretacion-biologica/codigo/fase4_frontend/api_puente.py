@@ -8,6 +8,8 @@ Desde codigo/: python fase4_frontend/api_puente.py (escucha en http://127.0.0.1:
   POST /criterio        -> {"GO_ID", "criterio": {gen: signo}}: Fase 3 de esa ruta con los signos de «Tu criterio»
   GET  /claves          -> claves del LLM por proveedor (Gemini y Groq), enmascaradas: nunca se devuelve una entera
   POST /claves          -> {"proveedor", "accion": "anadir", "clave"} o {"proveedor", "accion": "quitar", "indice"}
+  GET  / (y lo demás)   -> la interfaz ya construida (fase4_frontend/dist, de `npm run build`) si existe: así el
+                           programa de escritorio (codigo/empaquetado/) no necesita Node ni Vite
 
 Las claves (⚙ → token-api en la interfaz) se guardan en codigo/.env, varias por variable separadas por comas, y
 valen desde la siguiente ejecución. /claves solo acepta peticiones sin Origin o desde localhost, para que otra web
@@ -20,6 +22,8 @@ completo; las cachés de la Fase 1 y el registro de respuestas del LLM (codigo/d
 que una ruta ya consultada no vuelve a gastar llamadas.
 """
 import base64
+import functools
+import gzip
 import json
 import os
 import re
@@ -30,7 +34,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Tuple
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import pandas as pd
 
@@ -54,6 +58,16 @@ from fase3_scoring import config as f3_config  # noqa: E402
 from fase3_scoring.nps import COLUMNAS_FASE2, calcular, casos_con_peso, escribir, leer_fuentes_go  # noqa: E402
 
 DIR_SALIDAS = CODIGO_DIR / "data" / "frontend"
+DIR_WEB = Path(__file__).resolve().parent / "dist"  # npm run build
+# Tipos fijos: en Windows, mimetypes lee el registro y puede dar text/plain a los .js, y el navegador no los ejecuta.
+# El .js y el .css van sin «; charset=utf-8» (Vite ya los escribe en UTF-8): con él, en el equipo de pruebas
+# (con Avast), Edge se quedaba siempre con el JavaScript cortado (ERR_CONNECTION_RESET) y la ventana en blanco;
+# sin él carga a la primera.
+TIPOS_WEB = {".html": "text/html; charset=utf-8", ".js": "text/javascript",
+             ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
+             ".json": "application/json", ".woff2": "font/woff2", ".woff": "font/woff", ".txt": "text/plain; charset=utf-8",
+             ".webmanifest": "application/manifest+json"}
+COMPRIMIBLES = (".html", ".js", ".css", ".svg", ".json", ".txt", ".webmanifest")  # con gzip, el JS pasa de 300 a 92 KB: menos que cortar
 PATRON_GO = re.compile(r"^GO:\d{7}$")
 COLUMNAS_CIMUS = ["ID", "Description", "geneID"]
 SIGNOS_CRITERIO = ("+1", "-1", "neutro")
@@ -314,6 +328,12 @@ def ejecutar_ruta(ruta: dict):
         _actualizar(estado="error", error=f"{type(exc).__name__}: {exc}")
 
 
+@functools.lru_cache(maxsize=16)
+def _comprimido(ruta: str, _modificado: float) -> bytes:
+    """El fichero en gzip, una vez por versión (la fecha de modificación entra en la clave de la caché)."""
+    return gzip.compress(Path(ruta).read_bytes(), 6)
+
+
 class ManejadorPuente(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -346,6 +366,8 @@ class ManejadorPuente(BaseHTTPRequestHandler):
 
     def _claves(self, post: bool):
         if not self._origen_local():
+            if post:  # sin leer el cuerpo, Windows corta la conexión (RST) y el cliente no llega a ver el 403
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
             self._responder_json(403, {"ok": False, "error": "Las claves solo se gestionan desde la interfaz local."})
             return
         if not post:
@@ -376,8 +398,34 @@ class ManejadorPuente(BaseHTTPRequestHandler):
         elif self.path == "/estado":
             with _cerrojo:
                 self._responder_json(200, dict(_estado))
-        else:
+        elif not self._web():
             self.send_error(404)
+
+    def _web(self) -> bool:
+        """Un fichero de la interfaz construida (DIR_WEB); «/» es index.html. False si no hay interfaz construida o
+        el fichero no existe o queda fuera de DIR_WEB (p. ej. con «..»)."""
+        if not DIR_WEB.is_dir():
+            return False
+        raiz = DIR_WEB.resolve()
+        relativa = unquote(urlparse(self.path).path).lstrip("/") or "index.html"
+        fichero = (raiz / relativa).resolve()
+        if not fichero.is_relative_to(raiz) or not fichero.is_file() or fichero.suffix.lower() not in TIPOS_WEB:
+            return False
+        comprimir = fichero.suffix.lower() in COMPRIMIBLES and "gzip" in self.headers.get("Accept-Encoding", "")
+        cuerpo = _comprimido(str(fichero), fichero.stat().st_mtime) if comprimir else fichero.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", TIPOS_WEB[fichero.suffix.lower()])
+        if comprimir:
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("Vary", "Accept-Encoding")
+        self.send_header("Content-Length", str(len(cuerpo)))
+        # Lo de assets/ lleva una huella en el nombre (Vite) y no cambia nunca; el resto (index.html, iconos, manifiesto)
+        # se revalida cada vez, para que una versión nueva se vea sin borrar la caché del navegador
+        inmutable = fichero.parent == raiz / "assets"
+        self.send_header("Cache-Control", "max-age=31536000, immutable" if inmutable else "no-cache")
+        self.end_headers()
+        self.wfile.write(cuerpo)
+        return True
 
     def _leer_json(self) -> dict:
         return json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))

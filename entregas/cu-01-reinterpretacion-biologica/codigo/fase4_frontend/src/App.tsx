@@ -4,7 +4,6 @@ import {
   FileSpreadsheet,
   Search,
   Info,
-  Microscope,
   Circle,
   CheckCircle2,
   ChevronDown,
@@ -19,8 +18,11 @@ import { colorLectura, formatoNPS, loadXLSX, mensaje, MOTIVO_AGOTADO, NOMBRE_PRO
 import ExcelResultados from './ExcelResultados';
 import { MenuAjustes, PanelTokens } from './TokenApi';
 import Progreso, { Girador } from './Progreso';
+import Logo from './Logo';
 
-const API_URL = 'http://127.0.0.1:8000';
+// En desarrollo (npm run dev) el puente va aparte, en el 8000. Compilada (npm run build), la sirve el propio puente
+// o el programa de escritorio (codigo/empaquetado/), en el puerto que sea: misma dirección, ruta relativa.
+const API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000' : '';
 
 const descargarBase64Excel = (b64: string, filename: string) => {
   const byteCharacters = atob(b64);
@@ -749,9 +751,7 @@ export default function App() {
       {/* HEADER */}
       <header style={{ borderBottom: '1px solid var(--c-1e293b)', backgroundColor: 'var(--c-0f172a)', padding: '14px 24px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'var(--c-14b8a6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-020617)' }}>
-            <Microscope size={22} />
-          </div>
+          <Logo size={40} />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '16px', fontWeight: 'bold' }}>CU-01 PathScore Studio</span>

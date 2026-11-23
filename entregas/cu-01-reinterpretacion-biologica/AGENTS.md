@@ -16,6 +16,7 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 | `codigo/fase2_inferencia/` | **Fase 2 · Inferencia.** Preguntas (gen, PMID, proceso núcleo) → dos LLM → validación → contraste → `codigo/data/fase2_resultados.xlsx`. Es un paquete: se ejecuta con `python -m fase2_inferencia` desde `codigo/`. Lee la Fase 1 a través del puente `_fase1.py`. |
 | `codigo/fase3_scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m fase3_scoring` desde `codigo/`; los umbrales están en `fase3_scoring/config.py`. |
 | `codigo/fase4_frontend/` | **Fase 4 · Frontend.** Interfaz web (React + Vite: `src/App.tsx`, `src/ExcelResultados.tsx`, `src/comun.ts`; colores en `src/index.css`) y `api_puente.py`, que ejecuta una ruta entera (Fases 1 → 2 → 3) y escribe en `codigo/data/frontend/<GO_ID>/`. No toca el código de las fases: redirige sus rutas de entrada y salida ([spec](specs/frontend-ejecucion-ruta.md); [instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)). |
+| `codigo/empaquetado/` | **Programa de escritorio e instalador** de la Fase 4 ([ADR-006](decisions/adr-006-programa-de-escritorio.md)): `lanzador.py` (puente + ventana de Edge), `instalador.py` (asistente que instala y desinstala), `barra_tareas.py`, `construir.py` e `iconos.py`. La salida (`empaquetado/salida/`) no se versiona y nunca lleva `codigo/.env`. |
 | `codigo/evaluacion/` | Benchmark: gold set, guía de etiquetado, `evaluar_gold.py`, `seleccionar_gold.py` y `buscar_neutros.py`. |
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
 | `codigo/tools_cimus/` | Entrada original de CIMUS: rutas enriquecidas (únicos Excels versionados) y tabla de log2FC (`NK_cells_DESeq2_results.xlsx`, se reparte dentro del equipo y no se sube). |
@@ -39,6 +40,7 @@ python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
 python fase4_frontend/api_puente.py     # Fase 4: puente con las fases (http://127.0.0.1:8000)
 cd fase4_frontend && npm install && npm run dev   # Fase 4: interfaz web (http://localhost:5173/)
+python empaquetado/construir.py          # Fase 4: programa de Windows e instalador (pip install pyinstaller)
 ```
 
 * **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta. Antes de rendirse por cupo, el cliente prueba las demás claves del mismo proveedor (varias por variable, separadas por comas; en la interfaz, ⚙ → token-api); cualquier otro fallo pasa directamente al respaldo.

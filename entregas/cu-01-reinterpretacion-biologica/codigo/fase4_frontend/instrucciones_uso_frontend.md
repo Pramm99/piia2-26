@@ -6,6 +6,24 @@ aportación de cada gen; una persona experta puede corregir el signo de un gen e
 va acumulando las rutas ejecutadas. No se pueden lanzar las fases por separado: para eso está la línea de comandos
 (`AGENTS.md`).
 
+## 0. Programa de escritorio (sin instalar nada más)
+
+Para quien no use la terminal: **`Instalar CU-01 PathScore Studio.exe`** instala el programa con un asistente, sin
+permisos de administrador, y deja un acceso directo en el escritorio y en el menú Inicio. No hace falta Python ni Node.
+Al abrirlo sale una pantalla de carga y luego la aplicación en su propia ventana; al cerrarla se apaga todo. Las claves
+se añaden en ⚙ → token-api, y se desinstala desde «Aplicaciones instaladas» de Windows. Como el instalador no está
+firmado, Windows puede avisar al abrirlo: «Más información» → «Ejecutar de todas formas».
+
+Para construirlo, desde `codigo/` (necesita Node.js y `pip install pyinstaller`):
+
+```bash
+python empaquetado/construir.py      # deja empaquetado/salida/Instalar CU-01 PathScore Studio.exe
+python empaquetado/iconos.py         # solo si cambia empaquetado/icono.svg (necesita Pillow)
+```
+
+Lleva las cachés y el registro de respuestas del LLM, pero nunca `codigo/.env`. Incluye la tabla de log2FC de CIMUS,
+que no es pública: para repartirlo fuera del equipo, `--sin-datos-cimus`. Cómo está hecho y por qué: ADR-006.
+
 ## 1. Requisitos
 
 1. **Python** con las dependencias de `codigo/requirements.txt` (el entorno `codigo/pia_venv/` sirve).
@@ -122,6 +140,10 @@ Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md
 | `src/ExcelResultados.tsx` | Excel de resultados que acumula las rutas ejecutadas, con su vista previa. |
 | `src/comun.ts` | Utilidades compartidas: carga de SheetJS (desde el CDN, para leer y escribir Excel) y formatos. |
 | `src/index.css` | Paletas de colores del tema oscuro y del claro. |
+| `src/Logo.tsx` | Logo de la cabecera: el mismo dibujo que el icono del programa (`codigo/empaquetado/icono.svg`). |
+| `vite.config.ts` | Al compilar, el `index.html` carga el JS y el CSS con un tiempo límite y reintentos (las descargas locales se cortaban a veces con un antivirus). |
+| `public/` | `favicon.ico` e `iconos/`, generados por `codigo/empaquetado/iconos.py`. |
+| `../empaquetado/` | Programa de escritorio e instalador: `lanzador.py`, `instalador.py`, `barra_tareas.py`, `construir.py` e `iconos.py`. |
 
 Para comprobar el código antes de un commit, desde `codigo/fase4_frontend/`: `npx tsc -b` y `npx eslint src`.
 

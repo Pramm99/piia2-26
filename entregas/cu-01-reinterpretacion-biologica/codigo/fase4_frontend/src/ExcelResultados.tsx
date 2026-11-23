@@ -30,12 +30,17 @@ interface Manejador {
 interface OpcionesSelector {
   types?: { description: string; accept: Record<string, string[]> }[];
   suggestedName?: string;
+  id?: string;
+  startIn?: 'downloads' | 'desktop' | 'documents';
 }
 type VentanaFicheros = Window & {
   showOpenFilePicker?: (opts?: OpcionesSelector) => Promise<Manejador[]>;
   showSaveFilePicker?: (opts?: OpcionesSelector) => Promise<Manejador>;
 };
 const TIPOS = [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }];
+// Los diálogos empiezan en Descargas, no en Documentos (que puede estar dentro de OneDrive); con el mismo id, la
+// siguiente vez abren donde se guardó la última.
+const DONDE = { id: 'excel-resultados', startIn: 'downloads' } as const;
 
 interface Acumulado {
   nombre: string;
@@ -156,7 +161,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
       return;
     }
     try {
-      const [manejador] = await ventana.showOpenFilePicker({ types: TIPOS });
+      const [manejador] = await ventana.showOpenFilePicker({ ...DONDE, types: TIPOS });
       if (manejador.requestPermission) await manejador.requestPermission({ mode: 'readwrite' });
       const fichero = await manejador.getFile();
       const { libro, rutas, genes } = await leer(await fichero.arrayBuffer(), fichero.name);
@@ -186,7 +191,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
       const XLSX = await loadXLSX();
       const libro = XLSX.utils.book_new();
       if (ventana.showSaveFilePicker) {
-        const manejador = await ventana.showSaveFilePicker({ suggestedName: 'resultados_rutas.xlsx', types: TIPOS });
+        const manejador = await ventana.showSaveFilePicker({ ...DONDE, suggestedName: 'resultados_rutas.xlsx', types: TIPOS });
         empezar({ nombre: manejador.name, libro, rutas: [], genes: [], manejador }, true);
       } else {
         empezar({ nombre: 'resultados_rutas.xlsx', libro, rutas: [], genes: [], manejador: null }, true);

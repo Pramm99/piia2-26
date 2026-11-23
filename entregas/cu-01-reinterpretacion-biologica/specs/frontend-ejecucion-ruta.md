@@ -1,7 +1,7 @@
 # Spec: Interfaz web para ejecutar una ruta (Fase 4)
 
 ## Qué hay que construir
-Una interfaz web (Fase 4, `codigo/fase4_frontend/`) con la que una persona sin línea de comandos ejecuta **una ruta GO** de principio a fin y entiende el resultado. Tiene tres piezas (componentes 17, 18 y 19 de [`ARCHITECTURE.md`](../ARCHITECTURE.md)):
+Una interfaz web (Fase 4, `codigo/fase4_frontend/`) con la que una persona sin línea de comandos ejecuta **una ruta GO** de principio a fin y entiende el resultado. Tiene tres piezas (componentes 17, 18 y 19 de [`ARCHITECTURE.md`](../ARCHITECTURE.md)), y se reparte además como programa de Windows con instalador (componente 20; ver «Programa de escritorio» y el [ADR-006](../decisions/adr-006-programa-de-escritorio.md)):
 
 1. **Interfaz** (`src/App.tsx`, React + Vite, `npm run dev` desde `codigo/fase4_frontend/`, en `http://localhost:5173/`): subir los Excels de rutas, elegir la ruta, ejecutarla y leer el resultado.
 2. **Puente HTTP local** (`api_puente.py`, `python fase4_frontend/api_puente.py` desde `codigo/`, en `http://127.0.0.1:8000`): ejecuta seguidas las Fases 1 → 2 → 3 para la ruta elegida.
@@ -92,12 +92,19 @@ Para juntar varias rutas en un mismo Excel sin copiarlas a mano.
 * **Rotación** (`fase2_inferencia/cliente.py`, también en la línea de comandos): Si una clave se queda sin cupo (un `429` del límite diario, o un `429` que sigue tras los reintentos), se pasa a la siguiente del **mismo proveedor**; es el único fallo que cambia de clave. Una clave no válida, un `5xx` o la red, o quedarse sin cupo en todas las claves, hacen que el modelo deje de llamarse en esa ejecución y responda el respaldo (Groq), que también usa sus claves en orden. Sin ninguna clave con cupo, las preguntas quedan `pendiente`.
 * Si la variable está en las variables de entorno del sistema, que mandan sobre `codigo/.env`, el panel lo dice y no deja cambiarla.
 
+### Programa de escritorio (`codigo/empaquetado/`, [ADR-006](../decisions/adr-006-programa-de-escritorio.md))
+* **Construir:** desde `codigo/`, `python empaquetado/construir.py` (necesita Node.js y `pip install pyinstaller`). Deja en `codigo/empaquetado/salida/` (no se versiona) la carpeta del programa y `Instalar CU-01 PathScore Studio.exe`. Con `--sin-datos-cimus` no lleva la tabla de log2FC de CIMUS, que no es pública.
+* **Instalar:** el asistente instala solo para el usuario en `%LOCALAPPDATA%\Programs\CU-01 PathScore Studio`, sin permisos de administrador; crea los accesos directos del escritorio (opcional) y del menú Inicio y lo registra en «Aplicaciones instaladas». Si ya estaba, lo actualiza conservando `codigo/data` y `codigo/.env`, y si está abierto ofrece cerrarlo. Intro pulsa el botón principal y Esc cancela.
+* **Abrir:** el doble clic enseña una pantalla de carga mientras arranca el puente, que también sirve la interfaz compilada, en `127.0.0.1:47613`, y la abre en una ventana de Edge en modo aplicación, con su propio botón en la barra de tareas. Al cerrar la ventana se apaga todo. Un segundo doble clic con el programa abierto abre otra ventana.
+* **Desinstalar:** desde «Aplicaciones instaladas» o con `Desinstalar.exe`, borra la carpeta (con las claves y las cachés), los accesos directos y el registro. Solo borra una carpeta llamada `CU-01 PathScore Studio` que tenga el programa.
+* **Datos:** lleva las cachés de la Fase 1 y el registro de respuestas del LLM, pero nunca `codigo/.env`.
+
 ### Salida
 | Dónde | Qué |
 |---|---|
 | `codigo/data/frontend/<GO_ID>/` (no se versiona) | `entrada_activadas.xlsx` y `entrada_suprimidas.xlsx` (reducidos a la ruta), `fase1_dataset_abstracts.xlsx`, `fase2_resultados.xlsx` y `fase3_scoring.xlsx` de esa ruta. |
 | Navegador | `fase3_scoring_<GO_ID>.xlsx` al pulsar **Descargar Excel de la Fase 3**. |
-| Fichero elegido por la persona | El Excel de resultados, con las hojas `Rutas` y `Genes`. |
+| Fichero elegido por la persona | El Excel de resultados, con las hojas `Rutas` y `Genes`. Los diálogos de abrir y guardar empiezan en Descargas, no en Documentos, que puede estar dentro de OneDrive. |
 
 ## Por qué
 * **El usuario final es una persona de CIMUS, no un programador.** La línea de comandos y un Excel de cuatro hojas con códigos como `+1:15811952(0.36)` no se entienden sin conocer el pipeline. La interfaz dice si la ruta está activada o inhibida y por qué, gen a gen, con los artículos y la frase que lo sostienen.
@@ -121,7 +128,7 @@ Para juntar varias rutas en un mismo Excel sin copiarlas a mano.
 
 ## Restricciones
 * **No modifica las fases:** no cambia `fase1_ingesta/` ni la lógica de `fase2_inferencia/`; solo redirige sus rutas de entrada y salida. De `fase3_scoring/` usa el parámetro opcional `criterio` de `calcular`, que la línea de comandos no usa, así que su resultado no cambia. La rotación de claves vive en `fase2_inferencia/cliente.py` y vale igual en la línea de comandos.
-* **Local:** el puente solo escucha en `127.0.0.1:8000` y la interfaz en `localhost:5173`. Las claves se guardan solo en `codigo/.env`, que no se versiona. Una clave pasa por el navegador solo al pegarla en ⚙ → token-api, y va directa al puente local; el puente nunca la devuelve entera ni la escribe en el log, y `/claves` rechaza las peticiones con el `Origin` de otra web, para que una página abierta en el navegador no pueda cambiarlas.
+* **Local:** el puente solo escucha en `127.0.0.1:8000` y la interfaz en `localhost:5173`; el programa de escritorio, en `127.0.0.1:47613`. Las claves se guardan solo en `codigo/.env`, que no se versiona. Una clave pasa por el navegador solo al pegarla en ⚙ → token-api, y va directa al puente local; el puente nunca la devuelve entera ni la escribe en el log, y `/claves` rechaza las peticiones con el `Origin` de otra web, para que una página abierta en el navegador no pueda cambiarlas.
 * **Una ruta a la vez:** una segunda petición mientras hay otra en marcha recibe `409`.
 * **Mismo resultado que la línea de comandos:** con las mismas entradas, cachés y registro, la lectura y el NPS de la ruta coinciden con los de `python -m fase3_scoring`.
 * **Mismas reglas en «Tu criterio»:** el recálculo en pantalla sigue `fase3_scoring/nps.py` y `fase3_scoring/config.py`. Si cambian los umbrales o la regla de lectura, hay que cambiarlos también en `App.tsx`.
@@ -145,5 +152,8 @@ Estos criterios se comprueban a mano en el navegador, salvo los de `tsc` y `esli
 * [x] ✅ **Rotación de claves** (`tests/test_cliente.py`): con dos claves de Gemini, un `429` del límite diario pasa a la segunda sin reintentar y las siguientes llamadas siguen con ella; un `429` que sigue tras los reintentos también; sin cupo en todas, `ErrorTransitorio` con motivo `cupo` y responde Groq (`test_sin_cupo_en_todas_las_claves_de_gemini_responde_groq`). Una clave no válida (`400` «API key not valid» o `403`), un `5xx` o la red no cambian de clave. Sin ninguna clave, el cliente falla al llamar con `sin_clave`, no al crearse.
 * [x] ✅ **Progreso en el navegador** (a mano en Chrome, 23/11): con GO:0072678 (cachés y registro hechos, sin llamadas al LLM), la rueda gira durante toda la ejecución, el porcentaje no retrocede nunca, la barra sube dentro de la Fase 1 (hasta un 33 % a los 24 s), salta al 40 % al empezar la Fase 2 y al 92 % en la Fase 3, el contador corre segundo a segundo y al terminar marca 100 % en verde con el tiempo total (00:26) y el de cada fase. No se probó en frío de verdad: todas las rutas de CIMUS están ya en las cachés y el registro.
 * [x] ✅ **Panel token-api en el navegador** (a mano en Chrome, 23/11): la rueda abre el menú y token-api el panel, con las claves numeradas y enmascaradas; una clave de prueba se añade como «2.», una clave de Groq pegada en Gemini se rechaza con «Parece una clave de Groq», y la papelera, tras «Sí, quitarla», la quita. Después, `codigo/.env` queda idéntico byte a byte (también sus saltos de línea). El aviso del límite diario con **Añadir token** no se vio en pantalla (haría falta agotar el cupo de verdad): lo cubren `test_aviso_de_la_fase2` y `test_sin_cupo_en_todas_las_claves_de_gemini_responde_groq`.
-* [x] ✅ **Código** (23/11): `npx tsc -b` y `npx eslint src` sin errores, y `python -m pytest` en verde (165 pruebas).
+* [x] ✅ **Código** (23/11): `npx tsc -b` y `npx eslint src` sin errores, y `python -m pytest` en verde (174 pruebas).
+* [x] ✅ **Interfaz compilada servida por el puente** (`tests/test_puente_web.py`): `/` da `index.html` y el JS sale como `text/javascript`, sin `charset`, comprimido con gzip si el navegador lo acepta; nada fuera de `dist/` (`..`, `%2e%2e`) ni con otra extensión; sin `dist/`, `404`. Solo lo de `assets/` se guarda en caché para siempre. Las rutas de la API siguen igual.
+* [x] ✅ **Programa de escritorio** (a mano, 23/11): el `.exe` empaquetado ejecuta GO:0072678 por las Fases 1, 2 y 3 y da `activada` con NPS 0,333 en 13 s (12 respuestas reutilizadas). La ventana carga la interfaz aunque el JS se corte (en el registro, tres intentos), tiene su botón «CU-01 PathScore Studio» en la barra de tareas con el icono nítido y, al cerrarla, el programa se apaga.
+* [x] ✅ **Instalador** (a mano, 23/11): instalar crea la carpeta, los dos accesos directos y la entrada de «Aplicaciones instaladas»; actualizar con el programa abierto lo cierra y conserva `codigo/data`; «Abrir ahora» lo abre; desinstalar borra carpeta, accesos y registro, y la copia temporal del desinstalador se borra sola.
 * [ ] **Pruebas automáticas** (#40): pruebas del puente (`/salud`, `/ejecutar-ruta` y `/estado`, con las fases simuladas) y del recálculo de «Tu criterio» frente a `fase3_scoring/nps.py`.
