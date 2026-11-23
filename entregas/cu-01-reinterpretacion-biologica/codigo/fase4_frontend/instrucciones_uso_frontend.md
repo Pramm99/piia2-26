@@ -135,9 +135,11 @@ Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md
 
 | Fichero | Contenido |
 |---|---|
-| `api_puente.py` | Puente HTTP con las Fases 1 → 2 → 3 (`/salud`, `/ejecutar-ruta`, `/estado`) y el recálculo de «Tu criterio» (`/criterio`). |
+| `api_puente.py` | Puente HTTP con las Fases 1 → 2 → 3 (`/salud`, `/ejecutar-ruta`, `/estado`), el recálculo de «Tu criterio» (`/criterio`), las claves del LLM (`/claves`) y, si existe `dist/` (`npm run build`), la interfaz compilada en `/`. |
 | `src/App.tsx` | Interfaz: Excels de rutas, elección y ejecución de la ruta, veredicto, tarjetas por fase, tabla de genes y «Tu criterio». |
 | `src/ExcelResultados.tsx` | Excel de resultados que acumula las rutas ejecutadas, con su vista previa. |
+| `src/TokenApi.tsx` | Rueda ⚙ de la cabecera y panel token-api para añadir y quitar las claves de Gemini y Groq. |
+| `src/Progreso.tsx` | Rueda de carga, barra con el porcentaje (estimado por fases) y contador de tiempo de la ejecución. |
 | `src/comun.ts` | Utilidades compartidas: carga de SheetJS (desde el CDN, para leer y escribir Excel) y formatos. |
 | `src/index.css` | Paletas de colores del tema oscuro y del claro. |
 | `src/lectura.ts` | Lectura de la ruta con «Tu criterio», la misma cuenta que `fase3_scoring/nps.py` (sin React, para probarla). |

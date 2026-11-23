@@ -82,13 +82,15 @@ Para garantizar la entrega en plazo y la robustez del sistema, el proyecto sigue
 
 - **Interfaz web (Fase 4):** para ejecutar una ruta entera desde el navegador y leer el resultado explicado: veredicto
   de la ruta, qué aportó cada fase y, por gen, sus artículos con la cita y el peso de cada voto. Una persona experta puede
-  corregir en pantalla el signo de un gen sin que se guarde, y un Excel de resultados acumula las rutas ejecutadas
-  ([instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)).
+  corregir en pantalla el signo de un gen («Tu criterio»), que pasa al Excel de la Fase 3 y al Excel de resultados junto
+  al resultado automático; ese Excel acumula las rutas ejecutadas. Las claves del LLM se gestionan desde la propia
+  interfaz (⚙ → token-api). Se reparte también como programa de Windows con instalador, sin Python ni Node
+  ([ADR-006](decisions/adr-006-programa-de-escritorio.md); [instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)).
 
 - **Reproducibilidad:**
   - registro de todas las respuestas de los modelos, que permite reanudar una ejecución y regenerar los resultados sin volver a llamar ([ADR-004](decisions/adr-004-persistencia-ficheros-locales.md));
   - un cliente simulado (`ClienteSimulado`) que permite probar el pipeline sin red ni cuotas;
-  - pruebas con `pytest` en `codigo/tests/` (limpieza, validación, contraste, ejecución reanudable, ingesta y scoring), sin red: las APIs y los modelos se simulan.
+  - pruebas con `pytest` en `codigo/tests/` (limpieza, validación, contraste, ejecución reanudable, ingesta, scoring, puente de la interfaz y lógica de la interfaz con node), sin red: las APIs y los modelos se simulan.
 
 ### Qué queda explícitamente fuera
 
@@ -182,7 +184,8 @@ entregas/cu-01-reinterpretacion-biologica/
     ├── fase2_inferencia/              # Fase 2: casos, prompts, cliente LLM, registro, validación y contraste.
     ├── fase3_scoring/                 # Fase 3: signo de cada par (gen, ruta) y Net Pathway Score de cada ruta.
     ├── fase4_frontend/                # Fase 4: interfaz web (React + Vite) que ejecuta una ruta entera (Fases 1-3) a través de un puente HTTP local
-    │                                  #   (api_puente.py), con criterio experto y Excel de resultados que acumula las rutas.
+    │                                  #   (api_puente.py), con criterio experto, Excel de resultados que acumula las rutas y claves del LLM (token-api).
+    ├── empaquetado/                   # Programa de escritorio para Windows e instalador (ADR-006); la salida (empaquetado/salida/) no se versiona.
     ├── evaluacion/                    # Benchmark: selección del gold set, guía de etiquetado, etiquetas e informes.
     ├── tests/                         # Pruebas con pytest, sin red (python -m pytest desde codigo/).
     ├── tools_cimus/                   # Material de CIMUS: rutas enriquecidas (entrada de la Fase 1) y tabla de log2FC (sensibilidad de la Fase 3).
