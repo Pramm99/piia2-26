@@ -52,7 +52,7 @@ python empaquetado/construir.py          # Fase 4: programa de Windows e instala
 3. **Las claves nunca llegan a GitHub.** Viven solo en `codigo/.env`, que está en `.gitignore`.
    * No escribas una clave en el código, la documentación, los logs ni la salida de un comando: para comprobarla, mira solo si existe o está vacía.
    * Antes de cada commit, comprueba que `.env` no está en `git status` y busca los patrones de clave (`gsk_`, `AIza`, `AQ.`, `csk-`) en lo que se va a subir.
-4. **Solo se toca esta carpeta.** El resto del repositorio (README raíz, `evaluacion/`, `cu00-ejemplo`) es de la asignatura. Antes de un push, `git diff --name-status upstream-main HEAD -- . ':!entregas/cu-01-reinterpretacion-biologica'` debe salir vacío.
+4. **Solo se toca esta carpeta.** El resto del repositorio (README raíz, `evaluacion/`, `cu00-ejemplo`) es de la asignatura. Antes de abrir o actualizar un PR a la asignatura, en la rama del PR y desde la raíz del repositorio, `git diff --name-status upstream-main HEAD -- . ':!entregas/cu-01-reinterpretacion-biologica'` debe salir vacío (`upstream-main` es el `main` de `usc-gria/piia2-26`).
 5. **No se versionan Excels ni CSV**, salvo los de `codigo/tools_cimus/`. Las salidas nuevas van a `codigo/data/`. Ojo: `git add` de un fichero que ya estaba seguido se salta el `.gitignore`.
 6. **R está fuera del proyecto.** No propongas clusterProfiler, Script.R ni ggplot en el código ni en la documentación.
 
@@ -79,7 +79,7 @@ python empaquetado/construir.py          # Fase 4: programa de Windows e instala
 * **Documentación:** describe solo el estado actual, sin versiones antiguas ni históricos. Las cifras de las Fases 1, 2 y 3 son las de la ejecución de referencia del 2026-11-13, indicando la fecha; las del *gold set* y el benchmark, de la Fase 1 del 2026-11-09.
 * **No toques una fase que no te han pedido:** un cambio en la Fase 1 altera el Excel del que dependen la Fase 2, el gold set y el benchmark.
 * **No afirmes decisiones** que solo aparecen en un comentario del código: compruébalas en los ADR o pregunta.
-* **Commits:** el título lleva la fase que cambia, p. ej. `Fase 1 (INGESTA): …`, `Fase 2: …` o `Fase 3 (SCORING): …`. Si toca varias, nómbralas todas. Añade los ficheros con rutas explícitas, nunca con `git add -A`. El push va a `main` del fork `Pramm99/piia2-26`, que alimenta el PR #19 (Entrega 2) de `usc-gria/piia2-26`.
+* **Commits:** el título lleva la fase que cambia, p. ej. `Fase 1 (INGESTA): …`, `Fase 2: …` o `Fase 3 (SCORING): …`. Si toca varias, nómbralas todas. Añade los ficheros con rutas explícitas, nunca con `git add -A`. El push va a `main` del fork `Pramm99/piia2-26`. La asignatura fusiona los PR con *squash*, así que ese `main` no se propone tal cual: para entregar, se crea una rama desde el `main` de `usc-gria/piia2-26`, se copia el estado de esta carpeta (`git restore --source=main --staged --worktree -- entregas/cu-01-reinterpretacion-biologica`) y se abre el PR desde ella. Entrega 2: PR #19 (fusionado) y su actualización, PR #32 (rama `entrega2-actualizacion`).
 * **Tareas del tablero:** al abrir un issue usa la plantilla de [`docs/plantillas-issue/tarea.md`](docs/plantillas-issue/tarea.md). Al cerrar trabajo, comenta el issue con el commit y déjalo en REVISION: lo cierra otra persona contra el [DoD](DOD.md). Si algo te bloquea, sigue [`TABLERO.md`](TABLERO.md#bloqueos).
 * **Varios asistentes a la vez:** si otra sesión tiene cambios sin commit en la misma carpeta, no los incluyas en tu commit ni edites sus ficheros hasta que termine.
 
