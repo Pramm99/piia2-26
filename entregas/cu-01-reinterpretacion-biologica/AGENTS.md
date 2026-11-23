@@ -74,7 +74,7 @@ python empaquetado/construir.py          # Fase 4: programa de Windows e instala
 ## Cómo trabajar en este repositorio
 * **Idioma:** el código, los comentarios, la documentación y los commits van en español. Solo el prompt al LLM va en inglés.
 * **Estilo:** imita el código que lo rodea: nombres en español, docstrings cortas que dicen el *porqué*, sin capas de abstracción innecesarias. Los parámetros ajustables van en `fase1_ingesta/config.py`, `fase2_inferencia/esquema.py` (los modelos y sus límites, en `cliente.py:MODELOS`) o `fase3_scoring/config.py`, no repartidos por el código.
-* **Pruebas:** todo cambio de comportamiento lleva su prueba en `codigo/tests/`, sin red: las APIs se simulan con `monkeypatch` y los modelos con `ClienteSimulado`. `python -m pytest` tiene que pasar antes de cualquier commit. En la Fase 4, además, `npx tsc -b` y `npx eslint src` desde `codigo/fase4_frontend/`.
+* **Pruebas:** todo cambio de comportamiento lleva su prueba en `codigo/tests/`, sin red: las APIs se simulan con `monkeypatch` y los modelos con `ClienteSimulado`. `python -m pytest` tiene que pasar antes de cualquier commit (también lanza las pruebas de la interfaz con node, `tests/test_interfaz.py`). En la Fase 4, además, `npx tsc -b`, `npx eslint src` y `npm test` desde `codigo/fase4_frontend/`; la lógica que se pueda probar sin navegador va fuera de React (`src/lectura.ts`, `src/acumulado.ts`).
 * **Specs:** los criterios de aceptación son verificables y llevan `[x] ✅` y la prueba que los cubre cuando se cumplen. Si cambias el comportamiento, actualiza la spec, el ADR y `ARCHITECTURE.md` en el mismo commit.
 * **Documentación:** describe solo el estado actual, sin versiones antiguas ni históricos. Las cifras de las Fases 1, 2 y 3 son las de la ejecución de referencia del 2026-11-13, indicando la fecha; las del *gold set* y el benchmark, de la Fase 1 del 2026-11-09.
 * **No toques una fase que no te han pedido:** un cambio en la Fase 1 altera el Excel del que dependen la Fase 2, el gold set y el benchmark.
@@ -87,5 +87,4 @@ python empaquetado/construir.py          # Fase 4: programa de Windows e instala
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
 * los umbrales definitivos del scoring y la revisión de las rutas `Sensible_al_peso`;
-* si un artículo debe contar una sola vez por gen en la Fase 3 (#41);
-* las pruebas automáticas de la Fase 4 (#40).
+* la prueba del programa de escritorio en otro ordenador (#50).

@@ -167,9 +167,24 @@ def _ganadora(w: Dict[str, float]) -> Optional[str]:
     return cabeza[0] if maximo > 0 and len(cabeza) == 1 else None
 
 
+def un_voto_por_articulo(casos: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+    """Los votos de un par (gen, ruta), uno por artículo. Al LLM se le pregunta por cada subproceso de la ruta, así que
+    un mismo artículo puede responder varias veces; contarlas todas inflaría su peso. Si sus respuestas coinciden en el
+    signo, vota con ese signo y el mayor de sus pesos (la fila de ese peso). Si se contradicen, no vota: un artículo que
+    dice una cosa para un subproceso y la contraria para otro no inclina el par. Devuelve las filas que votan y los
+    PMIDs que se contradicen."""
+    votos = casos[(casos["Estado"] == ESTADO_RESUELTO) & casos["Signo_ruta"].isin(CLASES)]
+    if votos.empty:
+        return votos, []
+    signos = votos.groupby("PMID")["Signo_ruta"].nunique()
+    contradictorios = sorted(signos[signos > 1].index)
+    coherentes = votos[~votos["PMID"].isin(contradictorios)]
+    return coherentes.loc[coherentes.groupby("PMID", sort=False)["w"].idxmax()], contradictorios
+
+
 def signo_par(destino: str, casos: pd.DataFrame) -> Dict:
     """Reglas 4-9 de la spec para un par que pasó por el LLM (las 1-3 no miran los casos)."""
-    votos = casos[(casos["Estado"] == ESTADO_RESUELTO) & casos["Signo_ruta"].isin(CLASES)]
+    votos, contradictorios = un_voto_por_articulo(casos)
     w = {k: float(votos.loc[votos["Signo_ruta"] == k, "w"].sum()) for k in CLASES}
     n = {k: votos.loc[votos["Signo_ruta"] == k, "PMID"].nunique() for k in CLASES}
     fila = {"W_pos": w[SIGNO_POSITIVO], "W_neg": w[SIGNO_NEGATIVO], "W_neutro": w[SIGNO_NEUTRO],
@@ -195,6 +210,8 @@ def signo_par(destino: str, casos: pd.DataFrame) -> Dict:
                 return salida(gana, ESTADO_REVISAR, ["LLM_y_revision"] + motivos, gana)
             return salida(gana, ESTADO_RESUELTO, motivos)
         return salida(SIGNO_DESCONOCIDO, ESTADO_REVISAR, ["conflicto_entre_abstracts"], gana)
+    if contradictorios and votos.empty:  # su único apoyo es un artículo que se contradice entre subprocesos
+        return salida(SIGNO_DESCONOCIDO, ESTADO_REVISAR, ["conflicto_entre_abstracts"])
     if len(votos):  # votos que no pesan nada (confianza 0): como si no hubiera
         marcas.append("votos_sin_peso")
     revisar = casos[casos["Estado"] == ESTADO_REVISAR]

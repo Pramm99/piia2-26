@@ -19,6 +19,7 @@ import ExcelResultados from './ExcelResultados';
 import { MenuAjustes, PanelTokens } from './TokenApi';
 import Progreso, { Girador } from './Progreso';
 import Logo from './Logo';
+import { aplicarCriterio, genesParaCambiar, MIN_COBERTURA, MIN_PARES_CON_SIGNO, recalcularRuta, UMBRAL_NPS, type Criterio } from './lectura';
 
 // En desarrollo (npm run dev) el puente va aparte, en el 8000. Compilada (npm run build), la sirve el propio puente
 // o el programa de escritorio (codigo/empaquetado/), en el puerto que sea: misma dirección, ruta relativa.
@@ -95,13 +96,16 @@ interface Articulo {
   Efecto_LLM: string;
   Confianza_LLM: number | null;
   Tipo_evidencia: string;
+  Se_contradice: boolean; // sus respuestas se contradicen entre subprocesos: no vota (#41)
   Votos: Voto[];
 }
 
-// Un voto del artículo: uno por cada subproceso de la ruta por el que se preguntó al LLM
+// Una respuesta del artículo, una por cada subproceso de la ruta por el que se preguntó al LLM. El artículo vota una
+// sola vez por gen: con la respuesta de mayor peso (Cuenta), o ninguna si se contradicen (fase3_scoring/nps.py)
 interface Voto {
   Proceso: string;
   Signo: string;
+  Cuenta: boolean;
   Organismo: string;
   Tipo_celular: string;
   Confianza: number | null;
@@ -140,10 +144,6 @@ interface ResultadoCriterio {
 
 const genes = (s: string) => s.split('/').map((g) => g.trim()).filter(Boolean);
 
-// Umbrales de lectura de la Fase 3 (fase3_scoring/config.py)
-const UMBRAL_NPS = 0.33;
-const MIN_PARES_CON_SIGNO = 3;
-const MIN_COBERTURA = 0.3;
 
 // Los códigos de las fases, dichos en lenguaje llano
 const SIGNO_TEXTO: Record<string, string> = {
@@ -265,49 +265,9 @@ const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
   );
 };
 
-// Signo que puede fijar a mano una persona experta. La pantalla se recalcula aquí al momento; los dos Excels (el de
-// la Fase 3 y el de resultados) los recalcula el puente con fase3_scoring. Una nueva ejecución vuelve al automático.
-type Criterio = '+1' | '-1' | 'neutro';
-
-const aplicarCriterio = (pares: GeneContribution[], criterio: Record<string, Criterio>): GeneContribution[] =>
-  pares.map((g) => {
-    const s = criterio[g.Gen];
-    if (!s) return g;
-    const direccion = g.Direccion === 'up' ? 1 : -1;
-    return {
-      ...g, Signo_par: s, Estado_par: 'resuelto', Origen: 'Experto', Motivos: 'criterio_experto',
-      Contribucion: s === 'neutro' ? 0 : (s === '+1' ? 1 : -1) * direccion,
-    };
-  });
-
-// La misma cuenta que fase3_scoring/nps.py (tabla_rutas y _lectura), para la ruta con los cambios aplicados
-const recalcularRuta = (r: PathwayResult, pares: GeneContribution[]): PathwayResult => {
-  const resueltos = pares.filter((g) => g.Estado_par === 'resuelto');
-  const conSigno = resueltos.filter((g) => g.Signo_par === '+1' || g.Signo_par === '-1');
-  const neutros = resueltos.filter((g) => g.Signo_par === 'neutro');
-  const cobertura = pares.length ? (conSigno.length + neutros.length) / pares.length : 0;
-  const lectura = (v: number | null) => {
-    if (v === null || conSigno.length < MIN_PARES_CON_SIGNO || cobertura < MIN_COBERTURA) return 'insuficiente';
-    return v >= UMBRAL_NPS ? 'activada' : v <= -UMBRAL_NPS ? 'inhibida' : 'mixta';
-  };
-  const peso = (g: GeneContribution) => (g.Log2FC === null || g.Log2FC === undefined ? 1 : Math.abs(Number(g.Log2FC)));
-  const suma = (f: (g: GeneContribution) => number) => conSigno.reduce((a, g) => a + f(g), 0);
-  const nps = conSigno.length ? suma((g) => Number(g.Contribucion)) / conSigno.length : null;
-  const conLog2fc = Boolean(r.Lectura_log2FC);
-  const npsFc = conLog2fc && conSigno.length ? suma((g) => Number(g.Contribucion) * peso(g)) / suma(peso) : null;
-  const redondear = (v: number | null) => (v === null ? null : Math.round(v * 1000) / 1000);
-  const lec = lectura(nps);
-  const lecFc = conLog2fc ? lectura(npsFc) : '';
-  return {
-    ...r,
-    NPS: redondear(nps), Lectura: lec, NPS_log2FC: redondear(npsFc), Lectura_log2FC: lecFc,
-    Sensible_al_peso: conLog2fc ? (lec !== lecFc ? 'sí' : 'no') : '',
-    n_activan: pares.filter((g) => Number(g.Contribucion) > 0).length,
-    n_inhiben: pares.filter((g) => Number(g.Contribucion) < 0).length,
-    n_pendiente: pares.filter((g) => g.Estado_par === 'pendiente').length,
-    Cobertura: Math.round(cobertura * 1000) / 1000,
-  };
-};
+// «Tu criterio»: la pantalla se recalcula aquí al momento (lectura.ts, la misma cuenta que fase3_scoring/nps.py); los
+// dos Excels (el de la Fase 3 y el de resultados) los recalcula el puente con fase3_scoring. Una nueva ejecución vuelve
+// al automático.
 
 const efectoTexto = (c: number) => (c > 0 ? 'Empuja hacia activada' : c < 0 ? 'Empuja hacia inhibida' : 'No cuenta');
 
@@ -332,14 +292,6 @@ const tituloTarjeta: React.CSSProperties = { fontSize: '13px', fontWeight: 'bold
 const lineaTarjeta: React.CSSProperties = { fontSize: '13px', color: 'var(--c-cbd5e1)', lineHeight: 1.5 };
 const notaTarjeta: React.CSSProperties = { ...lineaTarjeta, color: 'var(--c-64748b)' };
 
-// Cuántos genes a favor tendrían que dejar de contar para que la ruta perdiera su lectura (activada o inhibida)
-const genesParaCambiar = (aFavor: number, enContra: number) => {
-  for (let k = 1; k <= aFavor; k++) {
-    const total = aFavor - k + enContra;
-    if (total < MIN_PARES_CON_SIGNO || (aFavor - k - enContra) / total < UMBRAL_NPS) return k;
-  }
-  return aFavor;
-};
 
 const TITULO_LECTURA: Record<string, string> = {
   activada: 'La ruta está ACTIVADA',
@@ -1165,12 +1117,17 @@ export default function App() {
                                     )}
                                     {a.Votos.length > 0 && (
                                       <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)', marginTop: '4px' }}>
-                                        {a.Votos.length > 1 ? `Cuenta ${a.Votos.length} veces, una por cada subproceso de la ruta por el que se preguntó:` : 'Cuenta una vez:'}
+                                        {a.Se_contradice
+                                          ? `Se le preguntó por ${a.Votos.length} subprocesos de la ruta y sus respuestas se contradicen, así que no inclina el gen hacia ningún lado:`
+                                          : a.Votos.length > 1
+                                            ? `Se le preguntó por ${a.Votos.length} subprocesos de la ruta${a.Votos.some((v) => v.Cuenta) ? ', pero el artículo cuenta una sola vez, con su respuesta de más peso' : ''}:`
+                                            : 'Cuenta una vez:'}
                                         <ul style={{ margin: '2px 0 0 0', paddingLeft: '18px' }}>
                                           {a.Votos.map((v, i) => (
                                             <li key={i}>
                                               {v.Proceso}: <strong style={{ color: v.Signo === '+1' ? 'var(--c-2dd4bf)' : v.Signo === '-1' ? 'var(--c-fb7185)' : 'var(--c-fbbf24)' }}>{(SIGNO_TEXTO[v.Signo] || v.Signo).toLowerCase()}</strong>
                                               {['+1', '-1', 'neutro'].includes(v.Signo) && <>, peso {calculoPeso(v)}</>}
+                                              {v.Cuenta && a.Votos.length > 1 && <strong style={{ color: 'var(--c-e2e8f0)' }}> ← es la que cuenta</strong>}
                                             </li>
                                           ))}
                                         </ul>

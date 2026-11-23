@@ -24,6 +24,10 @@ El módulo **no llama a ningún modelo ni a la red**: solo lee ficheros locales 
 Cada fila de `Por_ruta` es un caso. Su signo sobre la ruta (`Signo_ruta`) ya viene compuesto por la Fase 2 (efecto × signo del camino GO × polaridad de la ruta).
 
 * **Quién vota:** solo los casos con `Estado = resuelto` y `Signo_ruta` ∈ {`+1`, `−1`, `neutro`}. Los `UNKNOWN`, `revisar` y `pendiente` no votan, pero se cuentan.
+* **Un voto por artículo y par** (#41, `un_voto_por_articulo`): la Fase 2 pregunta por cada subproceso de la ruta, así que un mismo artículo puede responder varias veces para el mismo gen. Vota una sola vez:
+  * si sus respuestas coinciden en el signo, con ese signo y el **mayor** de sus pesos (no la suma);
+  * si se contradicen (un subproceso `+1` y otro `−1`), no vota: un artículo que dice una cosa y la contraria no inclina el par. Si era el único apoyo del par, el par va a `revisar` con `conflicto_entre_abstracts` (regla 5).
+  * En el Excel completo, 94 de los 2.072 artículos con voto respondían más de una vez (110 votos de más) y 11 se contradecían, todos el mismo de XCL1 (PMID 10887101). Con la regla, ningún par cambia de signo ni de estado y ninguna ruta de lectura ni de NPS; cambia el peso de 94 pares, y los de `evidencia_debil` pasan de 745 a 779.
 * **Peso del voto:** `w = Confianza_final / 100 × f_contexto × f_GO`.
   * `f_contexto` = 1,0 si el experimento es en humano (`Organismo` = `human`, `not_stated` o vacío) y en células inmunes (`Tipo_celular` ∈ {`NK`, `T`, `other_immune`, `not_stated`} o vacío).
   * Vale 0,5 por cada condición que no se cumpla: ratón u otro organismo, o tumor u otro tipo celular. Si fallan las dos, 0,25.
@@ -53,7 +57,7 @@ Además:
 * **Evidencia débil:** un par resuelto por la regla 4 (o que pasa a `revisar` por `LLM_y_revision`) con `W_total < 1` lleva además `evidencia_debil`. Es el caso, por ejemplo, de un único artículo en ratón.
 * **Contradicción dentro de un abstract:** va a `revisar` (regla 7) y no a `no_concluyente`, porque un abstract que da las dos direcciones suele describir una función dual real (p. ej. KIR2DL4 o la galectina-9). Eso es información para el experto, no una ausencia de evidencia.
 * **Votos sin peso:** si todos los votos pesan 0 (`Confianza_final = 0`), el par se trata como si no tuviera votos y lleva `votos_sin_peso`.
-* **Trazabilidad:** cada par guarda la lista de votos en el formato `signo:PMID(peso)`, p. ej. `+1:10652336(0.86); -1:29988376(0.45)`.
+* **Trazabilidad:** cada par guarda la lista de votos en el formato `signo:PMID(peso)`, uno por artículo, p. ej. `+1:10652336(0.86); -1:29988376(0.45)`.
 
 ### Paso 3 · Contribución del par y Net Pathway Score
 * **Contribución:** `c = s × d`, donde:
@@ -125,6 +129,8 @@ Las pruebas están en `codigo/tests/test_scoring.py`, con tablas sintéticas y s
 * [x] ✅ **Mayoría con minoría por debajo de ⅓** (`tests/test_scoring.py::test_mayoria_y_conflicto`): el mismo par con el `−1` en ratón (0,5) tiene una minoría de 0,5/2,5 = 20 %. Sale `+1`, `resuelto`, con el motivo `minoria_discrepante`.
 * [x] ✅ **Pesos** (`tests/test_scoring.py::test_pesos`): `Confianza_final = 80`, `Organismo = mouse` y `Tipo_celular = tumor` dan `w = 0,8 × 0,5 × 0,5 = 0,2`.
 * [x] ✅ **Evidencia débil** (`tests/test_scoring.py::test_evidencia_debil`): un único voto `−1` con `w = 0,4` da `−1`, `resuelto`, con `evidencia_debil`.
+* [x] ✅ **Un voto por artículo** (`tests/test_scoring.py::test_un_articulo_vota_una_vez_por_par`): un artículo que responde `+1` con peso 0,36 para dos subprocesos suma 0,36, no 0,72, con un PMID y `evidencia_debil`; con pesos 0,4 y 0,7 vota con 0,7.
+* [x] ✅ **Artículo que se contradice** (`tests/test_scoring.py::test_articulo_que_se_contradice_entre_subprocesos`): `−1`, `+1` y `−1` del mismo artículo, solo, dan `UNKNOWN` y `revisar` con `conflicto_entre_abstracts`; con otro artículo `+1`, decide ese (`+1`, `W_pos = 1`, un PMID).
 * [x] ✅ **Artículo de GO** (`tests/test_scoring.py::test_articulo_de_go_pesa_mas`): un único voto `+1` en humano con `Confianza_final = 80` pesa 1,2 si su `Fuente` es `GOA` (sin `evidencia_debil`) y 0,8 si es `EuropePMC` (con `evidencia_debil`); los dos dan `+1` y la misma contribución. En ratón, el de GO pesa 0,8 × 1,5 × 0,5 = 0,6.
 * [x] ✅ **Solo UNKNOWN** (`tests/test_scoring.py::test_solo_unknown_no_entra_en_el_nps`): un par cuyos casos son todos `UNKNOWN` sale `no_concluyente`, con `Contribucion = 0`, y no entra en el cociente del NPS.
 * [x] ✅ **Contradicción** (`tests/test_scoring.py::test_contradiccion_va_a_revisar`): un par sin votos con un caso `contradictorio` sale `revisar`, no `no_concluyente`.

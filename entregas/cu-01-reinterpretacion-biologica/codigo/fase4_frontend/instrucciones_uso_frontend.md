@@ -140,12 +140,16 @@ Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md
 | `src/ExcelResultados.tsx` | Excel de resultados que acumula las rutas ejecutadas, con su vista previa. |
 | `src/comun.ts` | Utilidades compartidas: carga de SheetJS (desde el CDN, para leer y escribir Excel) y formatos. |
 | `src/index.css` | Paletas de colores del tema oscuro y del claro. |
+| `src/lectura.ts` | Lectura de la ruta con «Tu criterio», la misma cuenta que `fase3_scoring/nps.py` (sin React, para probarla). |
+| `src/acumulado.ts` | Lo que se acumula en el Excel de resultados: añadir, sustituir, quitar y vaciar (sin React ni SheetJS). |
+| `pruebas/` | Pruebas con node (`npm test`) y `recalcular.ts`, que usa `tests/test_interfaz.py` para comparar con la Fase 3. |
 | `src/Logo.tsx` | Logo de la cabecera: el mismo dibujo que el icono del programa (`codigo/empaquetado/icono.svg`). |
 | `vite.config.ts` | Al compilar, el `index.html` carga el JS y el CSS con un tiempo límite y reintentos (las descargas locales se cortaban a veces con un antivirus). |
 | `public/` | `favicon.ico` e `iconos/`, generados por `codigo/empaquetado/iconos.py`. |
 | `../empaquetado/` | Programa de escritorio e instalador: `lanzador.py`, `instalador.py`, `barra_tareas.py`, `construir.py` e `iconos.py`. |
 
-Para comprobar el código antes de un commit, desde `codigo/fase4_frontend/`: `npx tsc -b` y `npx eslint src`.
+Para comprobar el código antes de un commit, desde `codigo/fase4_frontend/`: `npx tsc -b`, `npx eslint src` y `npm test`
+(pruebas de `pruebas/` con node; `python -m pytest` desde `codigo/` también las lanza).
 
 **Salidas de cada ejecución.** Cada ruta escribe en `codigo/data/frontend/<GO_ID>/` (ignorado por git): los dos Excels de entrada reducidos,
 `fase1_dataset_abstracts.xlsx`, `fase2_resultados.xlsx`, `fase3_scoring.xlsx` y, si se cambian genes en «Tu criterio»,

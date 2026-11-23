@@ -78,6 +78,30 @@ def test_evidencia_debil(tmp_path):
     assert f.Votos == "-1:1(0.40)"
 
 
+def test_un_articulo_vota_una_vez_por_par(tmp_path):
+    """#41: un artículo responde una vez por subproceso de la ruta, pero vota una sola vez, con su mayor peso."""
+    casos = [caso("G", "GO:A", "1", "+1", conf=36, proceso="GO:1"), caso("G", "GO:A", "1", "+1", conf=36, proceso="GO:2"),
+             caso("H", "GO:A", "2", "-1", conf=40, proceso="GO:1"), caso("H", "GO:A", "2", "-1", conf=70, proceso="GO:2")]
+    p, _, _ = puntuar(tmp_path, [par("G", "GO:A"), par("H", "GO:A")], casos)
+    g, h = fila(p, "G"), fila(p, "H")
+    assert (g.W_pos, g.n_PMIDs, g.Votos) == (pytest.approx(0.36), 1, "+1:1(0.36)")  # no 0,72
+    assert "evidencia_debil" in g.Motivos.split("|")  # un solo estudio sigue siendo evidencia débil
+    assert (h.W_neg, h.Votos) == (pytest.approx(0.70), "-1:2(0.70)")
+
+
+def test_articulo_que_se_contradice_entre_subprocesos(tmp_path):
+    """Si un artículo da signos distintos según el subproceso (XCL1, PMID 10887101), no vota: solo, el par va a
+    revisar por conflicto; con otro artículo, decide el otro."""
+    contradice = [caso("G", "GO:A", "1", "-1", proceso="GO:1"), caso("G", "GO:A", "1", "+1", proceso="GO:2"),
+                  caso("G", "GO:A", "1", "-1", proceso="GO:3")]
+    p, _, _ = puntuar(tmp_path, [par("G", "GO:A")], contradice)
+    assert (fila(p, "G").Signo_par, fila(p, "G").Estado_par, fila(p, "G").Motivos) == \
+        ("UNKNOWN", "revisar", "conflicto_entre_abstracts")
+    p, _, _ = puntuar(tmp_path, [par("G", "GO:A")], contradice + [caso("G", "GO:A", "2", "+1")])
+    f = fila(p, "G")
+    assert (f.Signo_par, f.Estado_par, f.W_pos, f.W_neg, f.n_PMIDs, f.Votos) == ("+1", "resuelto", 1.0, 0.0, 1, "+1:2(1.00)")
+
+
 def test_solo_unknown_no_entra_en_el_nps(tmp_path):
     pares = [par("G", "GO:A"), par("H", "GO:A")]
     casos = [caso("G", "GO:A", "1", "UNKNOWN", estado="no_concluyente", motivos="baja_confianza"),

@@ -55,7 +55,8 @@ from fase2_inferencia.esquema import ESTADO_PENDIENTE  # noqa: E402
 from fase2_inferencia.limpieza import normalizar_pmid as limpiar  # noqa: E402
 from fase2_inferencia.pipeline import ejecutar_fase2  # noqa: E402
 from fase3_scoring import config as f3_config  # noqa: E402
-from fase3_scoring.nps import COLUMNAS_FASE2, calcular, casos_con_peso, escribir, leer_fuentes_go  # noqa: E402
+from fase3_scoring.nps import (COLUMNAS_FASE2, calcular, casos_con_peso, escribir, leer_fuentes_go,  # noqa: E402
+                               un_voto_por_articulo)
 
 DIR_SALIDAS = CODIGO_DIR / "data" / "frontend"
 DIR_WEB = Path(__file__).resolve().parent / "dist"  # npm run build
@@ -232,9 +233,10 @@ def _texto(v) -> str:
 def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
     """Lo que la interfaz explica en lenguaje llano: un resumen de cada fase y, por gen, los artículos que leyó el
     LLM (título, signo, confianza y la frase citada) y las evidencias de GO cuando el signo sale de la anotación.
-    Cada artículo lleva sus votos: uno por subproceso de la ruta por el que se preguntó, con el peso que le da la
+    Cada artículo lleva sus respuestas: una por subproceso de la ruta por el que se preguntó, con el peso que le da la
     Fase 3 (confianza / 100, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes, y por
-    FACTOR_FUENTE_GO si el artículo lo cita la anotación de GO)."""
+    FACTOR_FUENTE_GO si el artículo lo cita la anotación de GO). El artículo vota una sola vez (Cuenta marca la
+    respuesta que vale), o ninguna si sus respuestas se contradicen (Se_contradice)."""
     f1 = pd.read_excel(excel_f1, sheet_name=["Con_abstract", "Triaje_polaridad"])
     con, triaje = f1["Con_abstract"], f1["Triaje_polaridad"]
     titulos = {limpiar(p): _texto(t) for p, t in zip(con["PMID"], con["Titulo"])}
@@ -242,6 +244,12 @@ def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
     votos = casos_con_peso(hojas["Por_ruta"][hojas["Por_ruta"]["GO_ID"] == go_id], hojas["Preguntas"],
                            leer_fuentes_go(excel_f1))
     f2 = votos.sort_values("Confianza_final", ascending=False).drop_duplicates(["Gen", "PMID"])  # un PMID por gen
+    # Un artículo vota una vez por gen (#41): la respuesta que cuenta y los artículos que se contradicen
+    cuentan, se_contradicen = set(), set()
+    for gen, g in votos.groupby("Gen"):
+        elegidos, contradictorios = un_voto_por_articulo(g)
+        cuentan |= set(elegidos.index)
+        se_contradicen |= {(gen, p) for p in contradictorios}
     # Lo que respondió el modelo aunque el código lo dejara en UNKNOWN: efecto, confianza y tipo de evidencia
     preguntas = hojas["Preguntas"].copy()
     preguntas["PMID"] = preguntas["PMID"].map(limpiar)
@@ -260,12 +268,13 @@ def detalle(excel_f1: Path, excel_f2: Path, pares: pd.DataFrame, go_id: str):
                               or pd.isna(respuesta[(gen, f["PMID"])]["Confianza_modelo"])
                               else int(respuesta[(gen, f["PMID"])]["Confianza_modelo"])),
             "Tipo_evidencia": _texto(respuesta[(gen, f["PMID"])]["Tipo_evidencia"]) if (gen, f["PMID"]) in respuesta else "",
-            "Votos": [{"Proceso": _texto(v["Proceso"]), "Signo": _texto(v["Signo_ruta"]),
+            "Se_contradice": (gen, f["PMID"]) in se_contradicen,
+            "Votos": [{"Proceso": _texto(v["Proceso"]), "Signo": _texto(v["Signo_ruta"]), "Cuenta": i in cuentan,
                        "Organismo": _texto(v["Organismo"]), "Tipo_celular": _texto(v["Tipo_celular"]),
                        "Confianza": None if pd.isna(v["Confianza_final"]) else int(v["Confianza_final"]),
                        "Peso": round(float(v["w"]), 2),
                        "Factor_GO": f3_config.FACTOR_FUENTE_GO if v["De_GO"] else None}
-                      for _, v in votos[(votos["Gen"] == gen) & (votos["PMID"] == f["PMID"])].iterrows()],
+                      for i, v in votos[(votos["Gen"] == gen) & (votos["PMID"] == f["PMID"])].iterrows()],
         } for _, f in filas.iterrows()]}
     for _, f in triaje[triaje["GO_ID"] == go_id].iterrows():
         g = genes.setdefault(f["Gen"], {"articulos": []})
@@ -366,8 +375,8 @@ class ManejadorPuente(BaseHTTPRequestHandler):
 
     def _claves(self, post: bool):
         if not self._origen_local():
-            if post:  # sin leer el cuerpo, Windows corta la conexión (RST) y el cliente no llega a ver el 403
-                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            if post:
+                self._descartar_cuerpo()
             self._responder_json(403, {"ok": False, "error": "Las claves solo se gestionan desde la interfaz local."})
             return
         if not post:
@@ -427,6 +436,11 @@ class ManejadorPuente(BaseHTTPRequestHandler):
         self.wfile.write(cuerpo)
         return True
 
+    def _descartar_cuerpo(self):
+        """Lee el cuerpo de una petición que se rechaza sin mirarlo: si queda sin leer, Windows corta la conexión
+        (RST) y el cliente no llega a ver la respuesta (el 403 o el 404)."""
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+
     def _leer_json(self) -> dict:
         return json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
 
@@ -463,6 +477,7 @@ class ManejadorPuente(BaseHTTPRequestHandler):
             self._criterio()
             return
         if self.path != "/ejecutar-ruta":
+            self._descartar_cuerpo()
             self.send_error(404)
             return
         try:
