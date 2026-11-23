@@ -194,7 +194,7 @@ Las cifras son de la ejecución de referencia del 2026-11-13: las de los pasos 1
 5. **Componente 14:** como el veredicto (neutro) no coincide con la `Polaridad_GO` (+1), la fila de `Por_ruta` sale con `Signo_ruta = UNKNOWN`, `Estado = revisar` y los motivos `baja_confianza`, `contexto_ajeno` y `discrepancia_polaridad_GO`. El caso pasa al experto con la cita y las dos fuentes, en vez de aceptar el `+1` que habría dado un modelo complaciente.
 
 ## Pendiente de decidir
-* **Fase 3:** los valores provisionales de la spec de scoring (pesos de contexto, factor ×1,5 de los artículos de GO, minoría de ⅓ y umbrales de lectura del NPS) y la revisión a mano de las 20 rutas `Sensible_al_peso`.
+* **Fase 3:** los valores provisionales de la spec de scoring (pesos de contexto, factor ×1,5 de los artículos de GO, minoría de ⅓ y umbrales de lectura del NPS) y la revisión a mano de las 20 rutas `Sensible_al_peso`, que hace CIMUS (#33).
 
 ## Decisiones de arquitectura
 | ADR | Decisión |

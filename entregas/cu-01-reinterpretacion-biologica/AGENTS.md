@@ -86,5 +86,5 @@ python empaquetado/construir.py          # Fase 4: programa de Windows e instala
 ## Estado y pendientes
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
-* los umbrales definitivos del scoring y la revisión de las rutas `Sensible_al_peso`;
+* los umbrales definitivos del scoring (#35) y la revisión a mano de las 20 rutas `Sensible_al_peso`, que hace CIMUS (#33, bloqueada a la espera de CIMUS, como el cronometraje de #38);
 * la prueba del programa de escritorio en otro ordenador (#50).
