@@ -6,4 +6,5 @@ ver su resultado explicado. Arranque, uso y ficheros: [`instrucciones_uso_fronte
 ```bash
 python fase4_frontend/api_puente.py   # desde codigo/
 npm install && npm run dev            # desde codigo/fase4_frontend/
+python empaquetado/construir.py       # desde codigo/: programa de Windows e instalador (ADR-006)
 ```

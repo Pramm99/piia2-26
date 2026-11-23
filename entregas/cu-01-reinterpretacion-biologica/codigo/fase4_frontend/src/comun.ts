@@ -41,3 +41,13 @@ export const formatoNPS = (v: number | null | undefined) =>
 
 export const colorLectura = (l: string) =>
   l === 'activada' ? 'var(--c-34d399)' : l === 'inhibida' ? 'var(--c-f87171)' : 'var(--c-fbbf24)';
+
+// Proveedores del LLM (⚙ → token-api) y por qué dejó de responder uno en la Fase 2 (Resumen.motivos del puente)
+export const NOMBRE_PROVEEDOR: Record<string, string> = { gemini: 'Gemini', groq: 'Groq' };
+
+export const MOTIVO_AGOTADO: Record<string, string> = {
+  cupo: 'sin cupo diario en todas sus claves',
+  clave: 'su clave no es válida',
+  sin_clave: 'no tiene ninguna clave',
+  fallo: 'no responde (servicio o red caídos)',
+};

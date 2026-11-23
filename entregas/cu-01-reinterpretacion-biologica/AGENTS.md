@@ -16,6 +16,7 @@ Todo el trabajo del equipo vive en esta carpeta (`entregas/cu-01-reinterpretacio
 | `codigo/fase2_inferencia/` | **Fase 2 · Inferencia.** Preguntas (gen, PMID, proceso núcleo) → dos LLM → validación → contraste → `codigo/data/fase2_resultados.xlsx`. Es un paquete: se ejecuta con `python -m fase2_inferencia` desde `codigo/`. Lee la Fase 1 a través del puente `_fase1.py`. |
 | `codigo/fase3_scoring/` | **Fase 3 · Scoring.** Fases 1 y 2 → signo de cada par (gen, ruta) → *Net Pathway Score* de cada ruta → `codigo/data/fase3_scoring.xlsx` ([spec](specs/scoring-net-pathway-score.md)). Sin red ni LLM. Es un paquete: `python -m fase3_scoring` desde `codigo/`; los umbrales están en `fase3_scoring/config.py`. |
 | `codigo/fase4_frontend/` | **Fase 4 · Frontend.** Interfaz web (React + Vite: `src/App.tsx`, `src/ExcelResultados.tsx`, `src/comun.ts`; colores en `src/index.css`) y `api_puente.py`, que ejecuta una ruta entera (Fases 1 → 2 → 3) y escribe en `codigo/data/frontend/<GO_ID>/`. No toca el código de las fases: redirige sus rutas de entrada y salida ([spec](specs/frontend-ejecucion-ruta.md); [instrucciones](codigo/fase4_frontend/instrucciones_uso_frontend.md)). |
+| `codigo/empaquetado/` | **Programa de escritorio e instalador** de la Fase 4 ([ADR-006](decisions/adr-006-programa-de-escritorio.md)): `lanzador.py` (puente + ventana de Edge), `instalador.py` (asistente que instala y desinstala), `barra_tareas.py`, `construir.py` e `iconos.py`. La salida (`empaquetado/salida/`) no se versiona y nunca lleva `codigo/.env`. |
 | `codigo/evaluacion/` | Benchmark: gold set, guía de etiquetado, `evaluar_gold.py`, `seleccionar_gold.py` y `buscar_neutros.py`. |
 | `codigo/tests/` | Pruebas `pytest`, todas sin red. |
 | `codigo/tools_cimus/` | Entrada original de CIMUS: rutas enriquecidas (únicos Excels versionados) y tabla de log2FC (`NK_cells_DESeq2_results.xlsx`, se reparte dentro del equipo y no se sube). |
@@ -39,9 +40,10 @@ python -m pytest              # pruebas (sin red ni claves)
 python evaluacion/evaluar_gold.py ...   # benchmark (ver specs/benchmark-gold-set.md)
 python fase4_frontend/api_puente.py     # Fase 4: puente con las fases (http://127.0.0.1:8000)
 cd fase4_frontend && npm install && npm run dev   # Fase 4: interfaz web (http://localhost:5173/)
+python empaquetado/construir.py          # Fase 4: programa de Windows e instalador (pip install pyinstaller)
 ```
 
-* **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta.
+* **Fase 2:** es reanudable. Cada respuesta se guarda en `codigo/data/respuestas_llm.jsonl` en cuanto llega. Si un modelo agota su cupo diario, sus preguntas quedan `pendiente` (nunca `UNKNOWN`); se relanza el mismo comando otro día y solo se pregunta lo que falta. Antes de rendirse por cupo, el cliente prueba las demás claves del mismo proveedor (varias por variable, separadas por comas; en la interfaz, ⚙ → token-api); cualquier otro fallo pasa directamente al respaldo.
 * **Modelos** (ADR-005): principal `gemini-3.5-flash-lite` y secundario `groq-gpt-oss-120b`. **gpt-oss es solo el respaldo de Gemini:** solo recibe una pregunta si Gemini no responde o su JSON no vale, y entonces decide él (`respaldo_secundario`). Si Gemini responde, la pregunta no va a gpt-oss, y una respuesta suya que esté en el registro no se usa. `--contraste` (envía todo a los dos y los contrasta) es solo para experimentos. Los nombres válidos son las claves de `fase2_inferencia/cliente.py:MODELOS`. `qwen3.8` está descartado: no se vuelve a usar.
 
 ## Reglas que no se negocian
@@ -72,7 +74,7 @@ cd fase4_frontend && npm install && npm run dev   # Fase 4: interfaz web (http:/
 ## Cómo trabajar en este repositorio
 * **Idioma:** el código, los comentarios, la documentación y los commits van en español. Solo el prompt al LLM va en inglés.
 * **Estilo:** imita el código que lo rodea: nombres en español, docstrings cortas que dicen el *porqué*, sin capas de abstracción innecesarias. Los parámetros ajustables van en `fase1_ingesta/config.py`, `fase2_inferencia/esquema.py` (los modelos y sus límites, en `cliente.py:MODELOS`) o `fase3_scoring/config.py`, no repartidos por el código.
-* **Pruebas:** todo cambio de comportamiento lleva su prueba en `codigo/tests/`, sin red: las APIs se simulan con `monkeypatch` y los modelos con `ClienteSimulado`. `python -m pytest` tiene que pasar antes de cualquier commit. En la Fase 4, además, `npx tsc -b` y `npx eslint src` desde `codigo/fase4_frontend/`.
+* **Pruebas:** todo cambio de comportamiento lleva su prueba en `codigo/tests/`, sin red: las APIs se simulan con `monkeypatch` y los modelos con `ClienteSimulado`. `python -m pytest` tiene que pasar antes de cualquier commit (también lanza las pruebas de la interfaz con node, `tests/test_interfaz.py`). En la Fase 4, además, `npx tsc -b`, `npx eslint src` y `npm test` desde `codigo/fase4_frontend/`; la lógica que se pueda probar sin navegador va fuera de React (`src/lectura.ts`, `src/acumulado.ts`).
 * **Specs:** los criterios de aceptación son verificables y llevan `[x] ✅` y la prueba que los cubre cuando se cumplen. Si cambias el comportamiento, actualiza la spec, el ADR y `ARCHITECTURE.md` en el mismo commit.
 * **Documentación:** describe solo el estado actual, sin versiones antiguas ni históricos. Las cifras de las Fases 1, 2 y 3 son las de la ejecución de referencia del 2026-11-13, indicando la fecha; las del *gold set* y el benchmark, de la Fase 1 del 2026-11-09.
 * **No toques una fase que no te han pedido:** un cambio en la Fase 1 altera el Excel del que dependen la Fase 2, el gold set y el benchmark.
@@ -84,7 +86,5 @@ cd fase4_frontend && npm install && npm run dev   # Fase 4: interfaz web (http:/
 ## Estado y pendientes
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
-* los umbrales definitivos del scoring y la revisión de las rutas `Sensible_al_peso`;
-* la estabilidad de la lectura de una ruta entre ejecuciones (#37). Ojo: el frontend reutiliza el registro del LLM, así que repetir una ruta desde la web no vuelve a preguntar nada; para medir la estabilidad hay que ejecutarla en limpio;
-* si un artículo debe contar una sola vez por gen en la Fase 3 (#41);
-* las pruebas automáticas de la Fase 4 (#40).
+* los umbrales definitivos del scoring (#35) y la revisión a mano de las 20 rutas `Sensible_al_peso`, que hace CIMUS (#33, bloqueada a la espera de CIMUS, como el cronometraje de #38);
+* la prueba del programa de escritorio en otro ordenador (#50).

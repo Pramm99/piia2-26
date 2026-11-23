@@ -15,6 +15,12 @@ ORGANISMOS_VALIDOS = ("human", "not_stated")
 TIPOS_CELULARES_VALIDOS = ("NK", "T", "other_immune", "not_stated")
 FACTOR_CONTEXTO = 0.5
 CONFIANZA_POR_DEFECTO = 50  # fila resuelta sin Confianza_final (marca peso_por_defecto)
+# El artículo que cita la anotación de GO del gen (Fuente GOA en la Fase 1) multiplica su peso: un curador ya lo
+# leyó y lo ligó al proceso. Sin él, un único artículo nunca llega a MIN_PESO_EVIDENCIA, porque la Fase 2 deja la
+# confianza en 90 como mucho (factor 0,9 sin segundo modelo). Con 1,5, un artículo humano con evidencia funcional
+# o directa y confianza alta deja de ser débil; uno en ratón, en tumor o solo de correlación lo sigue siendo. No
+# cambia el NPS: un par tiene solo artículos GOA o ninguno, así que el factor no altera qué signo gana.
+FACTOR_FUENTE_GO = 1.5
 
 # Signo del par: la clase ganadora vale si la minoría pesa menos de este tanto del total; si no, revisar.
 UMBRAL_MINORIA = 1 / 3

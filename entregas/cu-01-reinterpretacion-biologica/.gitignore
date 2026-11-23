@@ -13,3 +13,5 @@ llm_queue.jsonl
 .pytest_cache/
 .coverage
 htmlcov/
+# Programa de escritorio e instalador (python empaquetado/construir.py desde codigo/)
+codigo/empaquetado/salida/

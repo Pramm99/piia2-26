@@ -78,6 +78,30 @@ def test_evidencia_debil(tmp_path):
     assert f.Votos == "-1:1(0.40)"
 
 
+def test_un_articulo_vota_una_vez_por_par(tmp_path):
+    """#41: un artículo responde una vez por subproceso de la ruta, pero vota una sola vez, con su mayor peso."""
+    casos = [caso("G", "GO:A", "1", "+1", conf=36, proceso="GO:1"), caso("G", "GO:A", "1", "+1", conf=36, proceso="GO:2"),
+             caso("H", "GO:A", "2", "-1", conf=40, proceso="GO:1"), caso("H", "GO:A", "2", "-1", conf=70, proceso="GO:2")]
+    p, _, _ = puntuar(tmp_path, [par("G", "GO:A"), par("H", "GO:A")], casos)
+    g, h = fila(p, "G"), fila(p, "H")
+    assert (g.W_pos, g.n_PMIDs, g.Votos) == (pytest.approx(0.36), 1, "+1:1(0.36)")  # no 0,72
+    assert "evidencia_debil" in g.Motivos.split("|")  # un solo estudio sigue siendo evidencia débil
+    assert (h.W_neg, h.Votos) == (pytest.approx(0.70), "-1:2(0.70)")
+
+
+def test_articulo_que_se_contradice_entre_subprocesos(tmp_path):
+    """Si un artículo da signos distintos según el subproceso (XCL1, PMID 10887101), no vota: solo, el par va a
+    revisar por conflicto; con otro artículo, decide el otro."""
+    contradice = [caso("G", "GO:A", "1", "-1", proceso="GO:1"), caso("G", "GO:A", "1", "+1", proceso="GO:2"),
+                  caso("G", "GO:A", "1", "-1", proceso="GO:3")]
+    p, _, _ = puntuar(tmp_path, [par("G", "GO:A")], contradice)
+    assert (fila(p, "G").Signo_par, fila(p, "G").Estado_par, fila(p, "G").Motivos) == \
+        ("UNKNOWN", "revisar", "conflicto_entre_abstracts")
+    p, _, _ = puntuar(tmp_path, [par("G", "GO:A")], contradice + [caso("G", "GO:A", "2", "+1")])
+    f = fila(p, "G")
+    assert (f.Signo_par, f.Estado_par, f.W_pos, f.W_neg, f.n_PMIDs, f.Votos) == ("+1", "resuelto", 1.0, 0.0, 1, "+1:2(1.00)")
+
+
 def test_solo_unknown_no_entra_en_el_nps(tmp_path):
     pares = [par("G", "GO:A"), par("H", "GO:A")]
     casos = [caso("G", "GO:A", "1", "UNKNOWN", estado="no_concluyente", motivos="baja_confianza"),
@@ -210,6 +234,45 @@ def test_abstracts_de_los_pares_sin_signo(tmp_path):
     hoja = load_workbook(escribir(p, *calcular(f1, f2)[1:], ruta=tmp_path / "s.xlsx"))["Abstracts_sin_signo"]
     assert hoja.cell(row=2, column=6).hyperlink.target == "https://pubmed.ncbi.nlm.nih.gov/11/"
     assert res[res.Apartado == "Abstracts_sin_signo"].Valor.iloc[0] == "1 (1)"
+
+
+def test_articulo_de_go_pesa_mas(tmp_path):
+    """El artículo que cita la anotación de GO (Fuente GOA en la Fase 1) multiplica su peso por FACTOR_FUENTE_GO:
+    con un solo artículo humano de confianza 80 ya no es evidencia débil. Los de otra fuente no cambian, y el
+    signo y la contribución tampoco."""
+    pares = [par("G", "GO:A"), par("E", "GO:A")]
+    casos = [caso("G", "GO:A", "1", "+1", conf=80), caso("E", "GO:A", "2", "+1", conf=80)]
+    textos = [{"Gen": "G", "GO_ID": "GO:A", "PMID": "1", "Fuente": "GOA", "Titulo": "t", "Abstract": "a"},
+              {"Gen": "E", "GO_ID": "GO:A", "PMID": "2", "Fuente": "EuropePMC", "Titulo": "t", "Abstract": "a"}]
+    f1, f2 = entradas(tmp_path, pares, casos, con_abstract=textos)
+    p, *_ = calcular(f1, f2)
+    g, e = fila(p, "G"), fila(p, "E")
+    assert config.FACTOR_FUENTE_GO == 1.5
+    assert (g.W_pos, g.Motivos, g.Votos) == (1.2, "", "+1:1(1.20)")
+    assert (e.W_pos, e.Motivos) == (0.8, "evidencia_debil")
+    assert (g.Signo_par, g.Contribucion) == (e.Signo_par, e.Contribucion) == ("+1", 1.0)
+    assert peso(80, "mouse", "NK", de_go=True) == (pytest.approx(0.6), False)
+
+
+def test_criterio_experto(tmp_path):
+    """El signo que fija a mano una persona experta («Tu criterio» del frontend) sustituye al del par, que pasa a
+    resuelto con Origen Experto, y la ruta se recalcula con las reglas de siempre. Sin criterio, nada cambia."""
+    pares = [par("A", "GO:A"), par("B", "GO:A"), par("C", "GO:A", lista="Suprimida"),
+             par("S", "GO:A", destino="sin_evidencia")]
+    casos = [caso("A", "GO:A", "1", "+1"), caso("B", "GO:A", "2", "+1"), caso("C", "GO:A", "3", "-1")]
+    f1, f2 = entradas(tmp_path, pares, casos)
+    _, r, _, _ = calcular(f1, f2)
+    assert (r.iloc[0].Lectura, r.iloc[0].NPS) == ("activada", 1.0)
+    criterio = {("A", "GO:A"): "-1", ("B", "GO:A"): "-1", ("S", "GO:A"): "-1", ("NO_ESTA", "GO:A"): "+1"}
+    p, r, res, a = calcular(f1, f2, criterio=criterio)
+    s = fila(p, "S")
+    assert (s.Signo_par, s.Estado_par, s.Origen, s.Motivos, s.Contribucion) == ("-1", "resuelto", "Experto",
+                                                                                "criterio_experto", -1.0)
+    assert fila(p, "C").Origen == "LLM" and fila(p, "C").Contribucion == 1.0
+    ruta = r.iloc[0]
+    assert (ruta.Lectura, ruta.NPS, ruta.n_sin_evidencia) == ("inhibida", -0.5, 0)
+    assert (ruta.Genes_activan, ruta.Genes_inhiben) == ("C", "A; B; S")
+    assert len(p) == 4
 
 
 @pytest.mark.parametrize("hoja, columna", [("Por_ruta", None), ("Por_ruta", "Confianza_final")])

@@ -1,25 +1,29 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   UploadCloud,
   FileSpreadsheet,
   Search,
   Info,
-  Microscope,
   Circle,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Download,
   Play,
-  Loader2,
   Moon,
   Sun,
   X
 } from 'lucide-react';
-import { colorLectura, formatoNPS, loadXLSX, mensaje } from './comun';
+import { colorLectura, formatoNPS, loadXLSX, mensaje, MOTIVO_AGOTADO, NOMBRE_PROVEEDOR } from './comun';
 import ExcelResultados from './ExcelResultados';
+import { MenuAjustes, PanelTokens } from './TokenApi';
+import Progreso, { Girador } from './Progreso';
+import Logo from './Logo';
+import { aplicarCriterio, genesParaCambiar, MIN_COBERTURA, MIN_PARES_CON_SIGNO, recalcularRuta, UMBRAL_NPS, type Criterio } from './lectura';
 
-const API_URL = 'http://127.0.0.1:8000';
+// En desarrollo (npm run dev) el puente va aparte, en el 8000. Compilada (npm run build), la sirve el propio puente
+// o el programa de escritorio (codigo/empaquetado/), en el puerto que sea: misma dirección, ruta relativa.
+const API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000' : '';
 
 const descargarBase64Excel = (b64: string, filename: string) => {
   const byteCharacters = atob(b64);
@@ -92,17 +96,21 @@ interface Articulo {
   Efecto_LLM: string;
   Confianza_LLM: number | null;
   Tipo_evidencia: string;
+  Se_contradice: boolean; // sus respuestas se contradicen entre subprocesos: no vota (#41)
   Votos: Voto[];
 }
 
-// Un voto del artículo: uno por cada subproceso de la ruta por el que se preguntó al LLM
+// Una respuesta del artículo, una por cada subproceso de la ruta por el que se preguntó al LLM. El artículo vota una
+// sola vez por gen: con la respuesta de mayor peso (Cuenta), o ninguna si se contradicen (fase3_scoring/nps.py)
 interface Voto {
   Proceso: string;
   Signo: string;
+  Cuenta: boolean;
   Organismo: string;
   Tipo_celular: string;
   Confianza: number | null;
   Peso: number;
+  Factor_GO: number | null; // FACTOR_FUENTE_GO si el artículo lo cita la anotación de GO del gen
 }
 
 interface DetalleGen {
@@ -118,19 +126,24 @@ interface Resultado {
     fase1: { genes: number; inmunoglobulinas: number; signo_GO: number; genes_con_articulos: number; articulos: number; sin_articulos: number };
     fase2: { articulos_leidos: number; no_mencionan_gen: number; con_signo: number; sin_conclusion: number };
   };
-  llm: { llamadas: number; reutilizadas: number; pendientes: number; tokens: number };
+  // agotados: proveedor (gemini | groq) -> por qué dejó de responder en esta ejecución (cupo, clave, sin_clave, fallo)
+  llm: { llamadas: number; reutilizadas: number; pendientes: number; tokens: number; agotados?: Record<string, string> };
   tiempos: { fase1: number; fase2: number; fase3: number };
   carpeta: string;
   excel_b64: string;
   nombre_excel: string;
 }
 
+// La Fase 3 de la ruta recalculada por el puente con los signos de «Tu criterio» (POST /criterio)
+interface ResultadoCriterio {
+  rutas: PathwayResult[];
+  pares: GeneContribution[];
+  excel_b64: string;
+  nombre_excel: string;
+}
+
 const genes = (s: string) => s.split('/').map((g) => g.trim()).filter(Boolean);
 
-// Umbrales de lectura de la Fase 3 (fase3_scoring/config.py)
-const UMBRAL_NPS = 0.33;
-const MIN_PARES_CON_SIGNO = 3;
-const MIN_COBERTURA = 0.3;
 
 // Los códigos de las fases, dichos en lenguaje llano
 const SIGNO_TEXTO: Record<string, string> = {
@@ -164,7 +177,7 @@ const MOTIVO_TEXTO: Record<string, string> = {
   incoherencia_respuesta: 'La respuesta del LLM era incoherente.',
   json_invalido: 'La respuesta del LLM no se pudo leer.',
   LLM_y_revision: 'Gen con función doble conocida: se revisa siempre.',
-  criterio_experto: 'Cambiado a mano por una persona experta (solo en esta pantalla).',
+  criterio_experto: 'Cambiado a mano por una persona experta.',
 };
 
 // Lo que contestó el modelo antes de que el código decidiera (UMBRAL_VEREDICTO, fase2_inferencia/esquema.py)
@@ -182,8 +195,9 @@ const TIPO_EVIDENCIA_TEXTO: Record<string, string> = {
 const motivos = (m: string | null | undefined) =>
   (m || '').split('|').map((x) => x.trim()).filter(Boolean).map((x) => MOTIVO_TEXTO[x] || x);
 
-// Peso de cada voto en la Fase 3 (fase3_scoring/config.py): confianza / 100, por 0,5 si el estudio no es en humano
-// y otro 0,5 si no es en células inmunes. Un gen con menos de MIN_PESO_EVIDENCIA a su favor tiene evidencia débil.
+// Peso de cada voto en la Fase 3 (fase3_scoring/config.py): confianza / 100, por 0,5 si el estudio no es en humano,
+// otro 0,5 si no es en células inmunes y por FACTOR_FUENTE_GO (lo envía el puente) si el artículo lo cita la
+// anotación de GO. Un gen con menos de MIN_PESO_EVIDENCIA a su favor tiene evidencia débil.
 const MIN_PESO_EVIDENCIA = 1;
 const ORGANISMOS_VALIDOS = ['human', 'not_stated', ''];
 const TIPOS_CELULARES_VALIDOS = ['NK', 'T', 'other_immune', 'not_stated', ''];
@@ -194,6 +208,7 @@ const coma = (v: number) => v.toFixed(2).replace('.', ',');
 
 const calculoPeso = (v: Voto) => {
   const factores: string[] = [];
+  if (v.Factor_GO) factores.push(`${String(v.Factor_GO).replace('.', ',')} por citarlo la anotación de GO`);
   if (!ORGANISMOS_VALIDOS.includes(v.Organismo)) factores.push(`0,5 por ser en ${ORGANISMO_TEXTO[v.Organismo] || v.Organismo}`);
   if (!TIPOS_CELULARES_VALIDOS.includes(v.Tipo_celular)) factores.push(`0,5 por ser en ${CELULA_TEXTO[v.Tipo_celular] || v.Tipo_celular}`);
   const confianza = v.Confianza === null ? 'confianza por defecto 50 %' : `confianza ${v.Confianza} %`;
@@ -250,49 +265,9 @@ const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
   );
 };
 
-// Signo que puede fijar a mano una persona experta. Solo cambia lo que se ve en esta pantalla: no se guarda,
-// no pasa al Excel y una nueva ejecución vuelve al resultado automático.
-type Criterio = '+1' | '-1' | 'neutro';
-
-const aplicarCriterio = (pares: GeneContribution[], criterio: Record<string, Criterio>): GeneContribution[] =>
-  pares.map((g) => {
-    const s = criterio[g.Gen];
-    if (!s) return g;
-    const direccion = g.Direccion === 'up' ? 1 : -1;
-    return {
-      ...g, Signo_par: s, Estado_par: 'resuelto', Origen: 'Experto', Motivos: 'criterio_experto',
-      Contribucion: s === 'neutro' ? 0 : (s === '+1' ? 1 : -1) * direccion,
-    };
-  });
-
-// La misma cuenta que fase3_scoring/nps.py (tabla_rutas y _lectura), para la ruta con los cambios aplicados
-const recalcularRuta = (r: PathwayResult, pares: GeneContribution[]): PathwayResult => {
-  const resueltos = pares.filter((g) => g.Estado_par === 'resuelto');
-  const conSigno = resueltos.filter((g) => g.Signo_par === '+1' || g.Signo_par === '-1');
-  const neutros = resueltos.filter((g) => g.Signo_par === 'neutro');
-  const cobertura = pares.length ? (conSigno.length + neutros.length) / pares.length : 0;
-  const lectura = (v: number | null) => {
-    if (v === null || conSigno.length < MIN_PARES_CON_SIGNO || cobertura < MIN_COBERTURA) return 'insuficiente';
-    return v >= UMBRAL_NPS ? 'activada' : v <= -UMBRAL_NPS ? 'inhibida' : 'mixta';
-  };
-  const peso = (g: GeneContribution) => (g.Log2FC === null || g.Log2FC === undefined ? 1 : Math.abs(Number(g.Log2FC)));
-  const suma = (f: (g: GeneContribution) => number) => conSigno.reduce((a, g) => a + f(g), 0);
-  const nps = conSigno.length ? suma((g) => Number(g.Contribucion)) / conSigno.length : null;
-  const conLog2fc = Boolean(r.Lectura_log2FC);
-  const npsFc = conLog2fc && conSigno.length ? suma((g) => Number(g.Contribucion) * peso(g)) / suma(peso) : null;
-  const redondear = (v: number | null) => (v === null ? null : Math.round(v * 1000) / 1000);
-  const lec = lectura(nps);
-  const lecFc = conLog2fc ? lectura(npsFc) : '';
-  return {
-    ...r,
-    NPS: redondear(nps), Lectura: lec, NPS_log2FC: redondear(npsFc), Lectura_log2FC: lecFc,
-    Sensible_al_peso: conLog2fc ? (lec !== lecFc ? 'sí' : 'no') : '',
-    n_activan: pares.filter((g) => Number(g.Contribucion) > 0).length,
-    n_inhiben: pares.filter((g) => Number(g.Contribucion) < 0).length,
-    n_pendiente: pares.filter((g) => g.Estado_par === 'pendiente').length,
-    Cobertura: Math.round(cobertura * 1000) / 1000,
-  };
-};
+// «Tu criterio»: la pantalla se recalcula aquí al momento (lectura.ts, la misma cuenta que fase3_scoring/nps.py); los
+// dos Excels (el de la Fase 3 y el de resultados) los recalcula el puente con fase3_scoring. Una nueva ejecución vuelve
+// al automático.
 
 const efectoTexto = (c: number) => (c > 0 ? 'Empuja hacia activada' : c < 0 ? 'Empuja hacia inhibida' : 'No cuenta');
 
@@ -317,14 +292,6 @@ const tituloTarjeta: React.CSSProperties = { fontSize: '13px', fontWeight: 'bold
 const lineaTarjeta: React.CSSProperties = { fontSize: '13px', color: 'var(--c-cbd5e1)', lineHeight: 1.5 };
 const notaTarjeta: React.CSSProperties = { ...lineaTarjeta, color: 'var(--c-64748b)' };
 
-// Cuántos genes a favor tendrían que dejar de contar para que la ruta perdiera su lectura (activada o inhibida)
-const genesParaCambiar = (aFavor: number, enContra: number) => {
-  for (let k = 1; k <= aFavor; k++) {
-    const total = aFavor - k + enContra;
-    if (total < MIN_PARES_CON_SIGNO || (aFavor - k - enContra) / total < UMBRAL_NPS) return k;
-  }
-  return aFavor;
-};
 
 const TITULO_LECTURA: Record<string, string> = {
   activada: 'La ruta está ACTIVADA',
@@ -431,6 +398,23 @@ const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribut
   );
 };
 
+// Aviso del LLM al terminar una ruta. Sin ninguna clave con cupo (Gemini y Groq agotados), el aviso del límite diario.
+const avisoLLM = (llm: Resultado['llm']): { texto: string; grave: boolean } | null => {
+  const agotados = llm.agotados || {};
+  const detalle = Object.entries(agotados)
+    .map(([p, m]) => `${NOMBRE_PROVEEDOR[p] || p}: ${MOTIVO_AGOTADO[m] || m}`)
+    .join('; ');
+  if (!llm.pendientes) return detalle ? { texto: ` (${detalle}; respondió el respaldo).`, grave: false } : null;
+  const motivos = ['gemini', 'groq'].map((p) => agotados[p]);
+  if (motivos.every((m) => m === 'sin_clave')) {
+    return { texto: ` ⚠️ No hay ninguna clave del LLM: ${llm.pendientes} preguntas quedaron pendientes. Añade tus claves en ⚙ → token-api y vuelve a ejecutar la ruta.`, grave: true };
+  }
+  if (motivos.every((m) => m === 'cupo' || m === 'sin_clave')) {
+    return { texto: ` ⚠️ Se ha acabado tu límite diario de llamadas al LLM: ${llm.pendientes} preguntas quedaron pendientes. Añade el token de otra cuenta en ⚙ → token-api o espera al día siguiente, y vuelve a ejecutar la ruta.`, grave: true };
+  }
+  return { texto: ` ⚠️ ${llm.pendientes} preguntas quedaron pendientes${detalle ? ` (${detalle})` : ''}: revisa las claves en ⚙ → token-api o vuelve a ejecutar la ruta más tarde.`, grave: true };
+};
+
 export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
   const [tema, setTema] = useState<'oscuro' | 'claro'>(() => {
@@ -460,10 +444,20 @@ export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [segundos, setSegundos] = useState<number>(0);
-  const [feedback, setFeedback] = useState<{ type: 'info' | 'ok' | 'err'; msg: string } | null>(null);
+  const [inicioFase, setInicioFase] = useState<number>(0); // ms en que el puente informó de la fase en curso
+  const faseActual = useRef<number>(0);
+  const [inicioRuta, setInicioRuta] = useState<number>(0); // ms del arranque, para el contador de Progreso
+  // tokens: el aviso lleva un botón que abre ⚙ → token-api
+  const [feedback, setFeedback] = useState<{ type: 'info' | 'ok' | 'err'; msg: string; tokens?: boolean } | null>(null);
+  const [panelTokens, setPanelTokens] = useState(false);
+  const cerrarTokens = useCallback(() => setPanelTokens(false), []);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
   const [criterio, setCriterio] = useState<Record<string, Criterio>>({});
+  const [conCriterio, setConCriterio] = useState<ResultadoCriterio | null>(null);
+  const [calculandoCriterio, setCalculandoCriterio] = useState(false);
+  const [errorCriterio, setErrorCriterio] = useState<string | null>(null);
+  const peticionCriterio = useRef(0);
   const inicioRef = useRef<number>(0);
 
   useEffect(() => {
@@ -488,6 +482,10 @@ export default function App() {
       try {
         const d = await (await fetch(`${API_URL}/estado`)).json();
         if (d.estado === 'ejecutando') {
+          if (d.fase !== faseActual.current) {
+            faseActual.current = d.fase;
+            setInicioFase(Date.now());
+          }
           setCurrentStep(d.fase);
         } else if (d.estado === 'terminado') {
           const r: Resultado = d.resultado;
@@ -496,10 +494,12 @@ export default function App() {
           setCriterio({});
           setCurrentStep(4);
           setIsRunning(false);
-          const pend = r.llm.pendientes
-            ? ` ⚠️ ${r.llm.pendientes} preguntas quedaron pendientes (cupo del LLM agotado): vuelve a ejecutar la ruta más tarde.`
-            : '';
-          setFeedback({ type: 'ok', msg: `${d.GO_ID} ejecutada en ${r.tiempos.fase1 + r.tiempos.fase2 + r.tiempos.fase3} s.${pend}` });
+          const aviso = avisoLLM(r.llm);
+          setFeedback({
+            type: aviso?.grave ? 'err' : 'ok',
+            msg: `${d.GO_ID} ejecutada en ${r.tiempos.fase1 + r.tiempos.fase2 + r.tiempos.fase3} s.${aviso?.texto || ''}`,
+            tokens: aviso?.grave,
+          });
         } else if (d.estado === 'error') {
           setIsRunning(false);
           setCurrentStep(0);
@@ -550,6 +550,34 @@ export default function App() {
     [rutaRes, paresVista, criterio]
   );
   const automatico = useMemo(() => Object.fromEntries(paresRes.map((g) => [g.Gen, g])), [paresRes]);
+
+  // Con cambios en «Tu criterio», el puente recalcula la Fase 3 de la ruta (sin llamar al LLM): de ahí salen el Excel
+  // de la Fase 3 que se descarga y la fila del Excel de resultados. Solo vale la respuesta a la última petición.
+  useEffect(() => {
+    const id = ++peticionCriterio.current;
+    const sinCambios = !rutaRes || Object.keys(criterio).length === 0;
+    (async () => {
+      setConCriterio(null);
+      setErrorCriterio(null);
+      setCalculandoCriterio(!sinCambios);
+      if (sinCambios) return;
+      try {
+        const res = await fetch(`${API_URL}/criterio`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ GO_ID: rutaRes.GO_ID, criterio }),
+        });
+        const d = await res.json();
+        if (!res.ok || !d.ok) throw new Error(d.error || 'El puente no pudo recalcular la ruta');
+        if (id === peticionCriterio.current) setConCriterio(d);
+      } catch (err) {
+        if (id === peticionCriterio.current) setErrorCriterio(mensaje(err));
+      } finally {
+        if (id === peticionCriterio.current) setCalculandoCriterio(false);
+      }
+    })();
+  }, [rutaRes, criterio]);
+  const paraExcel = cambios.length ? conCriterio : resultado;
 
   const NOMBRE_LISTA = { up: 'rutas sobreexpresadas (upregulated)', down: 'rutas infraexpresadas (downregulated)' };
 
@@ -603,6 +631,9 @@ export default function App() {
       const d = await res.json();
       if (!res.ok || !d.ok) throw new Error(d.error || 'No se pudo lanzar la ejecución');
       inicioRef.current = Date.now();
+      faseActual.current = 1;
+      setInicioFase(inicioRef.current);
+      setInicioRuta(inicioRef.current);
       setSegundos(0);
       setResultado(null);
       setCriterio({});
@@ -672,9 +703,7 @@ export default function App() {
       {/* HEADER */}
       <header style={{ borderBottom: '1px solid var(--c-1e293b)', backgroundColor: 'var(--c-0f172a)', padding: '14px 24px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'var(--c-14b8a6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-020617)' }}>
-            <Microscope size={22} />
-          </div>
+          <Logo size={40} />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '16px', fontWeight: 'bold' }}>CU-01 PathScore Studio</span>
@@ -697,15 +726,20 @@ export default function App() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setTema(tema === 'oscuro' ? 'claro' : 'oscuro')}
-          title={tema === 'oscuro' ? 'Cambiar a fondo blanco' : 'Cambiar a fondo oscuro'}
-          style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-        >
-          {tema === 'oscuro' ? <Sun size={15} /> : <Moon size={15} />}
-          <span>{tema === 'oscuro' ? 'Fondo blanco' : 'Fondo oscuro'}</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          <button
+            onClick={() => setTema(tema === 'oscuro' ? 'claro' : 'oscuro')}
+            title={tema === 'oscuro' ? 'Cambiar a fondo blanco' : 'Cambiar a fondo oscuro'}
+            style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            {tema === 'oscuro' ? <Sun size={15} /> : <Moon size={15} />}
+            <span>{tema === 'oscuro' ? 'Fondo blanco' : 'Fondo oscuro'}</span>
+          </button>
+          <MenuAjustes onTokenApi={() => setPanelTokens(true)} />
+        </div>
       </header>
+
+      {panelTokens && <PanelTokens api={API_URL} onCerrar={cerrarTokens} />}
 
       {/* FEEDBACK */}
       {feedback && (
@@ -722,6 +756,11 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Info size={15} />
             <span>{feedback.msg}</span>
+            {feedback.tokens && (
+              <button onClick={() => setPanelTokens(true)} style={{ padding: '3px 10px', borderRadius: '7px', border: '1px solid currentColor', background: 'none', color: 'inherit', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                Añadir token
+              </button>
+            )}
           </div>
           <button onClick={() => setFeedback(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '11px' }}>Cerrar</button>
         </div>
@@ -760,7 +799,7 @@ export default function App() {
                   gap: '8px',
                 }}
               >
-                {isRunning ? <Loader2 size={16} /> : <Play size={16} />}
+                {isRunning ? <Girador size={16} color="var(--c-020617)" /> : <Play size={16} />}
                 <span>{isRunning ? `Ejecutando... (${segundos} s)` : rutaSel ? `Ejecutar ${rutaSel.GO_ID}` : 'Elige una ruta'}</span>
               </button>
             </div>
@@ -772,15 +811,24 @@ export default function App() {
             {huecoExcel('down')}
           </div>
 
-          {/* BARRA DE PROGRESO (fase real que informa el puente) */}
+          {/* PROGRESO: rueda, barra con el porcentaje (estimado dentro de cada fase) y contador de tiempo; debajo, las tres fases */}
           {(isRunning || currentStep > 0) && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px', backgroundColor: 'var(--c-020617)', padding: '12px', borderRadius: '10px', border: '1px solid var(--c-1e293b)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px', backgroundColor: 'var(--c-020617)', padding: '14px', borderRadius: '10px', border: '1px solid var(--c-1e293b)' }}>
+            <Progreso
+              fase={currentStep}
+              corriendo={isRunning}
+              inicio={inicioRuta}
+              inicioFase={inicioFase}
+              nombreFase={PASOS.find((s) => s.step === currentStep)?.title.split('· ')[1] || ''}
+              totalFinal={resultado ? resultado.tiempos.fase1 + resultado.tiempos.fase2 + resultado.tiempos.fase3 : null}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
               {PASOS.map((s) => {
                 const done = currentStep > s.step;
                 const active = currentStep === s.step;
                 return (
                   <div key={s.step} style={{ display: 'flex', alignItems: 'center', gap: '10px', opacity: currentStep >= s.step ? 1 : 0.4 }}>
-                    {done ? <CheckCircle2 size={18} color="var(--c-34d399)" /> : active ? <Loader2 size={18} color="var(--c-2dd4bf)" /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid var(--c-475569)' }} />}
+                    {done ? <CheckCircle2 size={18} color="var(--c-34d399)" /> : active ? <Girador size={18} /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid var(--c-475569)', flexShrink: 0 }} />}
                     <div>
                       <div style={{ fontSize: '12px', fontWeight: 'bold', color: done ? 'var(--c-6ee7b7)' : active ? 'var(--c-2dd4bf)' : 'var(--c-cbd5e1)' }}>
                         {s.title}
@@ -791,6 +839,7 @@ export default function App() {
                   </div>
                 );
               })}
+            </div>
             </div>
           )}
 
@@ -854,7 +903,7 @@ export default function App() {
         </section>
 
         {/* EXCEL DE RESULTADOS: ACUMULA LAS RUTAS EJECUTADAS */}
-        <ExcelResultados resultado={resultado} />
+        <ExcelResultados resultado={paraExcel} />
 
         {/* RESULTADO DE LA RUTA: UNA TARJETA POR FASE Y EL DESGLOSE POR GEN */}
         <section style={{ backgroundColor: 'var(--c-0f172a)', border: '1px solid var(--c-1e293b)', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -870,11 +919,18 @@ export default function App() {
                   <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold' }}>Resultado · {rutaRes.Ruta_Nombre}</h3>
                 </div>
                 <button
-                  onClick={() => descargarBase64Excel(resultado.excel_b64, resultado.nombre_excel)}
-                  style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--c-14b8a6)', color: 'var(--c-020617)', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  onClick={() => {
+                    const excel = cambios.length && conCriterio ? conCriterio : resultado;
+                    descargarBase64Excel(excel.excel_b64, excel.nombre_excel);
+                  }}
+                  disabled={calculandoCriterio}
+                  style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px', border: 'none', backgroundColor: 'var(--c-14b8a6)', color: 'var(--c-020617)', fontWeight: 'bold', cursor: calculandoCriterio ? 'wait' : 'pointer', opacity: calculandoCriterio ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: '5px' }}
                 >
                   <Download size={13} />
-                  <span>Descargar Excel de la Fase 3{cambios.length > 0 && ' (automático, sin tus cambios)'}</span>
+                  <span>
+                    Descargar Excel de la Fase 3
+                    {cambios.length > 0 && (calculandoCriterio ? ' (recalculando con tus cambios…)' : conCriterio ? ' (con tus cambios)' : ' (automático, sin tus cambios)')}
+                  </span>
                 </button>
               </div>
 
@@ -884,7 +940,11 @@ export default function App() {
                     ✎ Has cambiado a mano {cambios.length === 1 ? '1 gen' : `${cambios.length} genes`} ({cambios.join(', ')}). Resultado automático:{' '}
                     <strong style={{ color: colorLectura(rutaRes.Lectura) }}>{rutaRes.Lectura} (NPS {formatoNPS(rutaRes.NPS)})</strong>; con tus cambios:{' '}
                     <strong style={{ color: colorLectura((rutaVista || rutaRes).Lectura) }}>{(rutaVista || rutaRes).Lectura} (NPS {formatoNPS((rutaVista || rutaRes).NPS)})</strong>.
-                    Solo vale para esta pantalla: no se guarda ni pasa al Excel, y una nueva ejecución vuelve al resultado automático.
+                    {errorCriterio ? (
+                      <span style={{ color: 'var(--c-fda4af)' }}> No se pudieron pasar a los Excels: {errorCriterio}.</span>
+                    ) : (
+                      ' Pasan al Excel de la Fase 3 y al de resultados, que guardan también el resultado automático. Una nueva ejecución vuelve al resultado automático.'
+                    )}
                   </span>
                   <button onClick={() => setCriterio({})} style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', cursor: 'pointer' }}>
                     Deshacer mis cambios
@@ -954,9 +1014,9 @@ export default function App() {
 
               <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)' }}>
                 Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
-                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
+                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes, y por 1,5 si es el artículo que cita la anotación de Gene Ontology del gen; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
                 Pulsa un gen para ver sus artículos y el cálculo. En la última columna, <strong>Tu criterio</strong>, una persona experta puede
-                decir que un gen activa, inhibe o no cambia el proceso: el resultado se recalcula al momento, pero el cambio no se guarda.
+                decir que un gen activa, inhibe o no cambia el proceso: el resultado se recalcula al momento y el cambio pasa a los Excels.
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -1011,7 +1071,7 @@ export default function App() {
                                     return nuevo;
                                   });
                                 }}
-                                title="Cambia el signo del gen solo en esta pantalla"
+                                title="Cambia el signo del gen: se recalcula la ruta y pasa a los Excels"
                                 style={{ padding: '4px 6px', fontSize: '12px', borderRadius: '6px', backgroundColor: 'var(--c-020617)', color: 'var(--c-f8fafc)', border: `1px solid ${criterio[g.Gen] ? 'var(--c-fbbf24)' : 'var(--c-334155)'}`, cursor: 'pointer' }}
                               >
                                 <option value="">Automático</option>
@@ -1057,12 +1117,17 @@ export default function App() {
                                     )}
                                     {a.Votos.length > 0 && (
                                       <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)', marginTop: '4px' }}>
-                                        {a.Votos.length > 1 ? `Cuenta ${a.Votos.length} veces, una por cada subproceso de la ruta por el que se preguntó:` : 'Cuenta una vez:'}
+                                        {a.Se_contradice
+                                          ? `Se le preguntó por ${a.Votos.length} subprocesos de la ruta y sus respuestas se contradicen, así que no inclina el gen hacia ningún lado:`
+                                          : a.Votos.length > 1
+                                            ? `Se le preguntó por ${a.Votos.length} subprocesos de la ruta${a.Votos.some((v) => v.Cuenta) ? ', pero el artículo cuenta una sola vez, con su respuesta de más peso' : ''}:`
+                                            : 'Cuenta una vez:'}
                                         <ul style={{ margin: '2px 0 0 0', paddingLeft: '18px' }}>
                                           {a.Votos.map((v, i) => (
                                             <li key={i}>
                                               {v.Proceso}: <strong style={{ color: v.Signo === '+1' ? 'var(--c-2dd4bf)' : v.Signo === '-1' ? 'var(--c-fb7185)' : 'var(--c-fbbf24)' }}>{(SIGNO_TEXTO[v.Signo] || v.Signo).toLowerCase()}</strong>
                                               {['+1', '-1', 'neutro'].includes(v.Signo) && <>, peso {calculoPeso(v)}</>}
+                                              {v.Cuenta && a.Votos.length > 1 && <strong style={{ color: 'var(--c-e2e8f0)' }}> ← es la que cuenta</strong>}
                                             </li>
                                           ))}
                                         </ul>

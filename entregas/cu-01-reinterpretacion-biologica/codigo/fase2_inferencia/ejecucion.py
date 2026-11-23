@@ -5,7 +5,8 @@ Para cada pregunta y cada modelo: si la clave ya está en el registro, se vuelve
 llama, se valida (respuesta.py) y se añade al registro en ese momento. Si un modelo no responde tras los
 reintentos (ErrorTransitorio), sus preguntas quedan PENDIENTES y ese modelo deja de llamarse en esta ejecución:
 casi siempre es el límite diario del plan gratuito, y seguir solo gastaría reintentos. La siguiente ejecución
-retoma justo lo pendiente.
+retoma justo lo pendiente. Antes de rendirse por cupo, el cliente ya ha probado todas las claves de su proveedor
+(cliente.py); el resumen guarda por qué se detuvo cada modelo (Resumen.motivos).
 
 Las preguntas que le faltan a algún modelo se agrupan por gen y se trocean con el presupuesto
 por llamada más pequeño de los modelos (prompt.trocear_por_gen), para que todos reciban la misma agrupación.
@@ -44,6 +45,7 @@ class Resumen:
     reutilizadas: int = 0
     pendientes: int = 0
     agotados: List[str] = field(default_factory=list)
+    motivos: Dict[str, str] = field(default_factory=dict)  # modelo agotado -> cupo | clave | sin_clave | fallo
     cortadas: int = 0                 # llamadas con la salida cortada (finish_reason "length")
     tokens: Dict[str, Dict[str, int]] = field(default_factory=dict)  # modelo -> entrada/salida/cache/razonamiento
 
@@ -114,6 +116,7 @@ def _ejecutar_por_gen(preguntas: Sequence[PromptLLM], clientes: Sequence, regist
             except ErrorTransitorio as e:
                 print(f"⏸️ {e}. Las preguntas que faltan de {nombre} quedan pendientes para la próxima ejecución.")
                 agotados.add(nombre)
+                resumen.motivos[nombre] = getattr(e, "motivo", "fallo")
         if cada and i % cada == 0:
             print(f"   {i}/{len(grupos)} grupos | llamadas {resumen.llamadas} | reutilizadas {resumen.reutilizadas}")
 

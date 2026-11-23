@@ -1,18 +1,14 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
 import { ChevronDown, ChevronRight, Download, Eraser, FilePlus2, FileSpreadsheet, FolderOpen, Trash2, X } from 'lucide-react';
 import { colorLectura, formatoNPS, loadXLSX, mensaje, type Fila, type Libro } from './comun';
+import { añadirResultado, COLUMNAS_GENES, COLUMNAS_RUTAS, HOJA_GENES, HOJA_RUTAS, quitarRuta, vaciar, type ResultadoParaExcel } from './acumulado';
+
+export type { ResultadoParaExcel } from './acumulado';
 
 // Excel de resultados: va acumulando una fila por ruta ejecutada (hoja Rutas) y sus genes (hoja Genes).
 // Se puede empezar con uno vacío o con uno que ya tenga rutas; si la ruta ya estaba, su fila se sustituye.
+// Con cambios en «Tu criterio», la fila lleva el resultado con los cambios y, al lado, el automático.
 // Con Chrome o Edge se guarda directamente en el fichero elegido; en otros navegadores, con «Descargar».
-
-const HOJA_RUTAS = 'Rutas';
-const HOJA_GENES = 'Genes';
-const COLUMNAS_RUTAS = ['Fecha', 'GO_ID', 'Ruta_Nombre', 'Listas', 'Lectura', 'NPS', 'NPS_log2FC', 'Lectura_log2FC',
-  'Sensible_al_peso', 'n_total', 'n_activan', 'n_inhiben', 'n_neutros', 'n_no_concluyente', 'n_sin_evidencia',
-  'n_pendiente', 'Cobertura', 'Genes_activan', 'Genes_inhiben'];
-const COLUMNAS_GENES = ['GO_ID', 'Ruta_Nombre', 'Gen', 'Direccion', 'Log2FC', 'Signo_par', 'Estado_par', 'Origen',
-  'Contribucion', 'Motivos', 'Votos', 'PMIDs_consultados'];
 
 // API de acceso a ficheros de Chrome/Edge: permite volver a escribir en el mismo fichero
 interface Escritura {
@@ -28,12 +24,17 @@ interface Manejador {
 interface OpcionesSelector {
   types?: { description: string; accept: Record<string, string[]> }[];
   suggestedName?: string;
+  id?: string;
+  startIn?: 'downloads' | 'desktop' | 'documents';
 }
 type VentanaFicheros = Window & {
   showOpenFilePicker?: (opts?: OpcionesSelector) => Promise<Manejador[]>;
   showSaveFilePicker?: (opts?: OpcionesSelector) => Promise<Manejador>;
 };
 const TIPOS = [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }];
+// Los diálogos empiezan en Descargas, no en Documentos (que puede estar dentro de OneDrive); con el mismo id, la
+// siguiente vez abren donde se guardó la última.
+const DONDE = { id: 'excel-resultados', startIn: 'downloads' } as const;
 
 interface Acumulado {
   nombre: string;
@@ -46,29 +47,7 @@ interface Acumulado {
   ultima?: string;
 }
 
-export interface ResultadoParaExcel {
-  rutas: unknown[];
-  pares: unknown[];
-}
-
-const limpio = (v: unknown) => (v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? '' : v);
-const columnas = (f: Fila, cols: string[]) => Object.fromEntries(cols.map((c) => [c, limpio(f[c])]));
 const numero = (v: unknown) => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
-
-const añadirResultado = (acc: Acumulado, res: ResultadoParaExcel): Acumulado => {
-  const ruta = res.rutas[0] as Fila;
-  const go = String(ruta.GO_ID);
-  const fila = columnas({ ...ruta, Fecha: new Date().toLocaleString('es-ES') }, COLUMNAS_RUTAS);
-  const genes = (res.pares as Fila[]).filter((p) => p.GO_ID === go).map((p) => columnas(p, COLUMNAS_GENES));
-  return {
-    ...acc,
-    rutas: [...acc.rutas.filter((r) => String(r.GO_ID) !== go), fila],
-    genes: [...acc.genes.filter((g) => String(g.GO_ID) !== go), ...genes],
-    sinGuardar: true,
-    version: acc.version + 1,
-    ultima: go,
-  };
-};
 
 const leer = async (datos: ArrayBuffer, nombre: string) => {
   const XLSX = await loadXLSX();
@@ -150,7 +129,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
       return;
     }
     try {
-      const [manejador] = await ventana.showOpenFilePicker({ types: TIPOS });
+      const [manejador] = await ventana.showOpenFilePicker({ ...DONDE, types: TIPOS });
       if (manejador.requestPermission) await manejador.requestPermission({ mode: 'readwrite' });
       const fichero = await manejador.getFile();
       const { libro, rutas, genes } = await leer(await fichero.arrayBuffer(), fichero.name);
@@ -180,7 +159,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
       const XLSX = await loadXLSX();
       const libro = XLSX.utils.book_new();
       if (ventana.showSaveFilePicker) {
-        const manejador = await ventana.showSaveFilePicker({ suggestedName: 'resultados_rutas.xlsx', types: TIPOS });
+        const manejador = await ventana.showSaveFilePicker({ ...DONDE, suggestedName: 'resultados_rutas.xlsx', types: TIPOS });
         empezar({ nombre: manejador.name, libro, rutas: [], genes: [], manejador }, true);
       } else {
         empezar({ nombre: 'resultados_rutas.xlsx', libro, rutas: [], genes: [], manejador: null }, true);
@@ -203,9 +182,8 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
     if (!acc.manejador) setAcc({ ...acc, sinGuardar: false });
   };
 
-  const cambiar = (rutas: Fila[], genes: Fila[], texto: string) => {
-    if (!acc) return;
-    setAcc({ ...acc, rutas, genes, sinGuardar: true, version: acc.version + 1, ultima: undefined });
+  const cambiar = (nuevo: Acumulado, texto: string) => {
+    setAcc(nuevo);
     setNota({ tipo: 'ok', texto });
   };
 
@@ -228,7 +206,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
           </h2>
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--c-94a3b8)', maxWidth: '900px' }}>
             Pon un Excel vacío o uno con rutas ya buscadas: cada ruta que ejecutes se añade sola (si ya estaba, se actualiza).
-            Se guarda el resultado automático, sin los cambios de «Tu criterio».
+            Si cambias genes en «Tu criterio», la ruta se guarda con tus cambios y, al lado, el resultado automático.
             {puedeEscribir ? ' Los cambios se escriben directamente en el fichero.' : ' En este navegador no se puede escribir en el fichero: usa «Descargar» para guardar los cambios.'}
           </p>
         </div>
@@ -253,7 +231,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
                   <button
                     onClick={() => {
                       setConfirmarLimpiar(false);
-                      cambiar([], [], `${acc.nombre} se ha vaciado: las próximas rutas empiezan un Excel limpio.`);
+                      cambiar(vaciar(acc), `${acc.nombre} se ha vaciado: las próximas rutas empiezan un Excel limpio.`);
                     }}
                     style={{ ...boton, borderColor: 'var(--c-fda4af)', color: 'var(--c-fda4af)' }}
                   >
@@ -341,11 +319,7 @@ export default function ExcelResultados({ resultado }: { resultado: ResultadoPar
                         abierta={abiertaFila}
                         genes={genesRuta}
                         onAbrir={() => setAbierta(abiertaFila ? null : go)}
-                        onQuitar={() => cambiar(
-                          acc.rutas.filter((x) => String(x.GO_ID) !== go),
-                          acc.genes.filter((x) => String(x.GO_ID) !== go),
-                          `${go} quitada del Excel.`,
-                        )}
+                        onQuitar={() => cambiar(quitarRuta(acc, go), `${go} quitada del Excel.`)}
                       />
                     );
                   })}
@@ -379,6 +353,11 @@ function FilaRuta({ go, r, lectura, nps, nueva, abierta, genes, onAbrir, onQuita
         <td style={{ padding: '7px 10px' }}>{String(r.Ruta_Nombre || '')}</td>
         <td style={{ padding: '7px 10px' }}>
           <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '11px', color, border: `1px solid ${color}`, borderRadius: '4px', padding: '1px 6px' }}>{lectura || '—'}</span>
+          {r.Cambios_experto ? (
+            <span title={`Cambios a mano: ${String(r.Cambios_experto)}. Automático: ${String(r.Lectura_automatica)} (NPS ${formatoNPS(numero(r.NPS_automatico))})`} style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--c-fbbf24)' }}>
+              ✎ a mano
+            </span>
+          ) : null}
         </td>
         <td style={{ padding: '7px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

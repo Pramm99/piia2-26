@@ -106,10 +106,26 @@ def normalizar_signo(v) -> str:
         return s
 
 
-def peso(confianza, organismo, tipo_celular) -> Tuple[float, bool]:
-    """w = Confianza_final / 100 × f_contexto. Devuelve también si se usó la confianza por defecto."""
+def leer_fuentes_go(ruta) -> frozenset:
+    """(Gen, GO_ID, PMID) de los artículos que cita la anotación de GO (Fuente GOA en la hoja Con_abstract de la
+    Fase 1). Es opcional: sin la hoja o sin la columna Fuente, ninguno."""
+    with pd.ExcelFile(ruta) as libro:
+        hojas = libro.sheet_names
+    if "Con_abstract" not in hojas:
+        return frozenset()
+    df = pd.read_excel(ruta, sheet_name="Con_abstract")
+    if not {"Gen", "GO_ID", "PMID", "Fuente"} <= set(df.columns):
+        return frozenset()
+    goa = df["Fuente"].map(lambda f: "GOA" in valor_texto(f).split("|"))
+    return frozenset((valor_texto(g), valor_texto(go), normalizar_pmid(p))
+                     for g, go, p in df.loc[goa, ["Gen", "GO_ID", "PMID"]].itertuples(index=False))
+
+
+def peso(confianza, organismo, tipo_celular, de_go: bool = False) -> Tuple[float, bool]:
+    """w = Confianza_final / 100 × f_contexto (× FACTOR_FUENTE_GO si el artículo lo cita la anotación de GO).
+    Devuelve también si se usó la confianza por defecto."""
     por_defecto = confianza is None or pd.isna(confianza)
-    f = 1.0
+    f = config.FACTOR_FUENTE_GO if de_go else 1.0
     if valor_texto(organismo) not in ("",) + config.ORGANISMOS_VALIDOS:
         f *= config.FACTOR_CONTEXTO
     if valor_texto(tipo_celular) not in ("",) + config.TIPOS_CELULARES_VALIDOS:
@@ -118,8 +134,10 @@ def peso(confianza, organismo, tipo_celular) -> Tuple[float, bool]:
     return c / 100 * f, por_defecto
 
 
-def casos_con_peso(por_ruta: pd.DataFrame, preguntas: pd.DataFrame) -> pd.DataFrame:
-    """Por_ruta con el contexto de su pregunta (unido por Gen, PMID y Proceso_ID) y el peso de cada fila."""
+def casos_con_peso(por_ruta: pd.DataFrame, preguntas: pd.DataFrame,
+                   fuentes_go: frozenset = frozenset()) -> pd.DataFrame:
+    """Por_ruta con el contexto de su pregunta (unido por Gen, PMID y Proceso_ID) y el peso de cada fila.
+    fuentes_go: (Gen, GO_ID, PMID) de los artículos de la anotación de GO (leer_fuentes_go); marca De_GO."""
     clave = ["Gen", "PMID", "Proceso_ID"]
     p = preguntas[clave + ["Organismo", "Tipo_celular"]].copy()
     r = por_ruta.copy()
@@ -127,7 +145,10 @@ def casos_con_peso(por_ruta: pd.DataFrame, preguntas: pd.DataFrame) -> pd.DataFr
         df["PMID"] = df["PMID"].map(normalizar_pmid)
         df["Proceso_ID"] = df["Proceso_ID"].map(valor_texto)
     r = r.merge(p.drop_duplicates(clave), on=clave, how="left")
-    pesos = [peso(c, o, t) for c, o, t in zip(r["Confianza_final"], r["Organismo"], r["Tipo_celular"])]
+    r["De_GO"] = [(valor_texto(g), valor_texto(go), p) in fuentes_go
+                  for g, go, p in zip(r["Gen"], r["GO_ID"], r["PMID"])]
+    pesos = [peso(c, o, t, d) for c, o, t, d in
+             zip(r["Confianza_final"], r["Organismo"], r["Tipo_celular"], r["De_GO"])]
     r["w"] = [w for w, _ in pesos]
     r["peso_por_defecto"] = [d for _, d in pesos]
     r["Motivos"] = r["Motivos"].map(valor_texto)
@@ -146,9 +167,24 @@ def _ganadora(w: Dict[str, float]) -> Optional[str]:
     return cabeza[0] if maximo > 0 and len(cabeza) == 1 else None
 
 
+def un_voto_por_articulo(casos: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+    """Los votos de un par (gen, ruta), uno por artículo. Al LLM se le pregunta por cada subproceso de la ruta, así que
+    un mismo artículo puede responder varias veces; contarlas todas inflaría su peso. Si sus respuestas coinciden en el
+    signo, vota con ese signo y el mayor de sus pesos (la fila de ese peso). Si se contradicen, no vota: un artículo que
+    dice una cosa para un subproceso y la contraria para otro no inclina el par. Devuelve las filas que votan y los
+    PMIDs que se contradicen."""
+    votos = casos[(casos["Estado"] == ESTADO_RESUELTO) & casos["Signo_ruta"].isin(CLASES)]
+    if votos.empty:
+        return votos, []
+    signos = votos.groupby("PMID")["Signo_ruta"].nunique()
+    contradictorios = sorted(signos[signos > 1].index)
+    coherentes = votos[~votos["PMID"].isin(contradictorios)]
+    return coherentes.loc[coherentes.groupby("PMID", sort=False)["w"].idxmax()], contradictorios
+
+
 def signo_par(destino: str, casos: pd.DataFrame) -> Dict:
     """Reglas 4-9 de la spec para un par que pasó por el LLM (las 1-3 no miran los casos)."""
-    votos = casos[(casos["Estado"] == ESTADO_RESUELTO) & casos["Signo_ruta"].isin(CLASES)]
+    votos, contradictorios = un_voto_por_articulo(casos)
     w = {k: float(votos.loc[votos["Signo_ruta"] == k, "w"].sum()) for k in CLASES}
     n = {k: votos.loc[votos["Signo_ruta"] == k, "PMID"].nunique() for k in CLASES}
     fila = {"W_pos": w[SIGNO_POSITIVO], "W_neg": w[SIGNO_NEGATIVO], "W_neutro": w[SIGNO_NEUTRO],
@@ -174,6 +210,8 @@ def signo_par(destino: str, casos: pd.DataFrame) -> Dict:
                 return salida(gana, ESTADO_REVISAR, ["LLM_y_revision"] + motivos, gana)
             return salida(gana, ESTADO_RESUELTO, motivos)
         return salida(SIGNO_DESCONOCIDO, ESTADO_REVISAR, ["conflicto_entre_abstracts"], gana)
+    if contradictorios and votos.empty:  # su único apoyo es un artículo que se contradice entre subprocesos
+        return salida(SIGNO_DESCONOCIDO, ESTADO_REVISAR, ["conflicto_entre_abstracts"])
     if len(votos):  # votos que no pesan nada (confianza 0): como si no hubiera
         marcas.append("votos_sin_peso")
     revisar = casos[casos["Estado"] == ESTADO_REVISAR]
@@ -243,6 +281,26 @@ def tabla_pares(triaje: pd.DataFrame, igs: pd.DataFrame, casos: pd.DataFrame,
     # Lo que aportaría el par si se confirmara su clase de mayor peso (NPS_con_revisar)
     df["c_revisar"] = (df["Signo_revisar"].map(VALOR).fillna(0) * d).where(df["Estado_par"] == ESTADO_REVISAR, 0.0)
     df = df.sort_values(["GO_ID", "Gen"], kind="mergesort").reset_index(drop=True)
+    return df
+
+
+def aplicar_criterio(pares: pd.DataFrame, criterio: Dict[Tuple[str, str], str]) -> pd.DataFrame:
+    """Signos fijados a mano por una persona experta («Tu criterio» del frontend), por (Gen, GO_ID): el par pasa a
+    resuelto con ese signo y Origen Experto. Los pares que no están en la tabla se ignoran."""
+    df = pares.copy()
+    for (gen, go), signo in criterio.items():
+        sel = (df["Gen"] == gen) & (df["GO_ID"] == go)
+        if not sel.any():
+            continue
+        signo = normalizar_signo(signo)
+        if signo not in CLASES:
+            raise ValueError(f"Signo de criterio no válido para {gen} en {go}: {signo!r}")
+        d = df.loc[sel, "Estado_Original"].map(DIRECCION)
+        df.loc[sel, ["Signo_par", "Estado_par", "Motivos", "Origen"]] = [signo, ESTADO_RESUELTO, "criterio_experto",
+                                                                        "Experto"]
+        df.loc[sel, "Contribucion"] = (VALOR[signo] * d).astype(float) + 0.0  # sin -0.0
+        df.loc[sel, "Freno_retroalimentacion"] = df.loc[sel, "Contribucion"] < 0
+        df.loc[sel, "c_revisar"] = 0.0
     return df
 
 
@@ -333,7 +391,7 @@ def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Option
         filas.append(("Sensibilidad", "rutas Sensible_al_peso", int((rutas["Sensible_al_peso"] == "sí").sum())))
     filas += [("Entrada", k, f"{v} ({_fecha(v)})" if v else "no") for k, v in entradas.items()]
     filas += [("Parametro", k, str(getattr(config, k))) for k in
-              ("ORGANISMOS_VALIDOS", "TIPOS_CELULARES_VALIDOS", "FACTOR_CONTEXTO", "CONFIANZA_POR_DEFECTO",
+              ("ORGANISMOS_VALIDOS", "TIPOS_CELULARES_VALIDOS", "FACTOR_CONTEXTO", "FACTOR_FUENTE_GO", "CONFIANZA_POR_DEFECTO",
                "UMBRAL_MINORIA", "MIN_PESO_EVIDENCIA", "MIN_PARES_CON_SIGNO", "MIN_COBERTURA", "UMBRAL_NPS")]
     return pd.DataFrame(filas, columns=["Apartado", "Clave", "Valor"])
 
@@ -343,16 +401,20 @@ COLUMNAS_PAR = ["Gen", "GO_ID", "Ruta_Nombre", "Direccion", "Log2FC", "Signo_par
                 "Votos", "PMIDs_consultados", "Signo_revisar", "Contribucion", "Freno_retroalimentacion"]
 
 
-def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None):
-    """Entradas -> (Por_par, Por_ruta, Resumen, Abstracts_sin_signo)."""
+def calcular(fase1=config.FICHERO_FASE1, fase2=config.FICHERO_FASE2, log2fc=None,
+             criterio: Optional[Dict[Tuple[str, str], str]] = None):
+    """Entradas -> (Por_par, Por_ruta, Resumen, Abstracts_sin_signo). `criterio`: signos fijados a mano por
+    (Gen, GO_ID), ver aplicar_criterio."""
     f2 = leer_hojas(fase2, COLUMNAS_FASE2)
     f1 = leer_hojas(fase1, COLUMNAS_FASE1)
     triaje, igs = f1["Triaje_polaridad"], f1["Inmunoglobulinas"]
-    casos = casos_con_peso(f2["Por_ruta"], f2["Preguntas"])
+    casos = casos_con_peso(f2["Por_ruta"], f2["Preguntas"], leer_fuentes_go(fase1))
     direcciones = {valor_texto(g).upper(): DIRECCION.get(valor_texto(e)) for g, e in
                    pd.concat([triaje, igs])[["Gen", "Estado_Original"]].itertuples(index=False)}
     fc = leer_log2fc(log2fc, direcciones) if log2fc else None
     pares = tabla_pares(triaje, igs, casos, fc)
+    if criterio:
+        pares = aplicar_criterio(pares, criterio)
     rutas = tabla_rutas(pares, fc is not None)
     abstracts = tabla_abstracts_sin_signo(pares, casos, leer_abstracts(fase1))
     res = resumen(pares, rutas, {"Fase 1": Path(fase1), "Fase 2": Path(fase2),

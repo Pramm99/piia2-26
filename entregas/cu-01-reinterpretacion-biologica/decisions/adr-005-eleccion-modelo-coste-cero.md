@@ -23,6 +23,8 @@ El proyecto **solo usa modelos que no exijan pagar ninguna cantidad**. Los model
 
 **El secundario es solo el respaldo del principal** (2026-11-12). gpt-oss solo recibe una pregunta si Gemini no responde (cupo agotado, red) o devuelve un JSON que no vale, y entonces decide su respuesta, marcada con `respaldo_secundario` (ADR-003). Si Gemini responde, la pregunta no va a gpt-oss. Así el cupo diario de Groq se reserva para los fallos de Gemini. El contraste de los dos modelos en todas las preguntas (`--contraste`) queda solo para experimentos: en una prueba parcial, gpt-oss casi nunca contradijo a Gemini, pero se abstuvo en el 37 % de sus signos (ADR-003).
 
+**Varias claves por proveedor** (2026-11-23). Cada variable de clave puede llevar varias, de cuentas distintas, que se usan en orden (la interfaz las gestiona en ⚙ → token-api). Si una clave se queda sin cupo (un `429` del límite diario, o un `429` que sigue tras los reintentos), se pasa a la siguiente del **mismo proveedor**; es el único fallo que cambia de clave. Una clave no válida, un `5xx` o la red, o quedarse sin cupo en todas las claves, hacen que el modelo deje de llamarse en esa ejecución y responda el respaldo (Groq), que también usa sus claves en orden. Sin ninguna clave con cupo, las preguntas quedan `pendiente`. Así el cupo gratuito de una cuenta no corta el trabajo del día, y el reparto principal/respaldo no cambia: otra clave de Gemini va antes que Groq solo cuando el problema es el cupo.
+
 **Prompt:** el benchmark usa el mismo prompt y el mismo validador que producción (veredicto obligado y `UNKNOWN` decidido por el código), con las preguntas por proceso núcleo enviadas por gen (spec de inferencia).
 
 **Gold set:** 100 preguntas (gen, PMID, proceso núcleo):

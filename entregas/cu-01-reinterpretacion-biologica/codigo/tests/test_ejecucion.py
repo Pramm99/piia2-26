@@ -40,7 +40,7 @@ def test_reanudacion_sin_repetir_llamadas(tmp_path):
 def test_limite_diario_deja_pendiente_no_unknown(tmp_path):
     cli = ClienteSimulado("sim", _responder, fallar=lambda lista: True)
     resultados, resumen = ejecutar(_preguntas(), [cli], Registro(tmp_path / "r.jsonl"), cada=0)
-    assert resumen.pendientes == 3 and resumen.agotados == ["sim"]
+    assert resumen.pendientes == 3 and resumen.agotados == ["sim"] and resumen.motivos == {"sim": "cupo"}
     assert all(r.salidas["sim"] is None for r in resultados)
 
 
