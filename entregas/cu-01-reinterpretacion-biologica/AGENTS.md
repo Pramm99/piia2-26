@@ -89,4 +89,4 @@ python empaquetado/construir.py          # Fase 4: programa de Windows e instala
 El estado de cada componente está en la tabla de [`ARCHITECTURE.md`](ARCHITECTURE.md). Los grandes pendientes son:
 
 * la revisión a mano de las 20 rutas `Sensible_al_peso`, que hace CIMUS (#33, bloqueada a la espera de CIMUS, como el cronometraje de #38);
-* la prueba del programa de escritorio en otro ordenador (#50).
+* probar el instalador en otro ordenador, sin Python, Node ni las cachés del equipo (quedó sin hacer al cerrar #50).
