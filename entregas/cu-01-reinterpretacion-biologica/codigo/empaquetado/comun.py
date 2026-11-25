@@ -8,7 +8,7 @@ import tkinter as tk
 from pathlib import Path
 
 NOMBRE = "PathwayPulse"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 EDITOR = "Equipo CU-01 · PIIA2 (USC)"
 EXE_APP = f"{NOMBRE}.exe"
 EXE_DESINSTALAR = "Desinstalar.exe"
