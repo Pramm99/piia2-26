@@ -105,3 +105,14 @@ def test_peso_segun_la_clase_del_estudio(monkeypatch):
     monkeypatch.setattr(f3_config, "TIPOS_CELULARES_VALIDOS", estudio.TIPOS_LLM_POR_CLASE["tumoral"])
     assert peso(80, "human", "tumor") == (pytest.approx(0.8), False)
     assert peso(80, "human", "NK") == (pytest.approx(0.4), False)
+
+
+def test_con_celula_del_catalogo(tmp_path):
+    e = estudio.leer_estudio(escribir(tmp_path))
+    t = estudio.con_celula(e, "CL:0001064")
+    assert (t.celula, t.clase_celula, t.tejido, t.excel_activadas) == ("células tumorales", "tumoral", e.tejido,
+                                                                       e.excel_activadas)
+    with pytest.raises(ValueError, match="no es una de las células"):
+        estudio.con_celula(e, "CL:0000999")
+    assert len({cl for cl, _, _ in estudio.CELULAS_DISPONIBLES}) == len(estudio.CELULAS_DISPONIBLES)
+    assert all(estudio.CL_ID.match(cl) and k in estudio.TIPOS_LLM_POR_CLASE for cl, _, k in estudio.CELULAS_DISPONIBLES)

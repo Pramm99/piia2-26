@@ -79,6 +79,8 @@ Se guardan en `codigo/.env` y valen desde la siguiente ejecución; el panel solo
    uno o con los dos. Solo hay un Excel por lista a la vez: **Cambiar** sube otro en su lugar (el anterior se olvida)
    y **Quitar** lo elimina. Los de CIMUS están en `codigo/tools_cimus/` (`NK_rutas_activadas_GO.xlsx` y
    `NK_rutas_suprimidas_GO.xlsx`).
+   Debajo está la franja **Versión 2** (tipo celular y tabla de log2FC). En esta versión está congelada: se ve pero
+   no se puede usar, y la ejecución usa la célula y la tabla de `codigo/estudio.json`.
 2. Busca la ruta por GO_ID, nombre o gen y márcala. Se ve con sus genes sobreexpresados e infraexpresados: una ruta
    que está en los dos Excels se ejecuta con todos sus genes.
 3. Pulsa **Ejecutar GO:…** y confirma. Mientras se ejecuta, una rueda de carga, la fase en curso, una barra con el
@@ -144,6 +146,7 @@ Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md
 | `src/index.css` | Paletas de colores del tema oscuro y del claro. |
 | `src/lectura.ts` | Lectura de la ruta con «Tu criterio», la misma cuenta que `fase3_scoring/nps.py` (sin React, para probarla). |
 | `src/acumulado.ts` | Lo que se acumula en el Excel de resultados: añadir, sustituir, quitar y vaciar (sin React ni SheetJS). |
+| `src/estudio.ts` | El estudio (`GET /estudio`): textos de la célula y el tejido, qué artículos pesan entero y la versión 2 congelada (`VERSION_2`, selector de célula y tabla de log2FC). |
 | `pruebas/` | Pruebas con node (`npm test`) y `recalcular.ts`, que usa `tests/test_interfaz.py` para comparar con la Fase 3. |
 | `src/Logo.tsx` | Logo de la cabecera: el mismo dibujo que el icono del programa (`codigo/empaquetado/icono.svg`). |
 | `vite.config.ts` | Al compilar, el `index.html` carga el JS y el CSS con un tiempo límite y reintentos (las descargas locales se cortaban a veces con un antivirus). |

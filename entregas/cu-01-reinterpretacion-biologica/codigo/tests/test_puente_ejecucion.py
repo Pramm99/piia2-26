@@ -95,7 +95,8 @@ def test_ejecutar_una_ruta_de_principio_a_fin(puente, monkeypatch, tmp_path):
     assert base64.b64decode(r["excel_b64"]) == b"excel de la fase 3"
     assert r["nombre_excel"] == "fase3_scoring_GO_0000001.xlsx"
     assert r["carpeta"].endswith("GO_0000001")  # cada ruta en su carpeta, sin los dos puntos
-    assert llamadas["fase1"] == RUTA  # los genes llegan tal cual a la Fase 1
+    assert llamadas["fase1"] == {**RUTA, "Celula": "", "Log2FC": {}}  # los genes llegan tal cual a la Fase 1
+    assert r["estudio"]["cl_celula"] == mod.ESTUDIO_BASE.cl_celula  # sin célula elegida, la del estudio
 
 
 def test_una_ruta_a_la_vez(puente, monkeypatch, tmp_path):
@@ -161,7 +162,7 @@ def _salidas_de_una_ruta(mod, tmp_path):
 
 def test_tu_criterio_recalcula_la_fase_3(puente, monkeypatch, tmp_path):
     mod, base = puente
-    monkeypatch.setattr(mod, "_log2fc", lambda: None)
+    monkeypatch.setattr(mod, "_log2fc", lambda carpeta=None: None)
     carpeta = _salidas_de_una_ruta(mod, tmp_path)
     codigo, d = pedir(base + "/criterio", {"GO_ID": GO, "criterio": {"A": "-1", "B": "-1"}})
     assert codigo == 200 and d["ok"]
@@ -191,3 +192,77 @@ def test_tu_criterio_peticiones_no_validas(puente, cuerpo, codigo_esperado, erro
     _, base = puente
     codigo, d = pedir(base + "/criterio", cuerpo)
     assert codigo == codigo_esperado and error in d["error"]
+
+
+# --- Versión 2 (#52): célula elegida y tabla de log2FC por ruta (en la interfaz está congelado) ---
+TUMORAL = "CL:0001064"
+
+
+def test_estudio_con_las_celulas_que_se_pueden_elegir(puente):
+    mod, base = puente
+    codigo, d = pedir(base + "/estudio")
+    assert codigo == 200 and d["cl_celula"] == mod.ESTUDIO_BASE.cl_celula
+    assert d["celulas_disponibles"][0] == {"cl_celula": "CL:0000623", "celula": "células NK", "clase_celula": "inmune"}
+    assert {c["clase_celula"] for c in d["celulas_disponibles"]} == {"inmune", "tumoral", "otra"}
+
+
+def test_version2_celula_y_log2fc_solo_para_esa_ruta(puente, monkeypatch, tmp_path):
+    mod, base = puente
+    llamadas = simular_fases(mod, monkeypatch, tmp_path)
+    vistos = {}
+    fase1 = mod._fase1
+
+    def fase1_mira(carpeta, ruta):  # qué estudio ven las Fases 1 y 3 durante la ejecución
+        vistos["f1"], vistos["f3"] = mod.cruce_gaf.ESTUDIO.cl_celula, mod.f3_config.TIPOS_CELULARES_VALIDOS
+        return fase1(carpeta, ruta)
+
+    monkeypatch.setattr(mod, "_fase1", fase1_mira)
+    cuerpo = {**RUTA, "Celula": TUMORAL, "Log2FC": {"a": 2.5, "B": 1, "C": -1.2, "OTRO": 0.3}}
+    assert pedir(base + "/ejecutar-ruta", cuerpo)[0] == 202
+    r = esperar(base)["resultado"]
+    assert vistos == {"f1": TUMORAL, "f3": ("tumor", "not_stated")}
+    assert (r["estudio"]["celula"], r["log2fc"]) == ("células tumorales", "subida")
+    assert llamadas["fase1"]["Log2FC"] == {"A": 2.5, "B": 1.0, "C": -1.2, "OTRO": 0.3}
+    carpeta = mod.DIR_SALIDAS / "GO_0000001"
+    assert json.loads((carpeta / "estudio_ruta.json").read_text(encoding="utf-8")) == {"cl_celula": TUMORAL}
+    assert pd.read_csv(carpeta / "log2fc.csv").set_index("Gen")["log2FC"].to_dict()["A"] == 2.5
+    # Al acabar vuelve el estudio de codigo/estudio.json
+    assert mod.cruce_gaf.ESTUDIO == mod.ESTUDIO_BASE and mod.f3_config.ESTUDIO == mod.ESTUDIO_BASE
+    assert mod.f3_config.TIPOS_CELULARES_VALIDOS == mod.ESTUDIO_BASE.tipos_celulares_validos
+    # Otra ejecución sin elegir nada borra lo de la anterior
+    assert pedir(base + "/ejecutar-ruta", RUTA)[0] == 202
+    r = esperar(base)["resultado"]
+    assert r["estudio"]["cl_celula"] == mod.ESTUDIO_BASE.cl_celula
+    assert not (carpeta / "estudio_ruta.json").exists() and not (carpeta / "log2fc.csv").exists()
+
+
+@pytest.mark.parametrize("extra, error", [
+    ({"Celula": "CL:9999999"}, "Célula no disponible"),
+    ({"Log2FC": [1, 2]}, "La tabla de log2FC"),
+    ({"Log2FC": {"A": "mucho"}}, "no numérico"),
+    ({"Log2FC": {"A": -1.0}}, "contradice su lista (up)"),  # A es un gen up
+    ({"Log2FC": {"C": 0.5}}, "contradice su lista (down)"),
+])
+def test_version2_peticiones_no_validas(puente, monkeypatch, tmp_path, extra, error):
+    mod, base = puente
+    llamadas = simular_fases(mod, monkeypatch, tmp_path)
+    codigo, d = pedir(base + "/ejecutar-ruta", {**RUTA, **extra})
+    assert codigo == 400 and error in d["error"] and not llamadas
+
+
+def test_tu_criterio_usa_la_celula_y_el_log2fc_de_la_ruta(puente):
+    """Con la célula tumoral guardada para la ruta, los artículos en NK pesan la mitad; con su log2FC, sale la
+    sensibilidad. Sin ellos, como siempre."""
+    mod, base = puente
+    carpeta = _salidas_de_una_ruta(mod, mod.DIR_SALIDAS.parent)
+    mod.preparar_estudio(carpeta, TUMORAL, {"A": 3.0, "B": 1.0, "C": -1.0})
+    codigo, d = pedir(base + "/criterio", {"GO_ID": GO, "criterio": {}})
+    assert codigo == 200
+    a = next(p for p in d["pares"] if p["Gen"] == "A")
+    assert (a["W_pos"], a["Log2FC"]) == (0.5, 3.0)  # caso en NK (test_scoring.caso) con un estudio tumoral
+    assert d["rutas"][0]["Lectura_log2FC"] != ""
+    excel = pd.read_excel(io.BytesIO(base64.b64decode(d["excel_b64"])), sheet_name="Resumen")
+    assert "células tumorales" in excel["Valor"].astype(str).tolist()
+    mod.preparar_estudio(carpeta)
+    d = pedir(base + "/criterio", {"GO_ID": GO, "criterio": {}})[1]
+    assert next(p for p in d["pares"] if p["Gen"] == "A")["W_pos"] == 1.0

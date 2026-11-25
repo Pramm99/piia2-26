@@ -12,14 +12,15 @@ import {
   Play,
   Moon,
   Sun,
-  X
+  X,
+  Lock
 } from 'lucide-react';
 import { colorLectura, formatoNPS, loadXLSX, mensaje, MOTIVO_AGOTADO, NOMBRE_PROVEEDOR } from './comun';
 import ExcelResultados from './ExcelResultados';
 import { MenuAjustes, PanelTokens } from './TokenApi';
 import Progreso, { Girador } from './Progreso';
 import Logo from './Logo';
-import { celulaPenaliza, celulasQuePesanEntero, ESTUDIO_NK, EstudioContexto, etiquetaEstudio, leerEstudio, TIPO_CELULAR_TEXTO, type Estudio } from './estudio';
+import { celulaPenaliza, celulasQuePesanEntero, ESTUDIO_NK, EstudioContexto, etiquetaEstudio, extrasVersion2, leerEstudio, leerTablaLog2fc, TIPO_CELULAR_TEXTO, VERSION_2, type Estudio } from './estudio';
 import { aplicarCriterio, genesParaCambiar, MIN_COBERTURA, MIN_PARES_CON_SIGNO, recalcularRuta, UMBRAL_NPS, type Criterio } from './lectura';
 
 // En desarrollo (npm run dev) el puente va aparte, en el 8000. Compilada (npm run build), la sirve el propio puente
@@ -418,6 +419,9 @@ const avisoLLM = (llm: Resultado['llm']): { texto: string; grave: boolean } | nu
 export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
   const [estudio, setEstudio] = useState<Estudio>(ESTUDIO_NK);
+  // Versión 2 (#52): célula elegida y tabla de log2FC subida; congelados mientras VERSION_2 sea false
+  const [celulaElegida, setCelulaElegida] = useState<string>('');
+  const [log2fcSubido, setLog2fcSubido] = useState<{ nombre: string; valores: Record<string, number> } | null>(null);
   const [tema, setTema] = useState<'oscuro' | 'claro'>(() => {
     try {
       return localStorage.getItem('tema') === 'claro' ? 'claro' : 'oscuro';
@@ -618,6 +622,22 @@ export default function App() {
     }
   };
 
+  // Versión 2: tabla de log2FC para la próxima ejecución (Gen y log2FC, o la de DESeq2 tal cual)
+  const handleLog2fcUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !VERSION_2) return;
+    try {
+      const XLSX = await loadXLSX();
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const valores = leerTablaLog2fc(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]));
+      setLog2fcSubido({ nombre: file.name, valores });
+      setFeedback({ type: 'ok', msg: `log2FC de ${Object.keys(valores).length} genes leído de ${file.name}.` });
+    } catch (err) {
+      setFeedback({ type: 'err', msg: mensaje(err) });
+    }
+  };
+
   const quitarExcel = (lista: 'up' | 'down') => {
     const excel = lista === 'up' ? excelUp : excelDown;
     (lista === 'up' ? setExcelUp : setExcelDown)(null);
@@ -636,7 +656,7 @@ export default function App() {
       const res = await fetch(`${API_URL}/ejecutar-ruta`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(rutaSel),
+        body: JSON.stringify({ ...rutaSel, ...extrasVersion2(VERSION_2, celulaElegida, log2fcSubido?.valores ?? null) }),
       });
       const d = await res.json();
       if (!res.ok || !d.ok) throw new Error(d.error || 'No se pudo lanzar la ejecución');
@@ -820,6 +840,45 @@ export default function App() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
             {huecoExcel('up')}
             {huecoExcel('down')}
+          </div>
+
+          {/* VERSIÓN 2 (#52): célula y tabla de log2FC de la ejecución. Se ven congelados mientras VERSION_2 sea false */}
+          <div
+            title={VERSION_2 ? undefined : 'Preparado para la versión 2: de momento se usa el estudio configurado'}
+            style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', marginBottom: '16px', padding: '10px 12px', borderRadius: '10px', border: '1px dashed var(--c-334155)', backgroundColor: 'var(--c-020617)', opacity: VERSION_2 ? 1 : 0.6 }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', padding: '2px 8px', borderRadius: '999px', border: '1px solid var(--c-334155)', color: 'var(--c-94a3b8)' }}>
+              {!VERSION_2 && <Lock size={12} />}
+              Versión 2
+            </span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--c-cbd5e1)' }}>
+              Tipo celular
+              <select
+                disabled={!VERSION_2 || isRunning}
+                value={celulaElegida || estudio.cl_celula}
+                onChange={(e) => setCelulaElegida(e.target.value === estudio.cl_celula ? '' : e.target.value)}
+                style={{ padding: '5px 8px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)', color: 'var(--c-f8fafc)', fontSize: '12px', cursor: VERSION_2 ? 'pointer' : 'not-allowed' }}
+              >
+                {(estudio.celulas_disponibles?.length ? estudio.celulas_disponibles : [{ cl_celula: estudio.cl_celula, celula: estudio.celula }]).map((c) => (
+                  <option key={c.cl_celula} value={c.cl_celula}>{c.celula} ({c.cl_celula})</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ ...botonSubir, cursor: VERSION_2 && !isRunning ? 'pointer' : 'not-allowed' }}>
+              <input type="file" accept=".xlsx,.xls,.csv" disabled={!VERSION_2 || isRunning} onChange={handleLog2fcUpload} style={{ display: 'none' }} />
+              <UploadCloud size={14} />
+              <span>{log2fcSubido ? `log2FC: ${log2fcSubido.nombre}` : 'Subir tabla de log2FC'}</span>
+            </label>
+            {log2fcSubido && VERSION_2 && (
+              <button disabled={isRunning} onClick={() => setLog2fcSubido(null)} style={{ ...botonSubir, color: 'var(--c-fda4af)' }} title="Quitar la tabla de log2FC">
+                <X size={14} />
+              </button>
+            )}
+            <span style={{ fontSize: '11px', color: 'var(--c-64748b)', flex: '1 1 260px' }}>
+              {VERSION_2
+                ? 'La célula y la tabla valen solo para la ruta que ejecutes. Sin tabla, se usa la del estudio.'
+                : `Congelado hasta la versión 2: se usa ${estudio.celula} y la tabla de log2FC del estudio.`}
+            </span>
           </div>
 
           {/* PROGRESO: rueda, barra con el porcentaje (estimado dentro de cada fase) y contador de tiempo; debajo, las tres fases */}

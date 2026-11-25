@@ -3,8 +3,11 @@
 Desde codigo/: python fase4_frontend/api_puente.py (escucha en http://127.0.0.1:8000).
 
   GET  /salud           -> {"ok": true}
-  POST /ejecutar-ruta   -> {"GO_ID", "Descripcion", "Genes_up", "Genes_down"}: lanza las tres fases seguidas
-  GET  /estudio         -> tipo celular y tejido del estudio (codigo/estudio.json), para los textos de la interfaz
+  POST /ejecutar-ruta   -> {"GO_ID", "Descripcion", "Genes_up", "Genes_down"}: lanza las tres fases seguidas. Para la
+                           versión 2 (#52; en la interfaz está congelado) admite además "Celula" (un CL de
+                           estudio.CELULAS_DISPONIBLES) y "Log2FC" ({gen: log2FC}), que valen solo para esa ruta
+  GET  /estudio         -> tipo celular y tejido del estudio (codigo/estudio.json), para los textos de la interfaz,
+                           y las células que se pueden elegir
   GET  /estado          -> fase en curso y, al terminar, el resultado (Por_ruta, Por_par y el Excel de la Fase 3)
   POST /criterio        -> {"GO_ID", "criterio": {gen: signo}}: Fase 3 de esa ruta con los signos de «Tu criterio»
   GET  /claves          -> claves del LLM por proveedor (Gemini y Groq), enmascaradas: nunca se devuelve una entera
@@ -30,8 +33,10 @@ import os
 import re
 import sys
 import threading
+import math
 import time
 import traceback
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Tuple
@@ -47,9 +52,11 @@ sys.path.insert(0, str(CODIGO_DIR / "fase1_ingesta"))  # la Fase 1 usa imports p
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+import cruce_gaf  # noqa: E402
 import entrada_excel  # noqa: E402
 import main as f1_main  # noqa: E402
 import salida as f1_salida  # noqa: E402
+from estudio import CELULAS_DISPONIBLES, Estudio, con_celula  # noqa: E402
 from fase2_inferencia.__main__ import PRINCIPAL, SECUNDARIO  # noqa: E402
 from fase2_inferencia.cliente import MODELOS, ClienteOpenAICompatible, claves, guardar_claves  # noqa: E402
 from fase2_inferencia.esquema import ESTADO_PENDIENTE  # noqa: E402
@@ -79,6 +86,10 @@ PREFIJOS_AJENOS = {"gemini": (("gsk_",), "Groq"), "groq": (("AIza", "AQ."), "Gem
 
 _cerrojo = threading.Lock()
 _estado = {"estado": "libre"}  # libre | ejecutando | terminado | error
+# Mientras una ruta usa una célula elegida (#52), las Fases 1 y 3 la leen de sus módulos: otra ejecución o un
+# «Tu criterio» esperan a que acabe para no mezclar estudios.
+_cerrojo_estudio = threading.Lock()
+MAX_GENES_LOG2FC = 100_000
 
 
 def _actualizar(**cambios):
@@ -185,20 +196,88 @@ def _fase2(carpeta: Path, excel_f1: Path) -> Tuple[Path, dict]:
                        "agotados": {MODELOS[n].proveedor: m for n, m in resumen.motivos.items()}}
 
 
-def estudio() -> dict:
-    """Lo que la interfaz necesita del estudio: cómo nombrar la célula y el tejido, y qué tipos celulares del LLM
-    pesan entero (el resto pesa la mitad, como en fase3_scoring/nps.py:peso)."""
-    e = f3_config.ESTUDIO
+ESTUDIO_BASE = f3_config.ESTUDIO  # el de codigo/estudio.json
+
+
+def _estudio_json(e: Estudio) -> dict:
     return {"celula": e.celula, "cl_celula": e.cl_celula, "clase_celula": e.clase_celula, "tejido": e.tejido,
             "tipos_celulares_validos": list(e.tipos_celulares_validos)}
 
 
-def _log2fc():
+def estudio() -> dict:
+    """Lo que la interfaz necesita del estudio: cómo nombrar la célula y el tejido, qué tipos celulares del LLM
+    pesan entero (el resto pesa la mitad, como en fase3_scoring/nps.py:peso) y qué células se pueden elegir."""
+    return {**_estudio_json(ESTUDIO_BASE),
+            "celulas_disponibles": [{"cl_celula": cl, "celula": c, "clase_celula": k}
+                                    for cl, c, k in CELULAS_DISPONIBLES]}
+
+
+@contextmanager
+def _con_estudio(e: Estudio):
+    """Aplica a las Fases 1 y 3 el estudio de una ruta y deja el de codigo/estudio.json al acabar."""
+    with _cerrojo_estudio:
+        antes = (cruce_gaf.ESTUDIO, f3_config.ESTUDIO, f3_config.TIPOS_CELULARES_VALIDOS)
+        cruce_gaf.ESTUDIO, f3_config.ESTUDIO, f3_config.TIPOS_CELULARES_VALIDOS = e, e, e.tipos_celulares_validos
+        try:
+            yield
+        finally:
+            cruce_gaf.ESTUDIO, f3_config.ESTUDIO, f3_config.TIPOS_CELULARES_VALIDOS = antes
+
+
+def preparar_estudio(carpeta: Path, celula: str = "", log2fc: dict = None) -> Estudio:
+    """Guarda en la carpeta de la ruta la célula elegida (estudio_ruta.json) y la tabla de log2FC subida
+    (log2fc.csv), para que «Tu criterio» las vuelva a usar; sin ellas, borra las de una ejecución anterior."""
+    f_estudio, f_log2fc = carpeta / "estudio_ruta.json", carpeta / "log2fc.csv"
+    if celula:
+        f_estudio.write_text(json.dumps({"cl_celula": celula}), encoding="utf-8")
+    else:
+        f_estudio.unlink(missing_ok=True)
+    if log2fc:
+        pd.DataFrame(sorted(log2fc.items()), columns=["Gen", "log2FC"]).to_csv(f_log2fc, index=False, encoding="utf-8")
+    else:
+        f_log2fc.unlink(missing_ok=True)
+    return estudio_de_carpeta(carpeta)
+
+
+def estudio_de_carpeta(carpeta: Path) -> Estudio:
+    f = carpeta / "estudio_ruta.json"
+    if not f.exists():
+        return ESTUDIO_BASE
+    return con_celula(ESTUDIO_BASE, json.loads(f.read_text(encoding="utf-8"))["cl_celula"])
+
+
+def _log2fc(carpeta: Path = None):
+    """La tabla subida para esa ruta (log2fc.csv) o, si no hay, la del estudio."""
+    if carpeta is not None and (carpeta / "log2fc.csv").exists():
+        return carpeta / "log2fc.csv"
     return f3_config.FICHERO_LOG2FC if f3_config.FICHERO_LOG2FC and f3_config.FICHERO_LOG2FC.exists() else None
 
 
+def validar_version2(datos: dict) -> tuple:
+    """(célula, {gen: log2FC}) de una petición, o ValueError con lo que no vale. Un log2FC cuyo signo contradice
+    la lista del gen en la ruta (negativo en un gen up) se rechaza aquí, antes de ejecutar nada."""
+    celula = str(datos.get("Celula") or "").strip()
+    if celula and celula not in {cl for cl, _, _ in CELULAS_DISPONIBLES}:
+        raise ValueError(f"Célula no disponible: {celula!r}")
+    bruto = datos.get("Log2FC") or {}
+    if not isinstance(bruto, dict) or len(bruto) > MAX_GENES_LOG2FC:
+        raise ValueError("La tabla de log2FC debe ser {gen: valor}, con hasta 100.000 genes.")
+    fc = {}
+    for gen, v in bruto.items():
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+            raise ValueError(f"log2FC no numérico para {gen!r}")
+        fc[str(gen).strip().upper()] = float(v)
+    for lista, signo in (("Genes_up", 1), ("Genes_down", -1)):
+        for gen in str(datos.get(lista) or "").split("/"):
+            v = fc.get(gen.strip().upper())
+            if v is not None and v * signo < 0:
+                raise ValueError(f"El log2FC de {gen.strip()} ({v}) contradice su lista "
+                                 f"({'up' if signo > 0 else 'down'}).")
+    return celula, fc
+
+
 def _fase3(carpeta: Path, excel_f1: Path, excel_f2: Path):
-    pares, rutas, res, abstracts = calcular(excel_f1, excel_f2, _log2fc())
+    pares, rutas, res, abstracts = calcular(excel_f1, excel_f2, _log2fc(carpeta))
     return escribir(pares, rutas, res, abstracts, ruta=carpeta / "fase3_scoring.xlsx"), pares, rutas
 
 
@@ -211,10 +290,12 @@ def con_criterio(go_id: str, criterio: dict) -> dict:
     excel_f1, excel_f2 = carpeta / "fase1_dataset_abstracts.xlsx", carpeta / "fase2_resultados.xlsx"
     if not (excel_f1.exists() and excel_f2.exists()):
         raise FileNotFoundError(f"No están las salidas de {go_id} en {carpeta}: vuelve a ejecutar la ruta.")
-    auto_p, auto_r, auto_res, auto_abs = calcular(excel_f1, excel_f2, _log2fc())
+    with _con_estudio(estudio_de_carpeta(carpeta)):
+        auto_p, auto_r, auto_res, auto_abs = calcular(excel_f1, excel_f2, _log2fc(carpeta))
+        if criterio:
+            pares, rutas, res, abstracts = calcular(excel_f1, excel_f2, _log2fc(carpeta),
+                                                    criterio={(gen, go_id): s for gen, s in criterio.items()})
     if criterio:
-        pares, rutas, res, abstracts = calcular(excel_f1, excel_f2, _log2fc(),
-                                                criterio={(gen, go_id): s for gen, s in criterio.items()})
         antes = dict(zip(auto_p["Gen"], auto_p["Signo_par"]))
         pares.insert(pares.columns.get_loc("Signo_par") + 1, "Signo_automatico", pares["Gen"].map(antes))
         auto = auto_r.set_index("GO_ID")
@@ -313,21 +394,23 @@ def ejecutar_ruta(ruta: dict):
     carpeta.mkdir(parents=True, exist_ok=True)
     tiempos = {}
     try:
-        t0 = time.time()
-        _actualizar(fase=1)
-        excel_f1 = _fase1(carpeta, ruta)
-        tiempos["fase1"] = round(time.time() - t0)
+        e = preparar_estudio(carpeta, ruta.get("Celula", ""), ruta.get("Log2FC"))
+        with _con_estudio(e):
+            t0 = time.time()
+            _actualizar(fase=1)
+            excel_f1 = _fase1(carpeta, ruta)
+            tiempos["fase1"] = round(time.time() - t0)
 
-        t0 = time.time()
-        _actualizar(fase=2)
-        excel_f2, llm = _fase2(carpeta, excel_f1)
-        tiempos["fase2"] = round(time.time() - t0)
+            t0 = time.time()
+            _actualizar(fase=2)
+            excel_f2, llm = _fase2(carpeta, excel_f1)
+            tiempos["fase2"] = round(time.time() - t0)
 
-        t0 = time.time()
-        _actualizar(fase=3)
-        excel_f3, pares, rutas = _fase3(carpeta, excel_f1, excel_f2)
-        tiempos["fase3"] = round(time.time() - t0)
-        genes, resumen = detalle(excel_f1, excel_f2, pares, ruta["GO_ID"])
+            t0 = time.time()
+            _actualizar(fase=3)
+            excel_f3, pares, rutas = _fase3(carpeta, excel_f1, excel_f2)
+            tiempos["fase3"] = round(time.time() - t0)
+            genes, resumen = detalle(excel_f1, excel_f2, pares, ruta["GO_ID"])
 
         resultado = {
             "rutas": json.loads(rutas.to_json(orient="records")),
@@ -337,6 +420,8 @@ def ejecutar_ruta(ruta: dict):
             "llm": llm,
             "tiempos": tiempos,
             "carpeta": str(carpeta),
+            "estudio": _estudio_json(e),
+            "log2fc": "subida" if ruta.get("Log2FC") else ("del estudio" if _log2fc() else "ninguna"),
             "excel_b64": base64.b64encode(excel_f3.read_bytes()).decode("ascii"),
             "nombre_excel": f"fase3_scoring_{carpeta.name}.xlsx",
         }
@@ -497,8 +582,13 @@ class ManejadorPuente(BaseHTTPRequestHandler):
                     "Descripcion": str(datos.get("Descripcion", "")).strip(),
                     "Genes_up": str(datos.get("Genes_up") or "").strip(),
                     "Genes_down": str(datos.get("Genes_down") or "").strip()}
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeDecodeError, AttributeError):
             self._responder_json(400, {"ok": False, "error": "Petición mal formada."})
+            return
+        try:
+            ruta["Celula"], ruta["Log2FC"] = validar_version2(datos)
+        except ValueError as exc:
+            self._responder_json(400, {"ok": False, "error": str(exc)})
             return
         if not PATRON_GO.match(ruta["GO_ID"]):
             self._responder_json(400, {"ok": False, "error": f"GO_ID no válido: {ruta['GO_ID']!r}"})

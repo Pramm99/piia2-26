@@ -4,7 +4,7 @@ pipeline no dé por hecho que son células NK de laringe y faringe."""
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -22,6 +22,26 @@ TIPOS_LLM_POR_CLASE = {
 }
 CL_ID = re.compile(r"^CL:\d{7}$")
 
+# Células que se pueden elegir en la interfaz (#52, preparado para la versión 2: el selector está congelado). Términos
+# de Cell Ontology comprobados en OLS4 el 2026-11-25. La clase decide qué tipo celular del LLM pesa entero.
+CELULAS_DISPONIBLES = (
+    ("CL:0000623", "células NK", "inmune"),
+    ("CL:0000084", "células T", "inmune"),
+    ("CL:0000624", "células T CD4+", "inmune"),
+    ("CL:0000625", "células T CD8+", "inmune"),
+    ("CL:0000815", "células T reguladoras", "inmune"),
+    ("CL:0000236", "células B", "inmune"),
+    ("CL:0000235", "macrófagos", "inmune"),
+    ("CL:0000576", "monocitos", "inmune"),
+    ("CL:0000451", "células dendríticas", "inmune"),
+    ("CL:0000775", "neutrófilos", "inmune"),
+    ("CL:0000097", "mastocitos", "inmune"),
+    ("CL:0001064", "células tumorales", "tumoral"),
+    ("CL:0000066", "células epiteliales", "otra"),
+    ("CL:0000057", "fibroblastos", "otra"),
+    ("CL:0000115", "células endoteliales", "otra"),
+)
+
 
 @dataclass(frozen=True)
 class Estudio:
@@ -36,6 +56,14 @@ class Estudio:
     @property
     def tipos_celulares_validos(self) -> Tuple[str, ...]:
         return TIPOS_LLM_POR_CLASE[self.clase_celula]
+
+
+def con_celula(estudio: Estudio, cl: str) -> Estudio:
+    """El mismo estudio (tejido y ficheros) con otra célula de CELULAS_DISPONIBLES; ValueError si no está."""
+    for cl_celula, celula, clase in CELULAS_DISPONIBLES:
+        if cl_celula == cl:
+            return replace(estudio, cl_celula=cl_celula, celula=celula, clase_celula=clase)
+    raise ValueError(f"{cl!r} no es una de las células que se pueden elegir")
 
 
 def fichero_estudio() -> Path:
