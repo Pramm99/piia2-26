@@ -1,4 +1,4 @@
-"""CU-01 PathScore Studio: el programa de doble clic (la Fase 4 sin terminales, ni Python ni Node instalados).
+"""PathwayPulse: el programa de doble clic (la Fase 4 sin terminales, ni Python ni Node instalados).
 
 Arranca el puente (fase4_frontend/api_puente.py) dentro de este mismo proceso, que además sirve la interfaz ya
 construida, y la abre en una ventana propia: Microsoft Edge, que viene con Windows, en modo aplicación (sin pestañas
@@ -91,7 +91,7 @@ def es_nuestro() -> bool:
     """¿Lo que escucha en el puerto es este programa (con la interfaz)? Si es así, basta con abrir otra ventana."""
     try:
         with urllib.request.urlopen(URL, timeout=3) as r:
-            return "PathScore" in r.read(4096).decode("utf-8", "replace")
+            return "PathwayPulse" in r.read(4096).decode("utf-8", "replace")
     except OSError:
         return False
 

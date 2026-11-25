@@ -1,4 +1,4 @@
-"""Instalador y desinstalador de CU-01 PathScore Studio, con un asistente de tres pantallas.
+"""Instalador y desinstalador de PathwayPulse, con un asistente de tres pantallas.
 
 Instala solo para el usuario, en %LOCALAPPDATA%\\Programs, como VS Code o Discord: no pide permisos de administrador.
 Crea los accesos directos del escritorio y del menú Inicio y registra el programa en «Aplicaciones instaladas» de
@@ -78,7 +78,7 @@ def registrar(carpeta: Path, kb: int):
 
 
 def esta_abierto() -> bool:
-    # En CSV: en la tabla normal, tasklist recorta el nombre a 25 caracteres («CU-01 PathScore Studio.ex»)
+    # En CSV: en la tabla normal, tasklist recorta a 25 caracteres los nombres largos de ejecutable
     r = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {EXE_APP}", "/FO", "CSV", "/NH"], capture_output=True,
                        text=True, creationflags=SIN_VENTANA)
     return f'"{EXE_APP.lower()}"' in r.stdout.lower()

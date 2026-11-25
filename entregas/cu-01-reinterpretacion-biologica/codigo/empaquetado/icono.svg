@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 24 24">
-  <!-- Icono de CU-01 PathScore Studio: el microscopio de la cabecera de la web, simplificado y con trazo grueso para que
+  <!-- Icono de PathwayPulse: el microscopio de la cabecera de la web, simplificado y con trazo grueso para que
        se lea a 16 px. iconos.py lo dibuja a cada tamaño por separado. -->
   <rect x="0.5" y="0.5" width="23" height="23" rx="5.5" fill="#14b8a6"/>
   <g fill="none" stroke="#020617" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">

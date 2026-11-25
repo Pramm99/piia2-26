@@ -7,12 +7,12 @@ import time
 import tkinter as tk
 from pathlib import Path
 
-NOMBRE = "CU-01 PathScore Studio"
+NOMBRE = "PathwayPulse"
 VERSION = "1.0.0"
 EDITOR = "Equipo CU-01 · PIIA2 (USC)"
 EXE_APP = f"{NOMBRE}.exe"
 EXE_DESINSTALAR = "Desinstalar.exe"
-CLAVE_REGISTRO = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\CU01PathScoreStudio"
+CLAVE_REGISTRO = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\PathwayPulse"
 # Instalación por usuario, como VS Code o Discord: no pide permisos de administrador y la carpeta se puede escribir
 DIR_INSTALACION = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "Programs" / NOMBRE
 

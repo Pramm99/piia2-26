@@ -706,7 +706,7 @@ export default function App() {
           <Logo size={40} />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '16px', fontWeight: 'bold' }}>CU-01 PathScore Studio</span>
+              <span style={{ fontSize: '16px', fontWeight: 'bold' }}>PathwayPulse</span>
               <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(20, 184, 166, 0.12)', color: 'var(--c-5eead4)', border: '1px solid rgba(20, 184, 166, 0.25)' }}>
                 Células NK · Laringe y Faringe (HNSC)
               </span>

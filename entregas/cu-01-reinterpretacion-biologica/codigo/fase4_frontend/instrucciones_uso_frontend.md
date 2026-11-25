@@ -8,7 +8,7 @@ va acumulando las rutas ejecutadas. No se pueden lanzar las fases por separado: 
 
 ## 0. Programa de escritorio (sin instalar nada más)
 
-Para quien no use la terminal: **`Instalar CU-01 PathScore Studio.exe`** instala el programa con un asistente, sin
+Para quien no use la terminal: **`Instalar PathwayPulse.exe`** instala el programa con un asistente, sin
 permisos de administrador, y deja un acceso directo en el escritorio y en el menú Inicio. No hace falta Python ni Node.
 Al abrirlo sale una pantalla de carga y luego la aplicación en su propia ventana; al cerrarla se apaga todo. Las claves
 se añaden en ⚙ → token-api, y se desinstala desde «Aplicaciones instaladas» de Windows. Como el instalador no está
@@ -17,7 +17,7 @@ firmado, Windows puede avisar al abrirlo: «Más información» → «Ejecutar d
 Para construirlo, desde `codigo/` (necesita Node.js y `pip install pyinstaller`):
 
 ```bash
-python empaquetado/construir.py      # deja empaquetado/salida/Instalar CU-01 PathScore Studio.exe
+python empaquetado/construir.py      # deja empaquetado/salida/Instalar PathwayPulse.exe
 python empaquetado/iconos.py         # solo si cambia empaquetado/icono.svg (necesita Pillow)
 ```
 

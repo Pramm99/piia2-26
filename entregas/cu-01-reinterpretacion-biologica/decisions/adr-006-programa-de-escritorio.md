@@ -10,9 +10,9 @@ La Fase 4 se reparte también como **programa de Windows** para personas que no 
 
 | Pieza | Cómo |
 |---|---|
-| **Programa** (`CU-01 PathScore Studio.exe`) | `lanzador.py` empaquetado con **PyInstaller** (carpeta, sin consola). Arranca dentro de su proceso el mismo puente (`api_puente.py`), que además sirve la interfaz ya compilada (`npm run build`), en `127.0.0.1:47613`. El código de las fases va al lado, en `codigo/`, tal cual está en el repositorio. |
+| **Programa** (`PathwayPulse.exe`) | `lanzador.py` empaquetado con **PyInstaller** (carpeta, sin consola). Arranca dentro de su proceso el mismo puente (`api_puente.py`), que además sirve la interfaz ya compilada (`npm run build`), en `127.0.0.1:47613`. El código de las fases va al lado, en `codigo/`, tal cual está en el repositorio. |
 | **Ventana** | **Microsoft Edge en modo aplicación** (`--app`, con un perfil solo para el programa), que viene con Windows. Al cerrarla se apaga el programa. Tiene su propio botón en la barra de tareas, con su nombre y su icono (`barra_tareas.py`). Si no hay Edge ni Chrome, se abre el navegador por defecto y una ventanita para cerrar el programa. |
-| **Instalador** (`Instalar CU-01 PathScore Studio.exe`) | Un único fichero con un **asistente propio en Tk** (`instalador.py`). Instala solo para el usuario en `%LOCALAPPDATA%\Programs`, sin pedir permisos de administrador, crea los accesos directos del escritorio y del menú Inicio y registra el programa en «Aplicaciones instaladas», desde donde se desinstala. Al actualizar conserva `codigo/data` y `codigo/.env`. |
+| **Instalador** (`Instalar PathwayPulse.exe`) | Un único fichero con un **asistente propio en Tk** (`instalador.py`). Instala solo para el usuario en `%LOCALAPPDATA%\Programs`, sin pedir permisos de administrador, crea los accesos directos del escritorio y del menú Inicio y registra el programa en «Aplicaciones instaladas», desde donde se desinstala. Al actualizar conserva `codigo/data` y `codigo/.env`. |
 
 Lleva las cachés de la Fase 1 y el registro de respuestas del LLM, para que las rutas ya analizadas salgan al momento y sin clave. **Nunca lleva `codigo/.env`**, y `construir.py` se para si encuentra algo con forma de clave en lo que va a empaquetar. Las claves se añaden en el programa, en ⚙ → token-api.
 

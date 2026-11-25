@@ -13,7 +13,7 @@ def servidor(tmp_path, monkeypatch):
     mod = importlib.import_module("fase4_frontend.api_puente")
     web = tmp_path / "dist"
     (web / "assets").mkdir(parents=True)
-    (web / "index.html").write_text("<title>CU-01 PathScore Studio</title>", encoding="utf-8")
+    (web / "index.html").write_text("<title>PathwayPulse</title>", encoding="utf-8")
     (web / "assets" / "app-1a2b.js").write_text("console.log(1)", encoding="utf-8")
     (web / "assets" / "notas.md").write_text("no se sirve", encoding="utf-8")
     (tmp_path / "secreto.txt").write_text("fuera de dist", encoding="utf-8")
@@ -36,7 +36,7 @@ def _get(url):
 def test_sirve_la_interfaz_construida(servidor):
     _, _, base = servidor
     codigo, tipo, cuerpo = _get(base + "/")
-    assert codigo == 200 and tipo.startswith("text/html") and "PathScore" in cuerpo
+    assert codigo == 200 and tipo.startswith("text/html") and "PathwayPulse" in cuerpo
     codigo, tipo, _ = _get(base + "/assets/app-1a2b.js")
     assert codigo == 200 and tipo == "text/javascript"  # ni text/plain (registro de Windows) ni «; charset» (Avast)
     # Las rutas de la API siguen igual

@@ -3,8 +3,8 @@
     python empaquetado/construir.py [--sin-datos-cimus]
 
 Deja en empaquetado/salida/ (no se versiona):
-  CU-01 PathScore Studio/               el programa, en una carpeta que también funciona sin instalar
-  Instalar CU-01 PathScore Studio.exe   el instalador: un único fichero para repartir
+  PathwayPulse/               el programa, en una carpeta que también funciona sin instalar
+  Instalar PathwayPulse.exe   el instalador: un único fichero para repartir
 
 Pasos: interfaz (npm run build) → lanzador con PyInstaller → código y datos al lado → desinstalador → app.zip →
 instalador. Necesita Node.js y, en el mismo Python que tiene requirements.txt, `pip install pyinstaller`.

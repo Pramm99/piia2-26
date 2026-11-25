@@ -13,7 +13,7 @@ import uuid
 from ctypes import wintypes
 from pathlib import Path
 
-AUMID = "USC.PIIA2.CU01PathScoreStudio"
+AUMID = "USC.PIIA2.PathwayPulse"
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 shell32 = ctypes.WinDLL("shell32")
