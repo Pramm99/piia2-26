@@ -78,6 +78,18 @@ def test_evidencia_debil(tmp_path):
     assert f.Votos == "-1:1(0.40)"
 
 
+def test_umbral_de_evidencia_debil(tmp_path):
+    """#35: con MIN_PESO_EVIDENCIA = 0,7, un único artículo humano en células inmunes con confianza 70 no es débil;
+    con 69, o en ratón con confianza 90, sí. El signo y la contribución no cambian."""
+    pares = [par("A", "GO:A"), par("B", "GO:A"), par("C", "GO:A")]
+    casos = [caso("A", "GO:A", "1", "+1", conf=70), caso("B", "GO:A", "2", "+1", conf=69),
+             caso("C", "GO:A", "3", "+1", conf=90, contexto=RATON)]
+    p, _, _ = puntuar(tmp_path, pares, casos)
+    assert config.MIN_PESO_EVIDENCIA == 0.7
+    assert [fila(p, g).Motivos for g in "ABC"] == ["", "evidencia_debil", "evidencia_debil"]
+    assert {fila(p, g).Contribucion for g in "ABC"} == {1.0}
+
+
 def test_un_articulo_vota_una_vez_por_par(tmp_path):
     """#41: un artículo responde una vez por subproceso de la ruta, pero vota una sola vez, con su mayor peso."""
     casos = [caso("G", "GO:A", "1", "+1", conf=36, proceso="GO:1"), caso("G", "GO:A", "1", "+1", conf=36, proceso="GO:2"),
@@ -238,18 +250,18 @@ def test_abstracts_de_los_pares_sin_signo(tmp_path):
 
 def test_articulo_de_go_pesa_mas(tmp_path):
     """El artículo que cita la anotación de GO (Fuente GOA en la Fase 1) multiplica su peso por FACTOR_FUENTE_GO:
-    con un solo artículo humano de confianza 80 ya no es evidencia débil. Los de otra fuente no cambian, y el
+    con un solo artículo humano de confianza 60 ya no es evidencia débil. Los de otra fuente no cambian, y el
     signo y la contribución tampoco."""
     pares = [par("G", "GO:A"), par("E", "GO:A")]
-    casos = [caso("G", "GO:A", "1", "+1", conf=80), caso("E", "GO:A", "2", "+1", conf=80)]
+    casos = [caso("G", "GO:A", "1", "+1", conf=60), caso("E", "GO:A", "2", "+1", conf=60)]
     textos = [{"Gen": "G", "GO_ID": "GO:A", "PMID": "1", "Fuente": "GOA", "Titulo": "t", "Abstract": "a"},
               {"Gen": "E", "GO_ID": "GO:A", "PMID": "2", "Fuente": "EuropePMC", "Titulo": "t", "Abstract": "a"}]
     f1, f2 = entradas(tmp_path, pares, casos, con_abstract=textos)
     p, *_ = calcular(f1, f2)
     g, e = fila(p, "G"), fila(p, "E")
     assert config.FACTOR_FUENTE_GO == 1.5
-    assert (g.W_pos, g.Motivos, g.Votos) == (1.2, "", "+1:1(1.20)")
-    assert (e.W_pos, e.Motivos) == (0.8, "evidencia_debil")
+    assert (g.W_pos, g.Motivos, g.Votos) == (0.9, "", "+1:1(0.90)")
+    assert (e.W_pos, e.Motivos) == (0.6, "evidencia_debil")
     assert (g.Signo_par, g.Contribucion) == (e.Signo_par, e.Contribucion) == ("+1", 1.0)
     assert peso(80, "mouse", "NK", de_go=True) == (pytest.approx(0.6), False)
 

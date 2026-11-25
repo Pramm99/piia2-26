@@ -48,7 +48,7 @@ No se pueden lanzar las fases por separado ni el Excel entero: para eso está la
 ### Paso 3 · Resultado en lenguaje llano
 Sin códigos internos a la vista (`+1:15811952(0.36)`, `evidencia_debil`…): todo se explica con palabras.
 
-* **Veredicto:** si la ruta está activada, inhibida, mixta o sin evidencia suficiente; la escala del NPS de −1 a +1 con sus tres zonas (±`UMBRAL_NPS`); cuántos genes la sostienen, con evidencia directa de GO o por artículos, y cuántos tienen evidencia débil (peso a su favor < 1); cuántos genes tendrían que dejar de contar para que perdiera la lectura, y los genes repartidos en «empujan hacia activada», «empujan hacia inhibida» y «no cuentan».
+* **Veredicto:** si la ruta está activada, inhibida, mixta o sin evidencia suficiente; la escala del NPS de −1 a +1 con sus tres zonas (±`UMBRAL_NPS`); cuántos genes la sostienen, con evidencia directa de GO o por artículos, y cuántos tienen evidencia débil (peso a su favor < `MIN_PESO_EVIDENCIA`, 0,7); cuántos genes tendrían que dejar de contar para que perdiera la lectura, y los genes repartidos en «empujan hacia activada», «empujan hacia inhibida» y «no cuentan».
 * **Una tarjeta por fase**, con los mismos tres niveles de texto (título, resultado y notas):
   * Fase 1: genes, inmunoglobulinas, signos de GO, genes con artículos, artículos y genes sin ninguno;
   * Fase 2: artículos leídos, los que no mencionan el gen, los que dan signo y los que quedan sin conclusión;

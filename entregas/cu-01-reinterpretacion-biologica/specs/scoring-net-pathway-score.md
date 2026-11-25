@@ -27,12 +27,12 @@ Cada fila de `Por_ruta` es un caso. Su signo sobre la ruta (`Signo_ruta`) ya vie
 * **Un voto por artículo y par** (#41, `un_voto_por_articulo`): la Fase 2 pregunta por cada subproceso de la ruta, así que un mismo artículo puede responder varias veces para el mismo gen. Vota una sola vez:
   * si sus respuestas coinciden en el signo, con ese signo y el **mayor** de sus pesos (no la suma);
   * si se contradicen (un subproceso `+1` y otro `−1`), no vota: un artículo que dice una cosa y la contraria no inclina el par. Si era el único apoyo del par, el par va a `revisar` con `conflicto_entre_abstracts` (regla 5).
-  * En el Excel completo, 94 de los 2.072 artículos con voto respondían más de una vez (110 votos de más) y 11 se contradecían, todos el mismo de XCL1 (PMID 10887101). Con la regla, ningún par cambia de signo ni de estado y ninguna ruta de lectura ni de NPS; cambia el peso de 94 pares, y los de `evidencia_debil` pasan de 745 a 779.
+  * En el Excel completo, 94 de los 2.072 artículos con voto respondían más de una vez (110 votos de más) y 11 se contradecían, todos el mismo de XCL1 (PMID 10887101). Con la regla, ningún par cambia de signo ni de estado y ninguna ruta de lectura ni de NPS; cambia el peso de 94 pares, y los de `evidencia_debil` pasan de 745 a 779 (medido con el umbral de evidencia débil de entonces, 1,0).
 * **Peso del voto:** `w = Confianza_final / 100 × f_contexto × f_GO`.
   * `f_contexto` = 1,0 si el experimento es en humano (`Organismo` = `human`, `not_stated` o vacío) y en células inmunes (`Tipo_celular` ∈ {`NK`, `T`, `other_immune`, `not_stated`} o vacío).
   * Vale 0,5 por cada condición que no se cumpla: ratón u otro organismo, o tumor u otro tipo celular. Si fallan las dos, 0,25.
-  * `f_GO` = 1,5 (`FACTOR_FUENTE_GO`) si el artículo es el que cita la anotación de GO del gen para esa ruta (`Fuente` contiene `GOA` en la hoja `Con_abstract` de la Fase 1); si no, 1,0. Un curador de GO ya leyó ese artículo y lo ligó al proceso. Además, la Fase 2 deja `Confianza_final` en 90 como mucho (factor 0,9 sin segundo modelo), y estos pares suelen tener un único artículo, así que sin el factor nunca llegarían a `W_total ≥ 1` y siempre serían `evidencia_debil`. Con 1,5, un artículo humano de confianza 67 o más deja de ser débil; uno en ratón, en tumor o con confianza baja (p. ej. solo correlación) lo sigue siendo.
-  * `f_GO` **no cambia el NPS:** las fuentes externas solo se buscan para los pares sin abstract de GO, así que un par tiene solo artículos de GO o ninguno, y multiplicar todos sus votos por lo mismo no cambia qué clase gana ni la minoría. En el Excel completo, con 1,5, las 352 rutas y los 3.172 pares dan el mismo signo, lectura y NPS, y los pares con `evidencia_debil` pasan de 1.034 a 745.
+  * `f_GO` = 1,5 (`FACTOR_FUENTE_GO`) si el artículo es el que cita la anotación de GO del gen para esa ruta (`Fuente` contiene `GOA` en la hoja `Con_abstract` de la Fase 1); si no, 1,0. Un curador de GO ya leyó ese artículo y lo ligó al proceso. Además, la Fase 2 deja `Confianza_final` en 90 como mucho (factor 0,9 sin segundo modelo), y estos pares suelen tener un único artículo, así que el factor reconoce ese trabajo de curación. Con 1,5 y `MIN_PESO_EVIDENCIA` = 0,7, un artículo humano de GO deja de ser débil desde confianza 47 (uno de otra fuente, desde 70); uno en ratón o en tumor lo sigue siendo (como mucho 0,9 × 1,5 × 0,5 = 0,675).
+  * `f_GO` **no cambia el NPS:** las fuentes externas solo se buscan para los pares sin abstract de GO, así que un par tiene solo artículos de GO o ninguno, y multiplicar todos sus votos por lo mismo no cambia qué clase gana ni la minoría. En el Excel completo, con 1,5, las 352 rutas y los 3.172 pares dan el mismo signo, lectura y NPS, y los pares con `evidencia_debil` pasan de 1.034 a 745 (con el umbral de entonces, 1,0).
   * El tipo de evidencia (afirmación de fondo, correlación…), la posición de la frase y el acuerdo entre modelos **ya están dentro de `Confianza_final`** (`fase2_inferencia/confianza.py`), así que no se vuelven a penalizar aquí.
   * Si `Confianza_final` falta en una fila resuelta, se toma 0,5 y la fila lleva la marca `peso_por_defecto`.
 
@@ -54,7 +54,7 @@ Para cada par se suman los pesos por clase: `W(+1)`, `W(−1)` y `W(neutro)`. Se
 Además:
 
 * **Conflicto sin anulación:** en la regla 5 se guardan los dos recuentos (`W(+1)`, `W(−1)`, `W(neutro)` y el número de PMIDs de cada clase, `n_PMIDs_pos`, `n_PMIDs_neg` y `n_PMIDs_neutro`). El conflicto se expresa con el estado y el motivo, nunca con un signo nuevo.
-* **Evidencia débil:** un par resuelto por la regla 4 (o que pasa a `revisar` por `LLM_y_revision`) con `W_total < 1` lleva además `evidencia_debil`. Es el caso, por ejemplo, de un único artículo en ratón.
+* **Evidencia débil:** un par resuelto por la regla 4 (o que pasa a `revisar` por `LLM_y_revision`) con `W_total < MIN_PESO_EVIDENCIA` (0,7) lleva además `evidencia_debil`. Es solo una marca para el experto: el signo cuenta igual en el NPS. Con un único artículo, es débil si es en ratón u otro organismo, en tumor u otro tipo celular, o con confianza menor que 70 (47 si lo cita la anotación de GO). Las cifras están en «Por qué».
 * **Contradicción dentro de un abstract:** va a `revisar` (regla 7) y no a `no_concluyente`, porque un abstract que da las dos direcciones suele describir una función dual real (p. ej. KIR2DL4 o la galectina-9). Eso es información para el experto, no una ausencia de evidencia.
 * **Votos sin peso:** si todos los votos pesan 0 (`Confianza_final = 0`), el par se trata como si no tuviera votos y lleva `votos_sin_peso`.
 * **Trazabilidad:** cada par guarda la lista de votos en el formato `signo:PMID(peso)`, uno por artículo, p. ej. `+1:10652336(0.86); -1:29988376(0.45)`.
@@ -79,7 +79,7 @@ Además:
 * **Conclusión de la ruta** (`Lectura`), con umbrales en `fase3_scoring/config.py`:
   * `insuficiente` si `n_con_signo < MIN_PARES_CON_SIGNO` (3) o `Cobertura < MIN_COBERTURA` (0,30);
   * si no: `activada` si `NPS ≥ UMBRAL_NPS` (+0,33), `inhibida` si `NPS ≤ −UMBRAL_NPS` y `mixta` en el resto.
-  * Son umbrales provisionales: los fijará el equipo con CIMUS al revisar las primeras rutas.
+  * Los valores se fijaron con datos (#35, ver «Por qué»). Se pueden revisar con la validación de CIMUS.
 * **Cobertura:** `Cobertura = n_resueltos / n_total`, donde `n_resueltos` incluye los neutros y `n_total` todos los pares de la ruta, también las inmunoglobulinas y los `sin_evidencia`.
 
 ### Salida
@@ -110,6 +110,19 @@ Las rutas se ordenan por `|NPS|` descendente y, a igualdad, por `GO_ID`; los par
   * **`|log2FC|` con tope o en escala logarítmica** (`min(|log2FC|, 3)`, `log2(1 + |log2FC|)`): cambian 14 y 11 rutas, pero el tope es arbitrario y la conclusión es la misma.
   * **`|log2FC| − 1,96 · lfcSE`:** penaliza la imprecisión, pero cambia 34 rutas y le da la vuelta a una de activada a inhibida. Depende demasiado del error estándar, que es grande justo en los genes poco expresados.
 
+* **Umbrales con datos** (#35, medido el 2026-11-25 con la ejecución de referencia del 2026-11-13 y el código actual de la Fase 3, en el Excel completo de CIMUS: 352 rutas, 1.258 pares resueltos por el LLM, 935 de ellos con un solo artículo).
+  * **`MIN_PESO_EVIDENCIA` = 0,7.** Con 1,0 marcaba `evidencia_debil` en 772 de los 1.258 pares (61 %), entre ellos 83 de un solo artículo humano en células inmunes con confianza 70 o más: la marca no distinguía la evidencia de verdad débil. Con 0,7 la llevan 608 (48 %; 615 contando los que van a `revisar` por `LLM_y_revision`). En los pares de un solo artículo separa justo lo que se quiere: los 573 que quedan débiles son de otro organismo o tipo celular (526) o de confianza menor que 70, y ninguno es humano en células inmunes con confianza 70 o más. Solo es una marca: no cambia ningún signo, NPS ni lectura. En la ruta del proyecto (GO:0072678) son débiles 5 de los 7 pares con signo del LLM; CCL3 e ITGAL no, porque su artículo lo cita la anotación de GO.
+  * **Lectura: se quedan `MIN_PARES_CON_SIGNO` = 3, `MIN_COBERTURA` = 0,30 y `UMBRAL_NPS` = 0,33** (132 activadas, 29 inhibidas, 45 mixtas y 146 insuficientes). En la rejilla 2/3/4 × 0,2/0,3/0,4 × 0,20/0,25/0,33/0,40/0,50, **ninguna** combinación pasa una ruta de activada a inhibida ni al revés: solo se mueven las fronteras con mixta e insuficiente, así que la conclusión de signo no depende de los umbrales. La ruta del proyecto tiene NPS 0,333: es activada con `UMBRAL_NPS` ≤ 0,33 y mixta con 0,40 o más (su variación entre ejecuciones está en `docs/kpis.md`, #37).
+
+  **Alternativas descartadas:**
+  * **`MIN_PESO_EVIDENCIA` = 1,0:** marca el 61 % de los pares, también artículos humanos de confianza alta.
+  * **`MIN_PESO_EVIDENCIA` = 0,5** (la propuesta de antes del factor de GO): marca 359 pares, pero deja sin marcar artículos de GO en ratón (0,49–0,64) y artículos humanos de confianza 50–69.
+  * **Sacar del NPS los pares débiles:** con el umbral de 1,0 dejaba 303 de 352 rutas `insuficiente` (cambiaban 167). Un artículo débil sigue siendo evidencia con signo; la marca basta para que el experto lo mire.
+  * **`MIN_PARES_CON_SIGNO` = 2:** baja `insuficiente` de 146 a 94, pero da lectura a rutas en las que deciden dos genes. **Con 4,** sube a 206 y deja sin lectura rutas pequeñas que la tienen.
+  * **`MIN_COBERTURA` = 0,2 o 0,4:** cambia 12 o 16 rutas, todas en la frontera con `insuficiente`.
+  * **`UMBRAL_NPS` = 0,25:** cambia 4 rutas. **Con 0,40 o 0,50,** pasan a mixta 36 o 42: de las 36 rutas evaluables con |NPS| entre 0,33 y 0,40, 35 están justo en ⅓ (20 de ellas con 2 genes a favor y 1 en contra). 0,33 deja dentro ese caso, en el que dos de cada tres genes que empujan lo hacen en el mismo sentido.
+  * Script: `research_notes/Piloto 31 y umbrales 2026-11-12/umbrales_fase3_2026-11-25.py` (fuera del repositorio).
+
 ## Restricciones
 * **Sin red, sin LLM y sin bases de datos:** solo lee ficheros locales ([ADR-004](../decisions/adr-004-persistencia-ficheros-locales.md)), así que se puede repetir cuantas veces se quiera sin gastar cupo.
 * **Determinista:** con las mismas entradas, el Excel de salida tiene exactamente el mismo contenido.
@@ -129,9 +142,10 @@ Las pruebas están en `codigo/tests/test_scoring.py`, con tablas sintéticas y s
 * [x] ✅ **Mayoría con minoría por debajo de ⅓** (`tests/test_scoring.py::test_mayoria_y_conflicto`): el mismo par con el `−1` en ratón (0,5) tiene una minoría de 0,5/2,5 = 20 %. Sale `+1`, `resuelto`, con el motivo `minoria_discrepante`.
 * [x] ✅ **Pesos** (`tests/test_scoring.py::test_pesos`): `Confianza_final = 80`, `Organismo = mouse` y `Tipo_celular = tumor` dan `w = 0,8 × 0,5 × 0,5 = 0,2`.
 * [x] ✅ **Evidencia débil** (`tests/test_scoring.py::test_evidencia_debil`): un único voto `−1` con `w = 0,4` da `−1`, `resuelto`, con `evidencia_debil`.
+* [x] ✅ **Umbral de evidencia débil** (`tests/test_scoring.py::test_umbral_de_evidencia_debil`): con `MIN_PESO_EVIDENCIA = 0,7`, un único artículo humano en NK con `Confianza_final = 70` no lleva `evidencia_debil`; con 69, o en ratón con 90, sí. Los tres dan `+1` y contribución 1.
 * [x] ✅ **Un voto por artículo** (`tests/test_scoring.py::test_un_articulo_vota_una_vez_por_par`): un artículo que responde `+1` con peso 0,36 para dos subprocesos suma 0,36, no 0,72, con un PMID y `evidencia_debil`; con pesos 0,4 y 0,7 vota con 0,7.
 * [x] ✅ **Artículo que se contradice** (`tests/test_scoring.py::test_articulo_que_se_contradice_entre_subprocesos`): `−1`, `+1` y `−1` del mismo artículo, solo, dan `UNKNOWN` y `revisar` con `conflicto_entre_abstracts`; con otro artículo `+1`, decide ese (`+1`, `W_pos = 1`, un PMID).
-* [x] ✅ **Artículo de GO** (`tests/test_scoring.py::test_articulo_de_go_pesa_mas`): un único voto `+1` en humano con `Confianza_final = 80` pesa 1,2 si su `Fuente` es `GOA` (sin `evidencia_debil`) y 0,8 si es `EuropePMC` (con `evidencia_debil`); los dos dan `+1` y la misma contribución. En ratón, el de GO pesa 0,8 × 1,5 × 0,5 = 0,6.
+* [x] ✅ **Artículo de GO** (`tests/test_scoring.py::test_articulo_de_go_pesa_mas`): un único voto `+1` en humano con `Confianza_final = 60` pesa 0,9 si su `Fuente` es `GOA` (sin `evidencia_debil`) y 0,6 si es `EuropePMC` (con `evidencia_debil`); los dos dan `+1` y la misma contribución. En ratón, el de GO pesa 0,8 × 1,5 × 0,5 = 0,6.
 * [x] ✅ **Solo UNKNOWN** (`tests/test_scoring.py::test_solo_unknown_no_entra_en_el_nps`): un par cuyos casos son todos `UNKNOWN` sale `no_concluyente`, con `Contribucion = 0`, y no entra en el cociente del NPS.
 * [x] ✅ **Contradicción** (`tests/test_scoring.py::test_contradiccion_va_a_revisar`): un par sin votos con un caso `contradictorio` sale `revisar`, no `no_concluyente`.
 * [x] ✅ **Pendiente** (`tests/test_scoring.py::test_pendiente`): un par sin votos con algún caso `pendiente` sale `pendiente`. Un par del LLM sin ningún caso en la Fase 2 sale `pendiente` con `sin_fase2`, y la ruta cuenta los dos en `n_pendiente` (2).

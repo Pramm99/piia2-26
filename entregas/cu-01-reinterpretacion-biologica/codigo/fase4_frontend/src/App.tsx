@@ -198,7 +198,7 @@ const motivos = (m: string | null | undefined) =>
 // Peso de cada voto en la Fase 3 (fase3_scoring/config.py): confianza / 100, por 0,5 si el estudio no es en humano,
 // otro 0,5 si no es en células inmunes y por FACTOR_FUENTE_GO (lo envía el puente) si el artículo lo cita la
 // anotación de GO. Un gen con menos de MIN_PESO_EVIDENCIA a su favor tiene evidencia débil.
-const MIN_PESO_EVIDENCIA = 1;
+const MIN_PESO_EVIDENCIA = 0.7;
 const ORGANISMOS_VALIDOS = ['human', 'not_stated', ''];
 const TIPOS_CELULARES_VALIDOS = ['NK', 'T', 'other_immune', 'not_stated', ''];
 const ORGANISMO_TEXTO: Record<string, string> = { mouse: 'ratón', rat: 'rata', other: 'otro organismo' };
@@ -253,13 +253,13 @@ const PesoEvidencia = ({ g, d }: { g: GeneContribution; d?: DetalleGen }) => {
       <div style={{ position: 'relative', width: '120px', height: '6px', backgroundColor: 'var(--c-1e293b)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
         {pos > 0 && barra(pos, 'var(--c-2dd4bf)')}
         {neg > 0 && barra(neg, 'var(--c-fb7185)')}
-        <div title="Umbral: peso 1" style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '2px', backgroundColor: 'var(--c-f8fafc)' }} />
+        <div title="Umbral: peso 0,7" style={{ position: 'absolute', left: `${(MIN_PESO_EVIDENCIA / 2) * 100}%`, top: 0, bottom: 0, width: '2px', backgroundColor: 'var(--c-f8fafc)' }} />
       </div>
       <div style={{ fontSize: '11px', color: debil ? 'var(--c-fbbf24)' : 'var(--c-cbd5e1)', marginTop: '3px' }}>
         {pos > 0 && <>{coma(pos)} activa</>}
         {pos > 0 && neg > 0 && ' · '}
         {neg > 0 && <>{coma(neg)} inhibe</>}
-        {debil && ' (débil, < 1)'}
+        {debil && ' (débil, < 0,7)'}
       </div>
     </div>
   );
@@ -318,7 +318,7 @@ const ChipGen = ({ g, onClick }: { g: GeneContribution; onClick: () => void }) =
           {fuente}
         </span>
       )}
-      {debil && <span title="Evidencia débil (peso < 1)" style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--c-fbbf24)' }} />}
+      {debil && <span title="Evidencia débil (peso < 0,7)" style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--c-fbbf24)' }} />}
     </button>
   );
 };
@@ -1014,7 +1014,7 @@ export default function App() {
 
               <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)' }}>
                 Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
-                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes, y por 1,5 si es el artículo que cita la anotación de Gene Ontology del gen; un gen con un peso total menor que 1 (la raya blanca de la barra) tiene evidencia débil.
+                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes, y por 1,5 si es el artículo que cita la anotación de Gene Ontology del gen; un gen con un peso total menor que 0,7 (la raya blanca de la barra) tiene evidencia débil: un solo artículo en ratón, en tumor o con poca confianza.
                 Pulsa un gen para ver sus artículos y el cálculo. En la última columna, <strong>Tu criterio</strong>, una persona experta puede
                 decir que un gen activa, inhibe o no cambia el proceso: el resultado se recalcula al momento y el cambio pasa a los Excels.
               </div>
@@ -1140,7 +1140,7 @@ export default function App() {
                                 {g.Origen === 'LLM' && (
                                   <div style={{ fontSize: '12px', color: 'var(--c-cbd5e1)' }}>
                                     Peso total: {coma(Number(g.W_pos || 0))} a favor de que activa y {coma(Number(g.W_neg || 0))} a favor de que inhibe.
-                                    {Math.max(Number(g.W_pos || 0), Number(g.W_neg || 0)) < MIN_PESO_EVIDENCIA && ' No llega a 1: la evidencia es débil, pero el signo cuenta igual en el NPS.'}
+                                    {Math.max(Number(g.W_pos || 0), Number(g.W_neg || 0)) < MIN_PESO_EVIDENCIA && ' No llega a 0,7: la evidencia es débil, pero el signo cuenta igual en el NPS.'}
                                   </div>
                                 )}
                               </td>
