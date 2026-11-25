@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from 'react';
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -19,6 +19,7 @@ import ExcelResultados from './ExcelResultados';
 import { MenuAjustes, PanelTokens } from './TokenApi';
 import Progreso, { Girador } from './Progreso';
 import Logo from './Logo';
+import { celulaPenaliza, celulasQuePesanEntero, ESTUDIO_NK, EstudioContexto, etiquetaEstudio, leerEstudio, TIPO_CELULAR_TEXTO, type Estudio } from './estudio';
 import { aplicarCriterio, genesParaCambiar, MIN_COBERTURA, MIN_PARES_CON_SIGNO, recalcularRuta, UMBRAL_NPS, type Criterio } from './lectura';
 
 // En desarrollo (npm run dev) el puente va aparte, en el 8000. Compilada (npm run build), la sirve el propio puente
@@ -196,21 +197,19 @@ const motivos = (m: string | null | undefined) =>
   (m || '').split('|').map((x) => x.trim()).filter(Boolean).map((x) => MOTIVO_TEXTO[x] || x);
 
 // Peso de cada voto en la Fase 3 (fase3_scoring/config.py): confianza / 100, por 0,5 si el estudio no es en humano,
-// otro 0,5 si no es en células inmunes y por FACTOR_FUENTE_GO (lo envía el puente) si el artículo lo cita la
+// otro 0,5 si su tipo celular no es de la clase de la célula del estudio (src/estudio.ts) y por FACTOR_FUENTE_GO (lo envía el puente) si el artículo lo cita la
 // anotación de GO. Un gen con menos de MIN_PESO_EVIDENCIA a su favor tiene evidencia débil.
 const MIN_PESO_EVIDENCIA = 0.7;
 const ORGANISMOS_VALIDOS = ['human', 'not_stated', ''];
-const TIPOS_CELULARES_VALIDOS = ['NK', 'T', 'other_immune', 'not_stated', ''];
 const ORGANISMO_TEXTO: Record<string, string> = { mouse: 'ratón', rat: 'rata', other: 'otro organismo' };
-const CELULA_TEXTO: Record<string, string> = { tumor: 'células tumorales', other: 'células no inmunes' };
 
 const coma = (v: number) => v.toFixed(2).replace('.', ',');
 
-const calculoPeso = (v: Voto) => {
+const calculoPeso = (v: Voto, estudio: Estudio) => {
   const factores: string[] = [];
   if (v.Factor_GO) factores.push(`${String(v.Factor_GO).replace('.', ',')} por citarlo la anotación de GO`);
   if (!ORGANISMOS_VALIDOS.includes(v.Organismo)) factores.push(`0,5 por ser en ${ORGANISMO_TEXTO[v.Organismo] || v.Organismo}`);
-  if (!TIPOS_CELULARES_VALIDOS.includes(v.Tipo_celular)) factores.push(`0,5 por ser en ${CELULA_TEXTO[v.Tipo_celular] || v.Tipo_celular}`);
+  if (celulaPenaliza(estudio, v.Tipo_celular)) factores.push(`0,5 por ser en ${TIPO_CELULAR_TEXTO[v.Tipo_celular] || v.Tipo_celular}`);
   const confianza = v.Confianza === null ? 'confianza por defecto 50 %' : `confianza ${v.Confianza} %`;
   return factores.length ? `${coma(v.Peso)} (${confianza} × ${factores.join(' × ')})` : `${coma(v.Peso)} (${confianza})`;
 };
@@ -324,6 +323,7 @@ const ChipGen = ({ g, onClick }: { g: GeneContribution; onClick: () => void }) =
 };
 
 const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribution[]; onGen: (gen: string) => void }) => {
+  const estudio = useContext(EstudioContexto);
   const activan = pares.filter((g) => Number(g.Contribucion) > 0);
   const inhiben = pares.filter((g) => Number(g.Contribucion) < 0);
   const noCuentan = pares.filter((g) => Number(g.Contribucion) === 0);
@@ -391,7 +391,7 @@ const Veredicto = ({ r, pares, onGen }: { r: PathwayResult; pares: GeneContribut
         {columna('No cuentan', noCuentan, 'var(--c-64748b)')}
       </div>
       <div style={{ fontSize: '11px', color: 'var(--c-94a3b8)' }}>
-        ▲ sobreexpresado · ▼ infraexpresado en NK · <span style={{ color: 'var(--c-38bdf8)' }}>GO</span> evidencia directa de Gene Ontology · artículos: lo decidió el LLM leyendo PubMed ·{' '}
+        ▲ sobreexpresado · ▼ infraexpresado en {estudio.celula} · <span style={{ color: 'var(--c-38bdf8)' }}>GO</span> evidencia directa de Gene Ontology · artículos: lo decidió el LLM leyendo PubMed ·{' '}
         <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--c-fbbf24)' }} /> evidencia débil. Pulsa un gen para ver su detalle.
       </div>
     </div>
@@ -417,6 +417,7 @@ const avisoLLM = (llm: Resultado['llm']): { texto: string; grave: boolean } | nu
 
 export default function App() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
+  const [estudio, setEstudio] = useState<Estudio>(ESTUDIO_NK);
   const [tema, setTema] = useState<'oscuro' | 'claro'>(() => {
     try {
       return localStorage.getItem('tema') === 'claro' ? 'claro' : 'oscuro';
@@ -473,6 +474,15 @@ export default function App() {
     const id = setInterval(check, 5000);
     return () => clearInterval(id);
   }, []);
+
+  // El estudio (tipo celular y tejido) lo da el puente; sin puente se queda el de CIMUS
+  useEffect(() => {
+    if (!backendOnline) return;
+    fetch(`${API_URL}/estudio`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => setEstudio(leerEstudio(d)))
+      .catch(() => setEstudio(ESTUDIO_NK));
+  }, [backendOnline]);
 
   // Mientras se ejecuta, se consulta al puente qué fase va por
   useEffect(() => {
@@ -698,6 +708,7 @@ export default function App() {
   };
 
   return (
+    <EstudioContexto.Provider value={estudio}>
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--c-020617)', color: 'var(--c-f8fafc)', display: 'flex', flexDirection: 'column', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
       {/* HEADER */}
@@ -708,7 +719,7 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '16px', fontWeight: 'bold' }}>PathwayPulse</span>
               <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(20, 184, 166, 0.12)', color: 'var(--c-5eead4)', border: '1px solid rgba(20, 184, 166, 0.25)' }}>
-                Células NK · Laringe y Faringe (HNSC)
+                {etiquetaEstudio(estudio)}
               </span>
               <span style={{
                 fontSize: '10px',
@@ -1013,8 +1024,8 @@ export default function App() {
               </div>
 
               <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)' }}>
-                Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en NK, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
-                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en células inmunes, y por 1,5 si es el artículo que cita la anotación de Gene Ontology del gen; un gen con un peso total menor que 0,7 (la raya blanca de la barra) tiene evidencia débil: un solo artículo en ratón, en tumor o con poca confianza.
+                Un gen empuja hacia <strong>activada</strong> si activa el proceso y está sobreexpresado en {estudio.celula}, o si lo inhibe y está infraexpresado; hacia <strong>inhibida</strong> en los otros dos casos.
+                El <strong>peso</strong> de cada artículo es la confianza del LLM, por 0,5 si el estudio no es en humano y otro 0,5 si no es en {celulasQuePesanEntero(estudio)}, y por 1,5 si es el artículo que cita la anotación de Gene Ontology del gen; un gen con un peso total menor que 0,7 (la raya blanca de la barra) tiene evidencia débil: un solo artículo en ratón, en otro tipo de célula o con poca confianza.
                 Pulsa un gen para ver sus artículos y el cálculo. En la última columna, <strong>Tu criterio</strong>, una persona experta puede
                 decir que un gen activa, inhibe o no cambia el proceso: el resultado se recalcula al momento y el cambio pasa a los Excels.
               </div>
@@ -1025,7 +1036,7 @@ export default function App() {
                     <tr style={{ borderBottom: '1px solid var(--c-1e293b)', color: 'var(--c-94a3b8)' }}>
                       <th style={{ padding: '9px', width: '20px' }}></th>
                       <th style={{ padding: '9px' }}>Gen</th>
-                      <th style={{ padding: '9px' }}>En NK</th>
+                      <th style={{ padding: '9px' }}>En {estudio.celula}</th>
                       <th style={{ padding: '9px' }}>Qué hace en el proceso</th>
                       <th style={{ padding: '9px' }}>Efecto en la ruta</th>
                       <th style={{ padding: '9px' }}>Fuente</th>
@@ -1126,7 +1137,7 @@ export default function App() {
                                           {a.Votos.map((v, i) => (
                                             <li key={i}>
                                               {v.Proceso}: <strong style={{ color: v.Signo === '+1' ? 'var(--c-2dd4bf)' : v.Signo === '-1' ? 'var(--c-fb7185)' : 'var(--c-fbbf24)' }}>{(SIGNO_TEXTO[v.Signo] || v.Signo).toLowerCase()}</strong>
-                                              {['+1', '-1', 'neutro'].includes(v.Signo) && <>, peso {calculoPeso(v)}</>}
+                                              {['+1', '-1', 'neutro'].includes(v.Signo) && <>, peso {calculoPeso(v, estudio)}</>}
                                               {v.Cuenta && a.Votos.length > 1 && <strong style={{ color: 'var(--c-e2e8f0)' }}> ← es la que cuenta</strong>}
                                             </li>
                                           ))}
@@ -1191,5 +1202,6 @@ export default function App() {
         </div>
       )}
     </div>
+    </EstudioContexto.Provider>
   );
 }

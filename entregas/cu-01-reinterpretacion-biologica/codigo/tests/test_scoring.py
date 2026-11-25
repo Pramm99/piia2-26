@@ -219,7 +219,7 @@ def test_log2fc_solo_cambia_la_sensibilidad(tmp_path):
     assert (r.iloc[0].Lectura_log2FC, r.iloc[0].Sensible_al_peso) == ("", "") and pd.isna(r.iloc[0].NPS_log2FC)
 
 
-@pytest.mark.skipif(not config.FICHERO_LOG2FC.exists(), reason="hace falta la tabla de log2FC de CIMUS")
+@pytest.mark.skipif(not (config.FICHERO_LOG2FC and config.FICHERO_LOG2FC.exists()), reason="hace falta la tabla de log2FC de CIMUS")
 def test_tabla_de_log2fc_de_cimus():
     """Los 224 genes de las dos listas tienen log2FC y ninguno contradice su lista (si no, ValueError)."""
     direcciones = {}

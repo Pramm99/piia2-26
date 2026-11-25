@@ -2,7 +2,7 @@
   python -m fase3_scoring [excel_fase1|-] [excel_fase2|-] [log2fc.xlsx|.csv|-|ninguno]
 Escribe codigo/data/fase3_scoring.xlsx (hojas Por_ruta, Por_par, Resumen y Abstracts_sin_signo). Por defecto lee
 codigo/fase1_ingesta/fase1_dataset_abstracts.xlsx, codigo/data/fase2_resultados.xlsx y, si existe, la tabla de
-log2FC de CIMUS (config.FICHERO_LOG2FC), que solo cambia la sensibilidad (NPS_log2FC), no el NPS. Un «-» deja ese
+log2FC del estudio (log2fc de codigo/estudio.json), que solo cambia la sensibilidad (NPS_log2FC), no el NPS. Un «-» deja ese
 argumento por defecto; «ninguno» calcula sin log2FC.
 """
 import sys
@@ -20,7 +20,7 @@ from fase3_scoring.nps import calcular, escribir
 
 def main(argv) -> None:
     arg = lambda i: argv[i] if len(argv) > i and argv[i] != "-" else None
-    log2fc = arg(3) or (config.FICHERO_LOG2FC if config.FICHERO_LOG2FC.exists() else None)
+    log2fc = arg(3) or (config.FICHERO_LOG2FC if config.FICHERO_LOG2FC and config.FICHERO_LOG2FC.exists() else None)
     pares, rutas, res, abstracts = calcular(arg(1) or config.FICHERO_FASE1, arg(2) or config.FICHERO_FASE2,
                                  None if log2fc == "ninguno" else log2fc)
     print(pares.groupby(["Estado_par", "Signo_par"]).size().to_string())

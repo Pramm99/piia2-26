@@ -70,7 +70,7 @@ def _triaje_par(gen, anots):
     evidencias = "|".join(sorted(set(firmadas["Evidencia"])))
     pmids = "|".join(sorted({p for ps in firmadas["PMIDs"] for p in ps}))
 
-    contexto = firmadas["CL_no_NK"] != ""
+    contexto = firmadas["CL_otra_celula"] != ""
     indirecta = firmadas["Calificador"].str.startswith("acts_upstream_of")
     fiables = firmadas[firmadas["Experimental"] & (firmadas["PMIDs"].str.len() > 0)
                        & (firmadas["Profundidad_signo"] <= PROFUNDIDAD_MAX_ACEPTAR)
@@ -85,7 +85,7 @@ def _triaje_par(gen, anots):
     if not (firmadas["Experimental"] & (firmadas["PMIDs"].str.len() > 0)).any():
         motivos.append("sin_experimental")
     if contexto.any():
-        motivos.append("contexto_no_NK")
+        motivos.append("contexto_otra_celula")
     if indirecta.any():
         motivos.append("indirecto")
     if firmadas["Estados"].apply(lambda s: "P" in s and not ({"+", "-"} & s)).all():

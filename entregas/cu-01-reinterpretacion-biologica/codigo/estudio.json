@@ -1,0 +1,10 @@
+{
+  "_ayuda": "Describe el conjunto de datos que se analiza. Para otro tipo celular u otro tejido, cambia estos valores (o apunta la variable de entorno ESTUDIO_JSON a otro fichero con las mismas claves). Las rutas son relativas a codigo/. Ver specs/descarga-evidencias-go-pmc.md, apartado «Estudio».",
+  "celula": "células NK",
+  "cl_celula": "CL:0000623",
+  "clase_celula": "inmune",
+  "tejido": "laringe y faringe (HNSC)",
+  "excel_activadas": "tools_cimus/NK_rutas_activadas_GO.xlsx",
+  "excel_suprimidas": "tools_cimus/NK_rutas_suprimidas_GO.xlsx",
+  "log2fc": "tools_cimus/NK_cells_DESeq2_results.xlsx"
+}

@@ -390,6 +390,7 @@ def resumen(pares: pd.DataFrame, rutas: pd.DataFrame, entradas: Dict[str, Option
         filas += [("Lectura_log2FC", k, int(n)) for k, n in rutas["Lectura_log2FC"].value_counts().sort_index().items()]
         filas.append(("Sensibilidad", "rutas Sensible_al_peso", int((rutas["Sensible_al_peso"] == "sí").sum())))
     filas += [("Entrada", k, f"{v} ({_fecha(v)})" if v else "no") for k, v in entradas.items()]
+    filas += [("Estudio", k, getattr(config.ESTUDIO, k)) for k in ("celula", "cl_celula", "clase_celula", "tejido")]
     filas += [("Parametro", k, str(getattr(config, k))) for k in
               ("ORGANISMOS_VALIDOS", "TIPOS_CELULARES_VALIDOS", "FACTOR_CONTEXTO", "FACTOR_FUENTE_GO", "CONFIANZA_POR_DEFECTO",
                "UMBRAL_MINORIA", "MIN_PESO_EVIDENCIA", "MIN_PARES_CON_SIGNO", "MIN_COBERTURA", "UMBRAL_NPS")]

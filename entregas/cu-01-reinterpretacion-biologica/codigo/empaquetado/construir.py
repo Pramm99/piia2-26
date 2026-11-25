@@ -11,8 +11,9 @@ instalador. Necesita Node.js y, en el mismo Python que tiene requirements.txt, `
 
 Lleva las cachés de la Fase 1 y el registro de respuestas del LLM de codigo/data, para que las rutas ya analizadas
 salgan al momento y sin clave; nunca codigo/.env, y se para si encuentra algo con forma de clave en lo que va a
-empaquetar. La tabla de log2FC de CIMUS (tools_cimus/NK_cells_DESeq2_results.xlsx) no es pública: con
---sin-datos-cimus no la lleva (y la interfaz no da el NPS pesado por log2FC).
+empaquetar. Los Excels de rutas y la tabla de log2FC son los de codigo/estudio.json, que va con el programa (#51).
+La tabla de log2FC de CIMUS no es pública: con --sin-datos-cimus no la lleva (y la interfaz no da el NPS pesado por
+log2FC).
 """
 import re
 import shutil
@@ -22,6 +23,9 @@ import zipfile
 from pathlib import Path
 
 from comun import EXE_APP, NOMBRE, VERSION
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # codigo/, para leer el estudio
+from estudio import FICHERO_ESTUDIO, leer_estudio  # noqa: E402
 
 AQUI = Path(__file__).resolve().parent
 CODIGO = AQUI.parent
@@ -34,9 +38,11 @@ INSTALADOR = f"Instalar {NOMBRE}"
 CODIGO_FUENTE = ["fase1_ingesta", "fase2_inferencia", "fase3_scoring"]
 DATOS = ["go-basic.obo", "goa_human.gaf.gz", "hgnc_inmunoglobulinas.json", "uniprot_inmunoglobulinas.json",
          "respuestas_llm.jsonl", "cache_abstracts.json", "cache_epmc_busquedas.json", "cache_gene2pubmed.json",
-         "cache_mygene.json", "cache_nombres_proteina.json", "cache_uniprot.json"]
-EXCELS_RUTAS = ["NK_rutas_activadas_GO.xlsx", "NK_rutas_suprimidas_GO.xlsx"]
-LOG2FC = "NK_cells_DESeq2_results.xlsx"
+         "cache_mygene.json", "cache_nombres_proteina.json", "cache_uniprot.json", "cache_cell_ontology.json"]
+# Los ficheros del estudio, relativos a codigo/ (la misma ruta dentro del programa)
+_ESTUDIO = leer_estudio(FICHERO_ESTUDIO)
+EXCELS_RUTAS = [_ESTUDIO.excel_activadas.relative_to(CODIGO), _ESTUDIO.excel_suprimidas.relative_to(CODIGO)]
+LOG2FC = _ESTUDIO.log2fc.relative_to(CODIGO) if _ESTUDIO.log2fc else None
 # Claves de Gemini, Groq y Cerebras (AGENTS.md, regla 3)
 PATRON_CLAVE = re.compile(rb"AIza[0-9A-Za-z_-]{35}|gsk_[0-9A-Za-z]{40,}|csk-[0-9A-Za-z]{20,}|AQ\.[0-9A-Za-z_-]{30,}")
 
@@ -70,12 +76,14 @@ def copiar_codigo(destino: Path, con_log2fc: bool):
     puente.mkdir(parents=True)
     shutil.copy2(CODIGO / "fase4_frontend" / "api_puente.py", puente)
     shutil.copytree(CODIGO / "fase4_frontend" / "dist", puente / "dist")
-    (destino / "tools_cimus").mkdir()
-    for nombre in EXCELS_RUTAS + ([LOG2FC] if con_log2fc else []):
-        if (CODIGO / "tools_cimus" / nombre).exists():
-            shutil.copy2(CODIGO / "tools_cimus" / nombre, destino / "tools_cimus")
+    for nombre in ("estudio.py", "estudio.json"):
+        shutil.copy2(CODIGO / nombre, destino / nombre)
+    for nombre in EXCELS_RUTAS + ([LOG2FC] if con_log2fc and LOG2FC else []):
+        if (CODIGO / nombre).exists():
+            (destino / nombre).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(CODIGO / nombre, destino / nombre)
         elif nombre != LOG2FC:
-            sys.exit(f"Falta tools_cimus/{nombre}")
+            sys.exit(f"Falta {nombre}")
     (destino / "data").mkdir()
     for nombre in DATOS:
         if (CODIGO / "data" / nombre).exists():
@@ -111,7 +119,7 @@ def main():
     ejemplos = APP / "Excels de ejemplo"
     ejemplos.mkdir()
     for nombre in EXCELS_RUTAS:
-        shutil.copy2(CODIGO / "tools_cimus" / nombre, ejemplos)
+        shutil.copy2(CODIGO / nombre, ejemplos)
     sin_claves(APP)
 
     paso("4/6 Desinstalador")

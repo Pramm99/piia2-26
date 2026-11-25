@@ -1,6 +1,6 @@
 """Fase 4: la lógica de la interfaz (TypeScript), probada con node (sin navegador ni red).
 
-* Las pruebas de fase4_frontend/pruebas/ (node --test): «Tu criterio» y el Excel de resultados.
+* Las pruebas de fase4_frontend/pruebas/ (node --test): «Tu criterio», el Excel de resultados y el estudio.
 * «Tu criterio» en pantalla (src/lectura.ts) da lo mismo que fase3_scoring/nps.py con los mismos signos: rutas
   reales ya ejecutadas en codigo/data/frontend/ (si están) y una sintética, cambiando cada gen a cada signo y varios
   genes a la vez.
@@ -30,7 +30,7 @@ CAMPOS_PAR = ("Gen", "Direccion", "Signo_par", "Estado_par", "Origen", "Motivos"
 
 
 def test_pruebas_de_la_interfaz():
-    r = subprocess.run([NODE, "--test", "pruebas/lectura.test.ts", "pruebas/acumulado.test.ts"], cwd=WEB,
+    r = subprocess.run([NODE, "--test", "pruebas/lectura.test.ts", "pruebas/acumulado.test.ts", "pruebas/estudio.test.ts"], cwd=WEB,
                        capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -108,7 +108,7 @@ RUTAS_REALES = sorted((config.DIR_CODIGO / "data" / "frontend").glob("GO_*"))
 @pytest.mark.skipif(not RUTAS_REALES, reason="no hay rutas ejecutadas en codigo/data/frontend/")
 def test_tu_criterio_en_pantalla_igual_que_la_fase3_rutas_reales(monkeypatch):
     """Las rutas ejecutadas desde la interfaz (sus Excels de las Fases 1 y 2), con la tabla de log2FC si está."""
-    log2fc = config.FICHERO_LOG2FC if config.FICHERO_LOG2FC.exists() else None
+    log2fc = config.FICHERO_LOG2FC if config.FICHERO_LOG2FC and config.FICHERO_LOG2FC.exists() else None
     rutas = []
     for carpeta in RUTAS_REALES:
         f1, f2 = carpeta / "fase1_dataset_abstracts.xlsx", carpeta / "fase2_resultados.xlsx"

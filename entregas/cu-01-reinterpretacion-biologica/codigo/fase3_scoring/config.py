@@ -3,17 +3,22 @@
 lógica."""
 from pathlib import Path
 
+from estudio import leer_estudio
+
+ESTUDIO = leer_estudio()  # codigo/estudio.json (#51): tipo celular, tejido y tabla de log2FC
 DIR_CODIGO = Path(__file__).resolve().parent.parent
 FICHERO_FASE1 = DIR_CODIGO / "fase1_ingesta" / "fase1_dataset_abstracts.xlsx"
 FICHERO_FASE2 = DIR_CODIGO / "data" / "fase2_resultados.xlsx"
 FICHERO_SCORING = DIR_CODIGO / "data" / "fase3_scoring.xlsx"
-# Tabla de expresión diferencial de CIMUS (log2FC por gen). Si existe, el CLI la usa sola para NPS_log2FC.
-FICHERO_LOG2FC = DIR_CODIGO / "tools_cimus" / "NK_cells_DESeq2_results.xlsx"
+# Tabla de expresión diferencial del estudio (log2FC por gen; la de CIMUS no se versiona). Si existe, el CLI la usa
+# sola para NPS_log2FC. None si el estudio no la tiene.
+FICHERO_LOG2FC = ESTUDIO.log2fc
 
 # Peso del voto: w = Confianza_final / 100 × f_contexto. Cada condición de contexto que no se cumple multiplica
-# por FACTOR_CONTEXTO (ratón u otro organismo; tumor u otro tipo celular). Sin dato del modelo vale como cumplida.
+# por FACTOR_CONTEXTO (ratón u otro organismo; un tipo celular de otra clase que la del estudio: para NK, tumor u otro
+# tipo celular). Sin dato del modelo vale como cumplida.
 ORGANISMOS_VALIDOS = ("human", "not_stated")
-TIPOS_CELULARES_VALIDOS = ("NK", "T", "other_immune", "not_stated")
+TIPOS_CELULARES_VALIDOS = ESTUDIO.tipos_celulares_validos  # según clase_celula (estudio.TIPOS_LLM_POR_CLASE)
 FACTOR_CONTEXTO = 0.5
 CONFIANZA_POR_DEFECTO = 50  # fila resuelta sin Confianza_final (marca peso_por_defecto)
 # El artículo que cita la anotación de GO del gen (Fuente GOA en la Fase 1) multiplica su peso: un curador ya lo

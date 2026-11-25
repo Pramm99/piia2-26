@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test pruebas/lectura.test.ts pruebas/acumulado.test.ts"
+    "test": "node --test pruebas/lectura.test.ts pruebas/acumulado.test.ts pruebas/estudio.test.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.5",

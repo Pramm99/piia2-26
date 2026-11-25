@@ -15,7 +15,7 @@ Un módulo de ingesta (Fase 1, `codigo/fase1_ingesta/`, `python codigo/fase1_ing
      * en las rutas «positive/negative regulation of X», un término de X cuenta con el signo de la ruta (signo por pertenencia);
      * las rutas «regulation of X» sin dirección se tratan como X (`SIN_DIRECCION_COMO_PROCESO`, en `config.py`);
      * la regulación no se propaga después de un `part_of` ni por las aristas sin signo.
-   * **Cruce con el GAF.** Se recuperan las anotaciones de cada gen a la ruta o a cualquiera de sus descendientes, con su `PMID`, su código de evidencia, su calificador y su extensión. Los calificadores `acts_upstream_of_*_effect` componen el signo, y `occurs_in` con una célula distinta de NK queda marcado.
+   * **Cruce con el GAF.** Se recuperan las anotaciones de cada gen a la ruta o a cualquiera de sus descendientes, con su `PMID`, su código de evidencia, su calificador y su extensión. Los calificadores `acts_upstream_of_*_effect` componen el signo, y un `occurs_in` con una célula que no es la del estudio (ni sus ancestros ni sus subtipos en Cell Ontology) queda marcado en `CL_otra_celula` y con el motivo `contexto_otra_celula`, así que no se acepta sin el LLM.
 5. **Triaje del signo GO** (`polaridad.py`): para cada par (gen, ruta) se decide el `Destino`:
    * `aceptar_GO`: el signo de GO se acepta sin LLM, con revisión ligera. Exige un camino corto (profundidad ≤ `PROFUNDIDAD_MAX_ACEPTAR` = 2, o signo por pertenencia) y una anotación experimental con PMID que no ocurre en otra célula ni es indirecta.
    * `LLM`: la decide la Fase 2.
@@ -86,7 +86,20 @@ Las fuentes externas existen porque muchos pares no tienen ningún artículo en 
 * **Códigos de evidencia:** Se aceptan **todos los códigos de evidencia** que lleven `PMID`. Las anotaciones automáticas `IEA` quedan fuera de forma natural, porque nunca llevan PMID. Cada fila indica en la columna `Experimental` si su evidencia es experimental (`EXP`, `IDA`, `IPI`, `IMP`, `IGI`, `IEP` y sus equivalentes de alto rendimiento). El filtro estricto (`SOLO_EXPERIMENTAL`) es configurable y está desactivado por defecto.
 * **Resolución de genes:** Un gen se identifica por su símbolo oficial y, solo si no hay ambigüedad, por un sinónimo del GAF (un sinónimo que sea el símbolo oficial de otro gen no se usa).
 * **Formatos de entrada heterogéneos:** El módulo debe aceptar ficheros `.xlsx` y `.csv`, verificando la existencia de las columnas obligatorias (`ID`, `Description`, `geneID`) antes de iniciar las llamadas de red. `entrada_excel.leer_tabla` elige el lector por la extensión (en `.csv`, el separador `,` o `;` se detecta solo) y `main.py` lee y valida los dos ficheros antes de descargar el OBO y el GAF. Cualquier otra extensión se rechaza con `ValueError`.
-* **Ubicación de la entrada:** `config.py` lee directamente los Excels originales de CIMUS, versionados en `codigo/tools_cimus/` (`NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`), así que un clon limpio del repositorio tiene ya la entrada.
+* **Ubicación de la entrada:** los Excels de rutas son los de `codigo/estudio.json` (ver «Estudio»). Por defecto, los originales de CIMUS, versionados en `codigo/tools_cimus/` (`NK_rutas_activadas_GO.xlsx` y `NK_rutas_suprimidas_GO.xlsx`), así que un clon limpio del repositorio tiene ya la entrada.
+* **Estudio** (#51): `codigo/estudio.json` describe el conjunto de datos, y lo leen todas las fases y la interfaz (`codigo/estudio.py`). La variable de entorno `ESTUDIO_JSON` apunta a otro fichero con las mismas claves, sin tocar el del repositorio. Un valor que falta o no vale da `ValueError` antes de tocar la red.
+
+  | Clave | Qué es | Valor de CIMUS |
+  |---|---|---|
+  | `celula` | El tipo celular en palabras, para la interfaz y los Excels | `células NK` |
+  | `cl_celula` | Su término de Cell Ontology | `CL:0000623` |
+  | `clase_celula` | `inmune`, `tumoral` u `otra`: qué tipo celular de los artículos pesa entero en la Fase 3 | `inmune` |
+  | `tejido` | El tejido o el tumor, para la interfaz | `laringe y faringe (HNSC)` |
+  | `excel_activadas`, `excel_suprimidas` | Los dos Excels de rutas, relativos a `codigo/` | `tools_cimus/NK_rutas_*_GO.xlsx` |
+  | `log2fc` | Tabla de log2FC (opcional; vacío si no hay) | `tools_cimus/NK_cells_DESeq2_results.xlsx` |
+
+  * Los **tipos celulares compatibles** son el término del estudio, sus ancestros y sus subtipos (`fuentes/cell_ontology.py`), consultados en OLS4 una vez por término y guardados en `codigo/data/cache_cell_ontology.json`. Para NK se usa la lista fija de `config.py` (`CL_COMPATIBLES_NK`), sin red; OLS4 da hoy 17 subtipos más que no aparecen en ningún `occurs_in` del GAF humano, así que el resultado es el mismo.
+  * **Fuera del estudio configurable:** la especie (el GAF, MyGene y el filtro MeSH son de humano), la tabla ruta GO→MeSH de gene2pubmed (hecha a mano para las 252 rutas de CIMUS: otras rutas no tienen esa fuente) y la lista de genes de función dual (`GENES_VIGILANCIA`, pensada para NK, que solo manda más pares al LLM).
 * **Gestión de credenciales y red:** El correo de contacto y la clave de API de NCBI (`NCBI_EMAIL`, `NCBI_API_KEY`) se leen de las variables de entorno o del fichero `codigo/.env` (documentado en `codigo/.env.example`), sin escribir datos privados en el código. `codigo/.env` no se sube al repositorio. Si no hay correo, no se envía ninguno.
 
 ## Criterios de aceptación

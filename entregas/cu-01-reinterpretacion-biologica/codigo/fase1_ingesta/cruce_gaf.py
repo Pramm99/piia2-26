@@ -4,7 +4,8 @@ import re
 
 import pandas as pd
 
-from config import CL_COMPATIBLES_NK, EVIDENCIAS_EXPERIMENTALES, GAF_FILE, SOLO_EXPERIMENTAL
+from config import ESTUDIO, EVIDENCIAS_EXPERIMENTALES, GAF_FILE, SOLO_EXPERIMENTAL
+from fuentes.cell_ontology import cl_compatibles
 from grafo_go import CON_SIGNO, NOMBRE_ESTADO, componer, estados_efectivos, polaridad_desde_estados
 
 # Calificadores (col 4) que ya traen signo: se componen con el del camino hasta la ruta
@@ -75,9 +76,10 @@ def cruzar_con_gaf(pares, desc_map):
         return [(s, "sinonimo") for s in sinonimos
                 if s in genes_query and s not in simbolos_oficiales]
 
+    compatibles = cl_compatibles(ESTUDIO.cl_celula)  # la célula del estudio, sus ancestros y sus subtipos
     anotaciones = []  # una fila por (gen, ruta, anotación del GAF)
     for simbolo, sinonimos, go_anotado, pmids, evid, ref, with_from, calif, extension in candidatas:
-        cl_ajenos = sorted({cl for cl in OCCURS_IN_CL.findall(extension) if cl not in CL_COMPATIBLES_NK})
+        cl_ajenos = sorted({cl for cl in OCCURS_IN_CL.findall(extension) if cl not in compatibles})
         for gen, via in resolver_genes(simbolo, sinonimos):
             for ruta, estados in desc_map[go_anotado].items():
                 if (gen, ruta) not in pares:
@@ -87,7 +89,7 @@ def cruzar_con_gaf(pares, desc_map):
                     "Gen": gen, "GO_ID": ruta, "GO_ID_anotado": go_anotado,
                     "Directo": go_anotado == ruta, "PMIDs": pmids, "Evidencia": evid,
                     "Referencia": ref, "With_From": with_from, "Via_gen": via, "Fuente": "GOA",
-                    "Calificador": calif, "CL_no_NK": "|".join(cl_ajenos),
+                    "Calificador": calif, "CL_otra_celula": "|".join(cl_ajenos),
                     "Estados": set(efectivos), "Profundidad": min(efectivos.values()),
                     "Profundidad_signo": min((p for e, p in efectivos.items() if e in CON_SIGNO), default=None),
                 })

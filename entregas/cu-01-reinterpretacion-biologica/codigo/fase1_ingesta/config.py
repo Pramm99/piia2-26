@@ -1,15 +1,19 @@
 """Configuración global: rutas, URLs y opciones. Es el único sitio que hay que editar para ajustar la ejecución."""
 import os
+import sys
 
 # Rutas ancladas a esta carpeta (no al directorio desde el que se lanza el script)
 DIR_FASE1 = os.path.dirname(os.path.abspath(__file__))           # codigo/fase1_ingesta
 DIR_DATA = os.path.join(os.path.dirname(DIR_FASE1), "data")      # codigo/data
 
-# --- Entradas / salidas ---
-# Los Excels originales de CIMUS (versionados): rutas enriquecidas con genes up («activadas») y down («suprimidas»)
-DIR_CIMUS = os.path.join(os.path.dirname(DIR_FASE1), "tools_cimus")
-EXCEL_ACTIVADAS = os.path.join(DIR_CIMUS, "NK_rutas_activadas_GO.xlsx")
-EXCEL_SUPRIMIDAS = os.path.join(DIR_CIMUS, "NK_rutas_suprimidas_GO.xlsx")
+# --- Estudio (codigo/estudio.json, #51): tipo celular, tejido y Excels de entrada ---
+sys.path.append(os.path.dirname(DIR_FASE1))  # estudio.py está en codigo/ (al final: los módulos de la Fase 1 mandan)
+from estudio import leer_estudio  # noqa: E402
+
+ESTUDIO = leer_estudio()
+# Rutas enriquecidas con genes up («activadas») y down («suprimidas»); las de CIMUS están en codigo/tools_cimus/
+EXCEL_ACTIVADAS = str(ESTUDIO.excel_activadas)
+EXCEL_SUPRIMIDAS = str(ESTUDIO.excel_suprimidas)
 SALIDA = os.path.join(DIR_FASE1, "fase1_dataset_abstracts.xlsx")
 
 # --- Ficheros descargables (anotaciones GO) ---
@@ -105,8 +109,13 @@ SIGNO_POR_PERTENENCIA_REGULACION = True
 SIN_DIRECCION_COMO_PROCESO = True
 PROFUNDIDAD_MAX_ACEPTAR = 2  # a profundidad ≤2 con evidencia experimental no hubo errores en la auditoría
 EVIDENCIAS_FILOGENETICAS = {"IBA", "IBD", "IKR", "IRD"}  # se descartan si contradicen a una experimental
-# Tipos celulares de Cell Ontology compatibles con NK: CL:0000623, sus ancestros y sus subtipos
-# (OLS4, consultado el 2026-11-08). Un occurs_in con otro CL describe el efecto en otra célula.
+# Tipos celulares de Cell Ontology compatibles con la célula del estudio: su término, sus ancestros y sus subtipos. Un
+# occurs_in con otro CL describe el efecto en otra célula. Para otro tipo celular salen de OLS4, con caché
+# (fuentes/cell_ontology.py); para NK se usa esta lista (OLS4, consultado el 2026-11-08), sin red. OLS4 da hoy 17
+# subtipos más de NK que no aparecen en ningún occurs_in del GAF humano, así que el resultado es el mismo.
+OLS4_API = "https://www.ebi.ac.uk/ols4/api/ontologies/cl/terms"
+CELL_ONTOLOGY_CACHE = os.path.join(DIR_DATA, "cache_cell_ontology.json")
+CL_NK = "CL:0000623"
 CL_COMPATIBLES_NK = {
     "CL:0000623",
     # ancestros

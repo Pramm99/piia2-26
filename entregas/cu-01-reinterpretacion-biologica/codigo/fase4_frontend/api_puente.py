@@ -4,6 +4,7 @@ Desde codigo/: python fase4_frontend/api_puente.py (escucha en http://127.0.0.1:
 
   GET  /salud           -> {"ok": true}
   POST /ejecutar-ruta   -> {"GO_ID", "Descripcion", "Genes_up", "Genes_down"}: lanza las tres fases seguidas
+  GET  /estudio         -> tipo celular y tejido del estudio (codigo/estudio.json), para los textos de la interfaz
   GET  /estado          -> fase en curso y, al terminar, el resultado (Por_ruta, Por_par y el Excel de la Fase 3)
   POST /criterio        -> {"GO_ID", "criterio": {gen: signo}}: Fase 3 de esa ruta con los signos de «Tu criterio»
   GET  /claves          -> claves del LLM por proveedor (Gemini y Groq), enmascaradas: nunca se devuelve una entera
@@ -184,8 +185,16 @@ def _fase2(carpeta: Path, excel_f1: Path) -> Tuple[Path, dict]:
                        "agotados": {MODELOS[n].proveedor: m for n, m in resumen.motivos.items()}}
 
 
+def estudio() -> dict:
+    """Lo que la interfaz necesita del estudio: cómo nombrar la célula y el tejido, y qué tipos celulares del LLM
+    pesan entero (el resto pesa la mitad, como en fase3_scoring/nps.py:peso)."""
+    e = f3_config.ESTUDIO
+    return {"celula": e.celula, "cl_celula": e.cl_celula, "clase_celula": e.clase_celula, "tejido": e.tejido,
+            "tipos_celulares_validos": list(e.tipos_celulares_validos)}
+
+
 def _log2fc():
-    return f3_config.FICHERO_LOG2FC if f3_config.FICHERO_LOG2FC.exists() else None
+    return f3_config.FICHERO_LOG2FC if f3_config.FICHERO_LOG2FC and f3_config.FICHERO_LOG2FC.exists() else None
 
 
 def _fase3(carpeta: Path, excel_f1: Path, excel_f2: Path):
@@ -404,6 +413,8 @@ class ManejadorPuente(BaseHTTPRequestHandler):
             return
         if self.path == "/salud":
             self._responder_json(200, {"ok": True})
+        elif self.path == "/estudio":
+            self._responder_json(200, estudio())
         elif self.path == "/estado":
             with _cerrojo:
                 self._responder_json(200, dict(_estado))
