@@ -52,6 +52,12 @@ NCBI_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 NCBI_EMAIL = _env("NCBI_EMAIL")      # buena práctica NCBI: un correo de contacto
 NCBI_API_KEY = _env("NCBI_API_KEY")  # opcional: sube el límite a 10 req/s
 
+
+def ncbi():
+    """(correo, clave) de NCBI leídos en el momento: la interfaz los cambia en ⚙ → token-api sin reiniciar el
+    puente y valen desde la siguiente ejecución. Las dos constantes de arriba son el valor al importar."""
+    return _env("NCBI_EMAIL"), _env("NCBI_API_KEY")
+
 # --- Filtro de inmunoglobulinas (lista HGNC, se descarga una vez) ---
 HGNC_IG_FILE = os.path.join(DIR_DATA, "hgnc_inmunoglobulinas.json")
 HGNC_IG_URL = 'https://rest.genenames.org/search/locus_type/"immunoglobulin gene"'

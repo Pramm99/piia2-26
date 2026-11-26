@@ -10,8 +10,11 @@ Desde codigo/: python fase4_frontend/api_puente.py (escucha en http://127.0.0.1:
                            y las células que se pueden elegir
   GET  /estado          -> fase en curso y, al terminar, el resultado (Por_ruta, Por_par y el Excel de la Fase 3)
   POST /criterio        -> {"GO_ID", "criterio": {gen: signo}}: Fase 3 de esa ruta con los signos de «Tu criterio»
-  GET  /claves          -> claves del LLM por proveedor (Gemini y Groq), enmascaradas: nunca se devuelve una entera
-  POST /claves          -> {"proveedor", "accion": "anadir", "clave"} o {"proveedor", "accion": "quitar", "indice"}
+  GET  /claves          -> claves del LLM por proveedor (Gemini y Groq) y la clave y el correo de NCBI (Fase 1),
+                           enmascaradas: nunca se devuelve una clave entera
+  POST /claves          -> {"proveedor", "accion": "anadir", "clave"} o {"proveedor", "accion": "quitar", "indice"};
+                           para NCBI, {"proveedor": "ncbi", "accion": "guardar", "campo": "clave"|"email", "valor"}
+                           o {"proveedor": "ncbi", "accion": "quitar", "campo"}
   GET  / (y lo demás)   -> la interfaz ya construida (fase4_frontend/dist, de `npm run build`) si existe: así el
                            programa de escritorio (codigo/empaquetado/) no necesita Node ni Vite
 
@@ -59,6 +62,7 @@ import salida as f1_salida  # noqa: E402
 from estudio import CELULAS_DISPONIBLES, Estudio, con_celula  # noqa: E402
 from fase2_inferencia.__main__ import PRINCIPAL, SECUNDARIO  # noqa: E402
 from fase2_inferencia.cliente import MODELOS, ClienteOpenAICompatible, claves, guardar_claves  # noqa: E402
+from fase2_inferencia.cliente import _leer_env as leer_env  # noqa: E402
 from fase2_inferencia.esquema import ESTADO_PENDIENTE  # noqa: E402
 from fase2_inferencia.limpieza import normalizar_pmid as limpiar  # noqa: E402
 from fase2_inferencia.pipeline import ejecutar_fase2  # noqa: E402
@@ -83,6 +87,10 @@ SIGNOS_CRITERIO = ("+1", "-1", "neutro")
 # Una clave de API: letras, cifras, «-», «_» y «.» (las de Gemini empiezan por AIza o AQ., las de Groq por gsk_)
 PATRON_CLAVE = re.compile(r"^[A-Za-z0-9._-]{20,200}$")
 PREFIJOS_AJENOS = {"gemini": (("gsk_",), "Groq"), "groq": (("AIza", "AQ."), "Gemini")}
+# NCBI (Fase 1): una sola clave (36 caracteres hexadecimales en la cuenta de NCBI) y el correo de contacto
+PATRON_CLAVE_NCBI = re.compile(r"^[0-9a-fA-F]{30,40}$")
+PATRON_CORREO = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
+CAMPOS_NCBI = {"clave": "NCBI_API_KEY", "email": "NCBI_EMAIL"}
 
 _cerrojo = threading.Lock()
 _estado = {"estado": "libre"}  # libre | ejecutando | terminado | error
@@ -122,6 +130,9 @@ def cambiar_claves(datos: dict) -> list:
     """Añade una clave al final de las de su proveedor o quita una por su posición. ValueError si no se puede; el
     mensaje nunca lleva la clave."""
     proveedor = str(datos.get("proveedor", "")).strip()
+    if proveedor == "ncbi":
+        cambiar_ncbi(datos)
+        return estado_claves()
     if proveedor not in _proveedores():
         raise ValueError(f"Proveedor no válido: {proveedor!r}")
     var = _proveedores()[proveedor][0].var_clave
@@ -150,6 +161,47 @@ def cambiar_claves(datos: dict) -> list:
             raise ValueError(f"Acción no válida: {accion!r}")
         guardar_claves(var, actuales)
     return estado_claves()
+
+
+def _valor_env(var: str) -> str:
+    return (os.environ.get(var) or leer_env().get(var) or "").strip()
+
+
+def estado_ncbi() -> dict:
+    """Clave (enmascarada) y correo de NCBI para la Fase 1. Los dos son opcionales: sin clave, NCBI deja 3 peticiones
+    por segundo en vez de 10. El correo se devuelve entero: no es una clave y la persona lo tiene que reconocer."""
+    clave_ncbi, email = _valor_env("NCBI_API_KEY"), _valor_env("NCBI_EMAIL")
+    return {"clave": _mascara(clave_ncbi) if clave_ncbi else None, "email": email or None,
+            "clave_de_entorno": bool(os.environ.get("NCBI_API_KEY")),
+            "email_de_entorno": bool(os.environ.get("NCBI_EMAIL"))}
+
+
+def cambiar_ncbi(datos: dict) -> dict:
+    """{"accion": "guardar", "campo": "clave"|"email", "valor"} o {"accion": "quitar", "campo"}. ValueError si no
+    se puede; el mensaje nunca lleva la clave."""
+    campo = datos.get("campo")
+    if campo not in CAMPOS_NCBI:
+        raise ValueError(f"Campo no válido: {campo!r}")
+    var = CAMPOS_NCBI[campo]
+    if os.environ.get(var):
+        raise ValueError(f"{var} está en las variables de entorno del sistema, que mandan sobre codigo/.env: "
+                         "quítala de ahí para cambiarla desde aquí.")
+    accion = datos.get("accion")
+    if accion == "guardar":
+        valor = str(datos.get("valor") or "").strip()
+        if campo == "clave" and not PATRON_CLAVE_NCBI.match(valor):
+            raise ValueError("No parece una clave de NCBI: son unos 36 caracteres (números y letras de la a a la f). "
+                             "Pega solo la clave, sin espacios ni comillas.")
+        if campo == "email" and not PATRON_CORREO.match(valor):
+            raise ValueError("No parece un correo electrónico.")
+        nuevo = [valor]
+    elif accion == "quitar":
+        nuevo = []
+    else:
+        raise ValueError(f"Acción no válida: {accion!r}")
+    with _cerrojo_claves:
+        guardar_claves(var, nuevo)
+    return estado_ncbi()
 
 
 def _fase1(carpeta: Path, ruta: dict) -> Path:
@@ -474,7 +526,7 @@ class ManejadorPuente(BaseHTTPRequestHandler):
             self._responder_json(403, {"ok": False, "error": "Las claves solo se gestionan desde la interfaz local."})
             return
         if not post:
-            self._responder_json(200, {"ok": True, "proveedores": estado_claves()})
+            self._responder_json(200, {"ok": True, "proveedores": estado_claves(), "ncbi": estado_ncbi()})
             return
         try:
             datos = self._leer_json()
@@ -490,7 +542,8 @@ class ManejadorPuente(BaseHTTPRequestHandler):
             return
         with _cerrojo:
             ejecutando = _estado.get("estado") == "ejecutando"
-        self._responder_json(200, {"ok": True, "proveedores": proveedores, "ejecutando": ejecutando})
+        self._responder_json(200, {"ok": True, "proveedores": proveedores, "ncbi": estado_ncbi(),
+                                   "ejecutando": ejecutando})
 
     def do_GET(self):
         if self.path == "/claves":

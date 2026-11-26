@@ -28,9 +28,9 @@ que no es pública: para repartirlo fuera del equipo, `--sin-datos-cimus`. Cómo
 
 1. **Python** con las dependencias de `codigo/requirements.txt` (el entorno `codigo/pia_venv/` sirve).
 2. **Node.js y npm**, para la interfaz (React + Vite).
-3. **Claves** en `codigo/.env` (copia de `codigo/.env.example`): `GEMINI_API_KEY`, `GROQ_API_KEY` y `NCBI_EMAIL`.
-   El `.env` está en el `.gitignore` y nunca se sube a GitHub. Las de Gemini y Groq también se pueden pegar desde la
-   interfaz (⚙ → token-api, ver «Claves del LLM»).
+3. **Claves** en `codigo/.env` (copia de `codigo/.env.example`): `GEMINI_API_KEY`, `GROQ_API_KEY` y, opcionales,
+   `NCBI_API_KEY` y `NCBI_EMAIL`. El `.env` está en el `.gitignore` y nunca se sube a GitHub. Todas se pueden poner
+   también desde la interfaz (⚙ → token-api, ver «Claves»).
 
 Dependencias de la interfaz, una sola vez, desde `codigo/fase4_frontend/`:
 
@@ -59,7 +59,7 @@ npm run dev
 Se abre en `http://localhost:5173/`. Arriba aparece **● Motor Python conectado** cuando el puente responde. El botón
 **Fondo blanco / Fondo oscuro** de la cabecera cambia el tema, y el navegador lo recuerda para la próxima vez.
 
-**Claves del LLM.** La rueda ⚙ de arriba a la derecha abre un mini-menú; en **token-api** se pegan las claves de
+**Claves.** La rueda ⚙ de arriba a la derecha abre un mini-menú; en **token-api** se pegan las claves de
 **Gemini** (el modelo principal) y de **Groq** (el respaldo), varias de cada una si se tienen de varias cuentas:
 pega la clave en el campo de su proveedor y pulsa **Añadir**; la papelera la quita. Se usan en el orden de la lista:
 
@@ -70,7 +70,13 @@ pega la clave en el campo de su proveedor y pulsa **Añadir**; la papelera la qu
   límite diario de llamadas al LLM, así que añade el token de otra cuenta (botón **Añadir token**) o espera al día
   siguiente, y vuelve a ejecutar la ruta.
 
-Se guardan en `codigo/.env` y valen desde la siguiente ejecución; el panel solo enseña sus primeras y últimas letras.
+Debajo está **NCBI** (Fase 1, opcional): una clave y un correo; **Guardar** o **Cambiar** sustituye el que hubiera y
+la papelera lo quita. De NCBI (PubMed) se descargan los artículos y abstracts de cada gen; funciona sin clave, pero con
+ella va a 10 peticiones por segundo en vez de 3. El correo es el contacto que NCBI pide a quien usa su servicio. Cada
+apartado dice para qué sirve esa API y enlaza a la página donde se saca la clave gratis.
+
+Se guardan en `codigo/.env` y valen desde la siguiente ejecución; el panel solo enseña las primeras y últimas letras
+de cada clave.
 
 ## 3. Uso
 
@@ -126,7 +132,7 @@ Se guardan en `codigo/.env` y valen desde la siguiente ejecución; el panel solo
   siguiente; si no queda ninguna, las preguntas quedan `pendiente` y la interfaz lo avisa: basta con añadir otra clave
   o volver a ejecutar la ruta al día siguiente.
 * **Claves** (`GET` y `POST /claves`): lista enmascaradas, añade y quita las claves de ⚙ → token-api en
-  `codigo/.env`. Solo acepta peticiones desde la propia interfaz (localhost).
+  `codigo/.env` (Gemini y Groq, y la clave y el correo de NCBI). Solo acepta peticiones desde la propia interfaz (localhost).
 * **Fase 3** con la tabla de log2FC de CIMUS si existe.
 * **«Tu criterio»** (`POST /criterio`): recalcula la Fase 3 de la ruta con los signos cambiados a mano, sin llamar al
   LLM, y escribe `fase3_scoring_criterio.xlsx` en su carpeta; `fase3_scoring.xlsx` sigue siendo el automático.
@@ -140,7 +146,7 @@ Tarda unos segundos con las cachés y unos 2–3 minutos en frío (`docs/kpis.md
 | `api_puente.py` | Puente HTTP con las Fases 1 → 2 → 3 (`/salud`, `/ejecutar-ruta`, `/estado`), el recálculo de «Tu criterio» (`/criterio`), las claves del LLM (`/claves`) y, si existe `dist/` (`npm run build`), la interfaz compilada en `/`. |
 | `src/App.tsx` | Interfaz: Excels de rutas, elección y ejecución de la ruta, veredicto, tarjetas por fase, tabla de genes y «Tu criterio». |
 | `src/ExcelResultados.tsx` | Excel de resultados que acumula las rutas ejecutadas, con su vista previa. |
-| `src/TokenApi.tsx` | Rueda ⚙ de la cabecera y panel token-api para añadir y quitar las claves de Gemini y Groq. |
+| `src/TokenApi.tsx` | Rueda ⚙ de la cabecera y panel token-api para añadir y quitar las claves de Gemini y Groq, y la clave y el correo de NCBI, con lo que hace cada API. |
 | `src/Progreso.tsx` | Rueda de carga, barra con el porcentaje (estimado por fases) y contador de tiempo de la ejecución. |
 | `src/comun.ts` | Utilidades compartidas: carga de SheetJS (desde el CDN, para leer y escribir Excel) y formatos. |
 | `src/index.css` | Paletas de colores del tema oscuro y del claro. |

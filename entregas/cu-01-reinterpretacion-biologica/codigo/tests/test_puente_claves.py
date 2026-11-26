@@ -21,7 +21,7 @@ def puente(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text("# comentario\nNCBI_EMAIL=a@b.c\nGEMINI_API_KEY=\nGROQ_API_KEY=\n", encoding="utf-8")
     monkeypatch.setattr(cliente, "FICHERO_ENV", env)
-    for var in ("GEMINI_API_KEY", "GROQ_API_KEY"):
+    for var in ("GEMINI_API_KEY", "GROQ_API_KEY", "NCBI_API_KEY", "NCBI_EMAIL"):
         monkeypatch.delenv(var, raising=False)
     mod = importlib.import_module("fase4_frontend.api_puente")
     return mod, env
@@ -100,6 +100,42 @@ def test_clave_repetida_y_variable_de_entorno(puente, monkeypatch):
     with pytest.raises(ValueError, match="variables de entorno del sistema"):
         mod.cambiar_claves({"proveedor": "groq", "accion": "anadir", "clave": "gsk_" + "w" * 40})
     assert next(p for p in mod.estado_claves() if p["id"] == "groq")["de_entorno"] is True
+
+
+NCBI = "0123456789abcdef0123456789abcdef0123"
+
+
+def test_clave_y_correo_de_ncbi(puente, monkeypatch):
+    """NCBI (Fase 1) tiene una sola clave y un correo: se guardan, se sustituyen y se quitan sin tocar el resto."""
+    mod, env = puente
+    assert mod.estado_ncbi() == {"clave": None, "email": "a@b.c", "clave_de_entorno": False, "email_de_entorno": False}
+    mod.cambiar_claves({"proveedor": "ncbi", "accion": "guardar", "campo": "clave", "valor": f" {NCBI} "})
+    mod.cambiar_ncbi({"accion": "guardar", "campo": "email", "valor": "yo@ejemplo.org"})
+    estado = mod.estado_ncbi()
+    assert estado["clave"] == "0123…0123" and estado["email"] == "yo@ejemplo.org" and NCBI not in json.dumps(estado)
+    assert _leer(env)["NCBI_API_KEY"] == NCBI and _leer(env)["NCBI_EMAIL"] == "yo@ejemplo.org"
+    assert _leer(env)["GEMINI_API_KEY"] == ""
+    # La Fase 1 lo lee en el momento, sin reiniciar el puente
+    import config as f1_config
+    leer = f1_config._leer_env
+    monkeypatch.setattr(f1_config, "_leer_env", lambda ruta=None: leer(str(env)))
+    assert f1_config.ncbi() == ("yo@ejemplo.org", NCBI)
+    mod.cambiar_ncbi({"accion": "quitar", "campo": "clave"})
+    assert mod.estado_ncbi()["clave"] is None and _leer(env)["NCBI_API_KEY"] == ""
+
+
+@pytest.mark.parametrize("datos, error", [
+    ({"accion": "guardar", "campo": "clave", "valor": "AIzaSyA" + "x" * 32}, "No parece una clave de NCBI"),
+    ({"accion": "guardar", "campo": "email", "valor": "sin-arroba"}, "No parece un correo"),
+    ({"accion": "guardar", "campo": "otro", "valor": "x"}, "Campo no válido"),
+    ({"accion": "borrar_todo", "campo": "clave"}, "Acción no válida"),
+])
+def test_ncbi_no_valido(puente, datos, error):
+    mod, env = puente
+    antes = env.read_text(encoding="utf-8")
+    with pytest.raises(ValueError, match=error):
+        mod.cambiar_ncbi(datos)
+    assert env.read_text(encoding="utf-8") == antes
 
 
 def test_otra_web_no_puede_tocar_las_claves(puente):

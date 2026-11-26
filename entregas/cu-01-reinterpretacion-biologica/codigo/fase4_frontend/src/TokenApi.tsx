@@ -1,5 +1,6 @@
-// Rueda de ajustes de la cabecera y panel «token-api»: las claves de Gemini y de Groq que usa la Fase 2.
-// El puente las guarda en codigo/.env (no se sube a GitHub) y solo devuelve sus primeras y últimas letras.
+// Rueda de ajustes de la cabecera y panel «token-api»: las claves de Gemini y de Groq que usa la Fase 2, y la clave
+// y el correo de NCBI que usa la Fase 1. El puente las guarda en codigo/.env (no se sube a GitHub) y de las claves
+// solo devuelve sus primeras y últimas letras.
 import React, { useEffect, useRef, useState } from 'react';
 import { KeyRound, Loader2, Settings, Trash2, X } from 'lucide-react';
 import { mensaje, NOMBRE_PROVEEDOR } from './comun';
@@ -12,6 +13,51 @@ export interface ProveedorClaves {
   claves: string[]; // enmascaradas, en el orden en que se usan
   de_entorno: boolean; // la variable está en el entorno del sistema y manda sobre codigo/.env
 }
+
+export interface EstadoNcbi {
+  clave: string | null; // enmascarada
+  email: string | null;
+  clave_de_entorno: boolean;
+  email_de_entorno: boolean;
+}
+
+// Para qué sirve cada API y dónde se saca la clave (gratis en las tres)
+const PARA_QUE: Record<string, { texto: string; enlace: string; sitio: string }> = {
+  gemini: {
+    texto: 'Fase 2. Es el modelo de lenguaje que lee los abstracts de cada gen y decide qué dicen sobre el gen en la ruta. Sin ninguna clave de Gemini, responde solo Groq.',
+    enlace: 'https://aistudio.google.com/apikey',
+    sitio: 'aistudio.google.com',
+  },
+  groq: {
+    texto: 'Fase 2, respaldo. Solo responde cuando Gemini falla o se queda sin cupo. Sus claves empiezan por gsk_.',
+    enlace: 'https://console.groq.com/keys',
+    sitio: 'console.groq.com',
+  },
+  ncbi: {
+    texto: 'Fase 1. De NCBI (PubMed) se descargan los artículos y los abstracts de cada gen. Funciona sin clave; con clave va más rápido (10 peticiones por segundo en vez de 3). El correo es el contacto que NCBI pide a quien usa su servicio.',
+    enlace: 'https://www.ncbi.nlm.nih.gov/account/settings/',
+    sitio: 'NCBI → Account settings → API Key Management',
+  },
+};
+
+function ParaQue({ id }: { id: string }) {
+  const p = PARA_QUE[id];
+  if (!p) return null;
+  return (
+    <div style={{ fontSize: '11px', color: 'var(--c-94a3b8)', lineHeight: 1.5 }}>
+      {p.texto} Clave gratis en{' '}
+      <a href={p.enlace} target="_blank" rel="noreferrer" style={{ color: 'var(--c-2dd4bf)' }}>
+        {p.sitio}
+      </a>
+      .
+    </div>
+  );
+}
+
+const campoTexto: React.CSSProperties = {
+  flex: '1 1 220px', minWidth: 0, padding: '7px 10px', borderRadius: '8px', border: '1px solid var(--c-334155)',
+  backgroundColor: 'var(--c-0f172a)', color: 'var(--c-f8fafc)', fontSize: '12px',
+};
 
 const botonMenu: React.CSSProperties = {
   padding: '7px 9px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-1e293b)',
@@ -64,6 +110,7 @@ export function MenuAjustes({ onTokenApi }: { onTokenApi: () => void }) {
 // Panel para añadir y quitar claves. Cada cambio se guarda al momento y vale desde la siguiente ejecución.
 export function PanelTokens({ api, onCerrar }: { api: string; onCerrar: () => void }) {
   const [proveedores, setProveedores] = useState<ProveedorClaves[] | null>(null);
+  const [ncbi, setNcbi] = useState<EstadoNcbi | null>(null);
   const [nuevas, setNuevas] = useState<Record<string, string>>({});
   const [ocupado, setOcupado] = useState<string | null>(null); // proveedor con una petición en curso
   const [porQuitar, setPorQuitar] = useState<string | null>(null); // «proveedor:indice» a la espera de confirmar
@@ -77,6 +124,7 @@ export function PanelTokens({ api, onCerrar }: { api: string; onCerrar: () => vo
         const d = await res.json();
         if (!res.ok || !d.ok) throw new Error(d.error || 'El puente no devolvió las claves');
         setProveedores(d.proveedores);
+        setNcbi(d.ncbi || null);
       } catch (err) {
         setError(`No se pudieron leer las claves: ${mensaje(err)}. ¿Está en marcha api_puente.py?`);
       }
@@ -99,6 +147,7 @@ export function PanelTokens({ api, onCerrar }: { api: string; onCerrar: () => vo
       const d = await res.json();
       if (!res.ok || !d.ok) throw new Error(d.error || 'No se pudo guardar');
       setProveedores(d.proveedores);
+      setNcbi(d.ncbi || null);
       setAviso(d.ejecutando ? `${hecho} Hay una ruta en marcha: el cambio vale desde la siguiente ejecución.` : hecho);
       return true;
     } catch (err) {
@@ -118,6 +167,76 @@ export function PanelTokens({ api, onCerrar }: { api: string; onCerrar: () => vo
     }
   };
 
+  // NCBI: una sola clave y un correo; guardar sustituye el que hubiera
+  const guardarNcbi = async (campo: 'clave' | 'email') => {
+    const id = `ncbi-${campo}`;
+    const valor = (nuevas[id] || '').trim();
+    if (!valor) return;
+    if (await cambiar('ncbi', { accion: 'guardar', campo, valor }, campo === 'clave' ? 'Clave de NCBI guardada.' : 'Correo de NCBI guardado.')) {
+      setNuevas((n) => ({ ...n, [id]: '' }));
+    }
+  };
+
+  const filaNcbi = (campo: 'clave' | 'email') => {
+    if (!ncbi) return null;
+    const id = `ncbi-${campo}`;
+    const actual = campo === 'clave' ? ncbi.clave : ncbi.email;
+    const deEntorno = campo === 'clave' ? ncbi.clave_de_entorno : ncbi.email_de_entorno;
+    const variable = campo === 'clave' ? 'NCBI_API_KEY' : 'NCBI_EMAIL';
+    const bloqueado = deEntorno || ocupado !== null;
+    const escrito = (nuevas[id] || '').trim();
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ color: 'var(--c-94a3b8)' }}>{campo === 'clave' ? 'Clave' : 'Correo'}:</span>
+          {actual ? <code style={{ color: 'var(--c-e2e8f0)' }}>{actual}</code> : <span style={{ color: 'var(--c-fbbf24)' }}>{campo === 'clave' ? 'sin clave (va a 3 peticiones por segundo)' : 'sin correo'}</span>}
+          {actual && !deEntorno && (porQuitar === id ? (
+            <>
+              <button disabled={bloqueado} onClick={() => cambiar('ncbi', { accion: 'quitar', campo }, campo === 'clave' ? 'Clave de NCBI quitada.' : 'Correo de NCBI quitado.')} style={{ ...botonMenu, padding: '2px 8px', fontSize: '11px', color: 'var(--c-fda4af)' }}>
+                Sí, quitarlo
+              </button>
+              <button onClick={() => setPorQuitar(null)} style={{ ...botonMenu, padding: '2px 8px', fontSize: '11px' }}>
+                No
+              </button>
+            </>
+          ) : (
+            <button disabled={bloqueado} onClick={() => setPorQuitar(id)} title={campo === 'clave' ? 'Quitar la clave' : 'Quitar el correo'} aria-label={campo === 'clave' ? 'Quitar la clave de NCBI' : 'Quitar el correo de NCBI'} style={{ ...botonMenu, padding: '2px 6px', color: 'var(--c-fda4af)', opacity: bloqueado ? 0.5 : 1 }}>
+              <Trash2 size={12} />
+            </button>
+          ))}
+        </div>
+        {deEntorno && (
+          <div style={{ fontSize: '11px', color: 'var(--c-fbbf24)' }}>
+            {variable} está en las variables de entorno del sistema, que mandan sobre codigo/.env: quítala de ahí para cambiarla desde aquí.
+          </div>
+        )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            guardarNcbi(campo);
+          }}
+          style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}
+        >
+          <input
+            type={campo === 'clave' ? 'password' : 'email'}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={bloqueado}
+            value={nuevas[id] || ''}
+            onChange={(e) => setNuevas((n) => ({ ...n, [id]: e.target.value }))}
+            placeholder={campo === 'clave' ? 'Pega la clave de NCBI (36 caracteres)' : 'Tu correo de contacto'}
+            aria-label={campo === 'clave' ? 'Clave de NCBI' : 'Correo de NCBI'}
+            style={campoTexto}
+          />
+          <button type="submit" disabled={bloqueado || !escrito} style={{ ...botonMenu, opacity: bloqueado || !escrito ? 0.5 : 1 }}>
+            {ocupado === 'ncbi' ? <Loader2 size={14} className="animate-spin" /> : null}
+            {actual ? 'Cambiar' : 'Guardar'}
+          </button>
+        </form>
+      </div>
+    );
+  };
+
   return (
     <div onMouseDown={(e) => e.target === e.currentTarget && onCerrar()} style={{ position: 'fixed', inset: 0, zIndex: 50, backgroundColor: 'rgba(2, 6, 23, 0.6)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '60px 16px', overflowY: 'auto' }}>
       <div role="dialog" aria-modal="true" aria-label="token-api" style={{ width: '100%', maxWidth: '620px', borderRadius: '14px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-0f172a)', color: 'var(--c-f8fafc)', padding: '20px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -131,7 +250,7 @@ export function PanelTokens({ api, onCerrar }: { api: string; onCerrar: () => vo
         </div>
 
         <div style={{ fontSize: '12px', color: 'var(--c-94a3b8)', lineHeight: 1.5 }}>
-          Pega aquí tus claves de API de <strong>Gemini</strong> (el modelo principal) y de <strong>Groq</strong> (el respaldo). Puedes poner varias de cada una; se usan en el orden de la lista.
+          Aquí van las claves de las tres APIs que usa el análisis. Para preguntar al modelo de lenguaje hace falta al menos una de <strong>Gemini</strong> (el principal) o de <strong>Groq</strong> (el respaldo); la de <strong>NCBI</strong> es opcional. De Gemini y de Groq puedes poner varias; se usan en el orden de la lista.
           <ul style={{ margin: '6px 0 0', paddingLeft: '18px', listStyle: 'disc' }}>
             <li>Si una clave de Gemini se queda sin su cupo diario, se pasa a la <strong>siguiente clave de Gemini</strong>.</li>
             <li>Si Gemini falla por otro motivo (clave no válida, servicio o red caídos) o se acaban todas sus claves, responde <strong>Groq</strong>, que también usa sus claves en orden.</li>
@@ -160,6 +279,7 @@ export function PanelTokens({ api, onCerrar }: { api: string; onCerrar: () => vo
                   {p.papel === 'principal' ? 'principal' : 'respaldo'} · {p.modelo}
                 </span>
               </div>
+              <ParaQue id={p.id} />
               {p.de_entorno && (
                 <div style={{ fontSize: '11px', color: 'var(--c-fbbf24)' }}>
                   {p.variable} está en las variables de entorno del sistema, que mandan sobre codigo/.env: quítala de ahí para gestionar estas claves desde aquí.
@@ -212,7 +332,7 @@ export function PanelTokens({ api, onCerrar }: { api: string; onCerrar: () => vo
                   onChange={(e) => setNuevas((n) => ({ ...n, [p.id]: e.target.value }))}
                   placeholder={`Pega una clave de ${nombre}${p.id === 'groq' ? ' (gsk_…)' : ''}`}
                   aria-label={`Nueva clave de ${nombre}`}
-                  style={{ flex: '1 1 220px', minWidth: 0, padding: '7px 10px', borderRadius: '8px', border: '1px solid var(--c-334155)', backgroundColor: 'var(--c-0f172a)', color: 'var(--c-f8fafc)', fontSize: '12px' }}
+                  style={campoTexto}
                 />
                 <button type="submit" disabled={bloqueado || !(nuevas[p.id] || '').trim()} style={{ ...botonMenu, opacity: bloqueado || !(nuevas[p.id] || '').trim() ? 0.5 : 1 }}>
                   {ocupado === p.id ? <Loader2 size={14} className="animate-spin" /> : null}
@@ -222,6 +342,18 @@ export function PanelTokens({ api, onCerrar }: { api: string; onCerrar: () => vo
             </section>
           );
         })}
+
+        {ncbi && (
+          <section style={{ borderRadius: '10px', border: '1px solid var(--c-1e293b)', backgroundColor: 'var(--c-020617)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '6px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 'bold' }}>NCBI</span>
+              <span style={{ fontSize: '11px', color: 'var(--c-94a3b8)' }}>opcional · PubMed</span>
+            </div>
+            <ParaQue id="ncbi" />
+            {filaNcbi('clave')}
+            {filaNcbi('email')}
+          </section>
+        )}
       </div>
     </div>
   );

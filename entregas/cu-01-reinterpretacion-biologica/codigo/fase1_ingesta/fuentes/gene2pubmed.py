@@ -9,7 +9,7 @@ solo actúa sobre los pares que siguen sin abstract tras GeneRIF y Europe PMC (p
 import csv
 import time
 
-from config import GENE2PUBMED_CACHE, MYGENE_API, NCBI_API_KEY, NCBI_ELINK, NCBI_EMAIL, TABLA_GO_MESH
+from config import GENE2PUBMED_CACHE, MYGENE_API, NCBI_ELINK, TABLA_GO_MESH, ncbi
 from fuentes.cache import cargar_json, guardar_json
 from red import configurar_sesion
 
@@ -40,16 +40,17 @@ def articulos(consultas, destino=GENE2PUBMED_CACHE):
         print(f"📥 gene2pubmed + MeSH: {len(pendientes)} consultas a NCBI ...")
         sesion = configurar_sesion()
         ids = _entrez(sesion, sorted({g for g, _ in pendientes}))
-        pausa = 0.12 if NCBI_API_KEY else 0.35  # 10 o 3 peticiones por segundo
+        email, clave_ncbi = ncbi()
+        pausa = 0.12 if clave_ncbi else 0.35  # 10 o 3 peticiones por segundo
         for i, (g, c) in enumerate(pendientes, 1):
             pmids = set()
             if ids.get(g):
                 params = {"dbfrom": "gene", "db": "pubmed", "linkname": "gene_pubmed", "id": ids[g],
                           "term": f'({c}) AND "Humans"[mh]', "retmode": "json", "tool": "piia2-cu01"}
-                if NCBI_API_KEY:
-                    params["api_key"] = NCBI_API_KEY
-                if NCBI_EMAIL:
-                    params["email"] = NCBI_EMAIL
+                if clave_ncbi:
+                    params["api_key"] = clave_ncbi
+                if email:
+                    params["email"] = email
                 r = sesion.get(NCBI_ELINK, params=params, timeout=60)
                 r.raise_for_status()
                 for ls in r.json().get("linksets", []):

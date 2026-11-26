@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 import pandas as pd
 
-from config import CACHE_FILE, EPMC_API, NCBI_API_KEY, NCBI_EMAIL, NCBI_URL
+from config import CACHE_FILE, EPMC_API, NCBI_URL, ncbi
 from red import Progreso, configurar_sesion
 
 GUARDAR_CADA = 25  # lotes entre guardados de la caché (unos 1.000 PMIDs en Europe PMC, 2.500 en NCBI)
@@ -65,14 +65,14 @@ def _epmc_lote(sesion, lote):
     return out
 
 
-def _ncbi_lote(sesion, lote):
+def _ncbi_lote(sesion, lote, email=None, clave=None):
     """Devuelve {pmid: {Titulo, Abstract}} para todos los artículos que NCBI conoce
     (Abstract puede ser '' = confirmado sin abstract)."""
     data = {"db": "pubmed", "id": ",".join(lote), "retmode": "xml", "tool": "fase1_go_abstracts"}
-    if NCBI_EMAIL:
-        data["email"] = NCBI_EMAIL
-    if NCBI_API_KEY:
-        data["api_key"] = NCBI_API_KEY
+    if email:
+        data["email"] = email
+    if clave:
+        data["api_key"] = clave
     r = sesion.post(NCBI_URL, data=data, timeout=60)
     r.raise_for_status()
     root = ET.fromstring(r.content)
@@ -120,18 +120,19 @@ def descargar_abstracts(pmids):
     # 2) NCBI para lo que falte; si un lote falla, se parte en PMIDs individuales
     pendientes = [p for p in pendientes if not cache.get(p, {}).get("Crudo")]
     print(f"🔄 Pasando {len(pendientes)} PMIDs a NCBI...")
-    pausa = 0.12 if NCBI_API_KEY else 0.35
+    email, clave = ncbi()
+    pausa = 0.12 if clave else 0.35
     progreso = Progreso("NCBI (abstracts)", len(pendientes))
     for i in range(0, len(pendientes), 100):
         lote = pendientes[i:i + 100]
         try:
-            res = _ncbi_lote(sesion, lote)
+            res = _ncbi_lote(sesion, lote, email, clave)
         except Exception as e:
             print(f"⚠️ NCBI lote fallido ({e}); reintentando uno a uno")
             res = {}
             for p in lote:
                 try:
-                    res.update(_ncbi_lote(sesion, [p]))
+                    res.update(_ncbi_lote(sesion, [p], email, clave))
                 except Exception as e2:
                     print(f"   ❌ PMID {p}: {e2}")  # no se cachea: se reintentará en la próxima ejecución
                 time.sleep(pausa)
